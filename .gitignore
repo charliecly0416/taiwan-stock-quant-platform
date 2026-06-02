@@ -18,11 +18,13 @@ frontend/dist/
 .pnpm-store/
 
 # Generated data and artifacts
-data/
-data_tw/
+/data/
+/data_tw/
 backend/data/
 backend/data_tw/
 qlib_data/
+qlib_pipeline/data_tw/
+qlib_pipeline/mlruns/
 *.bin
 *.pkl
 *.parquet

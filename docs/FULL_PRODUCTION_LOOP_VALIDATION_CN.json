@@ -1,0 +1,43 @@
+{
+  "ok": true,
+  "mode": "full_production_assets_local",
+  "preflight": {
+    "signal_root_exists": true,
+    "latest_signal_exists": true,
+    "provider_calendar_exists": true,
+    "provider_calendar_latest": "2026-06-01",
+    "option_c_150_normalized_count": 150,
+    "recorder_exists": true,
+    "params_pkl_exists": true,
+    "pred_pkl_exists": true
+  },
+  "checks": [
+    {
+      "cmd": [
+        "/home/chuliyang/software/miniconda3/bin/python",
+        "-c",
+        "\nimport json\nfrom datetime import datetime, timezone\nfrom app.services.tw_stock_qlib_option_c import QlibOptionCSignalReader\nreader = QlibOptionCSignalReader()\nlatest = reader.latest(bucket='all')\nhealth = reader.health(now=datetime(2026, 6, 2, tzinfo=timezone.utc))\nassert latest['ok'] is True\nassert latest['status'] == 'accepted'\nassert latest['top30_count'] == 30\nassert latest['top50_count'] == 50\nassert health['latest']['accepted_validated'] is True\nprint(json.dumps({\n  'ok': True,\n  'asof': latest['asof'],\n  'target_date': latest.get('target_date'),\n  'run_id': latest['run_id'],\n  'top30_first': latest['top30'][0],\n  'health_status': health['status'],\n  'research_signal_not_order': latest['trading']['research_signal_not_order'],\n}, ensure_ascii=False, indent=2))\n"
+      ],
+      "cwd": "/home/chuliyang/taiwan-stock-quant-platform/backend",
+      "returncode": 0,
+      "ok": true
+    },
+    {
+      "cmd": [
+        "/home/chuliyang/software/miniconda3/bin/python",
+        "examples/tw/run_option_c_daily_signal_option_c_provider.py",
+        "--asof",
+        "2026-06-01",
+        "--dry-run"
+      ],
+      "cwd": "/home/chuliyang/taiwan-stock-quant-platform/qlib_pipeline",
+      "returncode": 0,
+      "ok": true
+    }
+  ],
+  "notes": [
+    "backend accepted latest reader passed against repo-local copied production artifacts",
+    "qlib dry-run check is reported separately because it depends on local qlib runtime dependencies",
+    "data/model assets are ignored by git and should be shipped as release artifacts or regenerated"
+  ]
+}

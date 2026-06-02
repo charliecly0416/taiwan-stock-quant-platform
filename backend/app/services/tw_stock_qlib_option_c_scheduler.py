@@ -9,6 +9,9 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+QLIB_PIPELINE_ROOT = REPO_ROOT / "qlib_pipeline"
 from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo
 
@@ -19,7 +22,7 @@ DEFAULT_SCHEDULER_ENABLED = False
 DEFAULT_SCHEDULER_TIME = "18:30"
 DEFAULT_SCHEDULER_TZ = "Asia/Taipei"
 SCHEDULER_MODE = "dry-run-only"
-DEFAULT_PROVIDER_CALENDAR = "/home/chuliyang/qlib/data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin/calendars/day.txt"
+DEFAULT_PROVIDER_CALENDAR = str(QLIB_PIPELINE_ROOT / "data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin/calendars/day.txt")
 
 
 def _parse_bool(raw: Optional[str], *, default: bool = False) -> bool:

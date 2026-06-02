@@ -17,7 +17,7 @@ The project is designed for research and human review. It does not place broker 
 - Taiwan stock symbol sync and daily data archive.
 - Executable FinMind/TWSE Taiwan stock archive and validation scripts.
 - qlib Option C normalized data export, accepted latest artifact consumption, ops integration, EOD automation wrappers, and scheduler support.
-- Built-in Yahoo/Scrapling crawler handoff scripts and a self-contained Option C style demo artifact generator.
+- Built-in Yahoo/Scrapling crawler handoff scripts, FinMind/TWSE archive/export scripts, and qlib Option C production pipeline scripts.
 - QuantDinger cross-analysis between qlib research signals and monitor/trend data.
 - Read-only backtest templates and historical simulation.
 - OpenAI Agent module for questions such as top ranked stocks, trend metrics, and buy/sell research suggestions.
@@ -56,6 +56,20 @@ pnpm dev
 ```
 
 By default the frontend expects the backend API to be available through `/api` proxy settings in `vite.config.js`.
+
+
+## Full Production Closed Loop
+
+To reproduce the original local production effect with the existing qlib assets on this machine:
+
+```bash
+python scripts/bootstrap_full_production_assets.py --replace
+python scripts/verify_full_production_loop.py
+```
+
+This bootstraps repo-local ignored assets under `qlib_pipeline/data_tw/` and `qlib_pipeline/mlruns/`, then validates the real Option C 150-stock accepted latest artifact and qlib provider dry-run. See `docs/FULL_PRODUCTION_CLOSED_LOOP_CN.md`.
+
+Large market data and model artifacts are not committed to git. Publish them as GitHub Release artifacts or regenerate them with the included crawler/export/dump/signal scripts.
 
 ## Self-Contained Closed Loop
 

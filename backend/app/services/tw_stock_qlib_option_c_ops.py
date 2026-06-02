@@ -16,6 +16,9 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+QLIB_PIPELINE_ROOT = REPO_ROOT / "qlib_pipeline"
 from typing import Any, Dict, Optional
 
 from app.services.tw_stock_qlib_option_c import research_only_trading_flags
@@ -23,8 +26,8 @@ from app.services.tw_stock_qlib_option_c import research_only_trading_flags
 
 ASOF_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 JOB_ID_RE = re.compile(r"^option_c_dry_run_\d{8}_[0-9TZ]+_[0-9a-f]{8}$")
-DEFAULT_QLIB_CWD = "/home/chuliyang/qlib"
-DEFAULT_LATEST_SIGNAL = "/home/chuliyang/qlib/data_tw/experiments/option_c_daily_signal/latest_signal.json"
+DEFAULT_QLIB_CWD = str(QLIB_PIPELINE_ROOT)
+DEFAULT_LATEST_SIGNAL = str(QLIB_PIPELINE_ROOT / "data_tw/experiments/option_c_daily_signal/latest_signal.json")
 DEFAULT_OPS_ROOT = "data_tw/ops/option_c_jobs"
 WRAPPER_SCRIPT = "examples/tw/run_option_c_daily_signal_option_c_provider.py"
 TIMEOUT_SECONDS = 600

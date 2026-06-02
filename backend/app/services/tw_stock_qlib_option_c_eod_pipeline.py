@@ -13,6 +13,9 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+QLIB_PIPELINE_ROOT = REPO_ROOT / "qlib_pipeline"
 from typing import Any, Dict, Optional
 
 from app.services.tw_stock_qlib_option_c import QlibOptionCSignalReader, research_only_trading_flags
@@ -25,10 +28,10 @@ from app.services.tw_stock_qlib_option_c_ops import ASOF_RE, DEFAULT_OPS_ROOT, O
 EOD_PIPELINE_MODE = "controlled_smoke"
 DEFAULT_EOD_PIPELINE_ENABLED = False
 EOD_PIPELINE_LOCK_FILENAME = "option_c_eod_pipeline.lock"
-DEFAULT_QLIB_CWD = "/home/chuliyang/qlib"
+DEFAULT_QLIB_CWD = str(QLIB_PIPELINE_ROOT)
 REFRESH_SCRIPT = "examples/tw/run_option_c_yahoo_scrapling_refresh.py"
 PUBLISH_SCRIPT = "examples/tw/publish_option_c_yahoo_scrapling_refresh.py"
-DEFAULT_PROVIDER_CALENDAR = "/home/chuliyang/qlib/data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin/calendars/day.txt"
+DEFAULT_PROVIDER_CALENDAR = str(QLIB_PIPELINE_ROOT / "data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin/calendars/day.txt")
 
 
 def _parse_bool(raw: Optional[str], *, default: bool = False) -> bool:

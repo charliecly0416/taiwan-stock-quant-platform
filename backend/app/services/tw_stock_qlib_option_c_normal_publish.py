@@ -14,6 +14,9 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+QLIB_PIPELINE_ROOT = REPO_ROOT / "qlib_pipeline"
 from typing import Any, Dict, Optional
 
 from app.services.tw_stock_qlib_option_c import research_only_trading_flags
@@ -31,9 +34,9 @@ from app.services.tw_stock_qlib_option_c_ops import (
 )
 
 DEFAULT_OPS_ROOT = "data_tw/ops/option_c_jobs"
-DEFAULT_SIGNAL_ROOT = "/home/chuliyang/qlib/data_tw/experiments/option_c_daily_signal"
-DEFAULT_PROVIDER_CALENDAR = "/home/chuliyang/qlib/data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin/calendars/day.txt"
-DEFAULT_EXPECTED_UNIVERSE = "/home/chuliyang/qlib/data_tw/experiments/option_c_forward_validation/timed_data_availability_retry_20260601T101323Z/symbols_accepted_prediction_universe.txt"
+DEFAULT_SIGNAL_ROOT = str(QLIB_PIPELINE_ROOT / "data_tw/experiments/option_c_daily_signal")
+DEFAULT_PROVIDER_CALENDAR = str(QLIB_PIPELINE_ROOT / "data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin/calendars/day.txt")
+DEFAULT_EXPECTED_UNIVERSE = str(QLIB_PIPELINE_ROOT / "data_tw/experiments/option_c_forward_validation/timed_data_availability_retry_20260601T101323Z/symbols_accepted_prediction_universe.txt")
 NORMAL_PUBLISH_MODE = "accepted-latest-publish-review"
 EXPECTED_PREDICTION_ROWS = 150
 EXPECTED_TOP30_ROWS = 30

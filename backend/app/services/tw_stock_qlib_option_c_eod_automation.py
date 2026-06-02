@@ -12,6 +12,9 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, time, timezone
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+QLIB_PIPELINE_ROOT = REPO_ROOT / "qlib_pipeline"
 from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo
 
@@ -22,7 +25,7 @@ from app.services.tw_stock_qlib_option_c_ops import DEFAULT_OPS_ROOT, OptionCFil
 EOD_AUTOMATION_MODE = "controlled_scheduler_smoke"
 DEFAULT_EOD_AUTOMATION_ENABLED = False
 EOD_AUTOMATION_LOCK_FILENAME = "option_c_eod_automation.lock"
-DEFAULT_PROVIDER_CALENDAR = "/home/chuliyang/qlib/data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin/calendars/day.txt"
+DEFAULT_PROVIDER_CALENDAR = str(QLIB_PIPELINE_ROOT / "data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin/calendars/day.txt")
 
 
 def _parse_bool(raw: Optional[str], *, default: bool = False) -> bool:

@@ -13,11 +13,14 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+QLIB_PIPELINE_ROOT = REPO_ROOT / "qlib_pipeline"
 from typing import Any, Dict, List, Optional
 
 from app.services.tw_stock_trend import TWStockTrendService
 
-DEFAULT_SIGNAL_ROOT = "/home/chuliyang/qlib/data_tw/experiments/option_c_daily_signal"
+DEFAULT_SIGNAL_ROOT = str(QLIB_PIPELINE_ROOT / "data_tw/experiments/option_c_daily_signal")
 ROOT_ENV = "QLIB_TW_OPTION_C_ROOT"
 SIGNAL_REL_PREFIX = "data_tw/experiments/option_c_daily_signal"
 EXPECTED_RECORDER_ID = "950741cfd5f14ee5a05464fec3e12e0a"
