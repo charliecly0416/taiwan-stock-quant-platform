@@ -17,7 +17,7 @@ The project is designed for research and human review. It does not place broker 
 - Taiwan stock symbol sync and daily data archive.
 - Executable FinMind/TWSE Taiwan stock archive and validation scripts.
 - qlib Option C normalized data export, accepted latest artifact consumption, ops integration, EOD automation wrappers, and scheduler support.
-- Scrapling/Yahoo collection workflow documentation for the external qlib/Scrapling producer path.
+- Built-in Yahoo/Scrapling crawler handoff scripts and a self-contained Option C style demo artifact generator.
 - QuantDinger cross-analysis between qlib research signals and monitor/trend data.
 - Read-only backtest templates and historical simulation.
 - OpenAI Agent module for questions such as top ranked stocks, trend metrics, and buy/sell research suggestions.
@@ -57,6 +57,18 @@ pnpm dev
 
 By default the frontend expects the backend API to be available through `/api` proxy settings in `vite.config.js`.
 
+## Self-Contained Closed Loop
+
+To verify the single-repository demo loop without external qlib/Scrapling projects:
+
+```bash
+python scripts/verify_self_contained_closed_loop.py
+```
+
+This generates local fixture market data, creates an accepted Option C style `latest_signal.json`, and validates that the QuantDinger backend reader can consume latest/top30/top50/health. See `docs/SELF_CONTAINED_CLOSED_LOOP_CN.md`.
+
+For production daily operation, keep using or migrate the full qlib/Scrapling producer path. The included demo generator proves the repository contract and UI/backend consumption loop; it is not a replacement for production qlib LightGBM/Alpha158 training.
+
 ## Validation
 
 Backend focused tests used during packaging:
@@ -91,7 +103,7 @@ Ignored examples:
 - `frontend/dist/`
 - caches and virtual environments
 
-Use the scripts and docs to regenerate local data in your own environment. For a fully self-contained Scrapling/Yahoo -> qlib training/prediction loop, add the external qlib `examples/tw/*option_c*` scripts and Scrapling crawler into this repository or vendor them as a submodule.
+Use the scripts and docs to regenerate local data in your own environment. The repository now includes a self-contained demo loop under `scripts/verify_self_contained_closed_loop.py`; generated `data_tw/` artifacts remain ignored. For production-grade live Yahoo/Scrapling -> qlib LightGBM/Alpha158 training/prediction, migrate the full qlib `examples/tw/*option_c*` scripts into `qlib_pipeline/option_c/` or vendor them as a submodule.
 
 ## Attribution
 
