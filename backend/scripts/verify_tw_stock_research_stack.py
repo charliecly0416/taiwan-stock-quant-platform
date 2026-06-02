@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import subprocess
+from pathlib import Path
 import sys
 import time
 from typing import Any, Dict, List, Sequence
@@ -26,26 +27,36 @@ os.environ.setdefault("ENABLE_PENDING_ORDER_WORKER", "false")
 os.environ.setdefault("ENABLE_PORTFOLIO_MONITOR", "false")
 os.environ.setdefault("ENABLE_TW_STOCK_MONITOR_WORKER", "false")
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_ROOT = REPO_ROOT / "backend"
+
 DEFAULT_TESTS = [
-    "backend/tests/test_tw_stock_monitor_safety_audit.py",
-    "backend/tests/test_pr_template_safety_checklist.py",
-    "backend/tests/test_tw_stock_monitor_page_e2e_script.py",
-    "backend/tests/test_tw_stock_trend_api.py",
-    "backend/tests/test_tw_stock_monitor_worker.py",
-    "backend/tests/test_run_tw_stock_monitor_scan.py",
-    "backend/tests/test_tw_stock_monitor_service.py",
-    "backend/tests/test_cleanup_tw_stock_monitor_history.py",
-    "backend/tests/test_build_tw_stock_universe.py",
-    "backend/tests/test_import_tw_stock_monitor_config.py",
-    "backend/tests/test_preflight_tw_stock_monitor_config.py",
-    "backend/tests/test_build_tw_stock_data_quality_report.py",
-    "backend/tests/test_report_tw_stock_monitor_health.py",
-    "backend/tests/test_report_tw_stock_alert_review.py",
-    "backend/tests/test_tw_stock_frontend_contract_docs.py",
-    "backend/tests/test_tw_stock_backtest_plan_docs.py",
-    "backend/tests/test_tw_stock_backtest.py",
+    "tests/test_tw_stock_monitor_safety_audit.py",
+    "tests/test_pr_template_safety_checklist.py",
+    "tests/test_tw_stock_monitor_page_e2e_script.py",
+    "tests/test_tw_stock_trend_api.py",
+    "tests/test_tw_stock_monitor_worker.py",
+    "tests/test_run_tw_stock_monitor_scan.py",
+    "tests/test_tw_stock_monitor_service.py",
+    "tests/test_cleanup_tw_stock_monitor_history.py",
+    "tests/test_build_tw_stock_universe.py",
+    "tests/test_import_tw_stock_monitor_config.py",
+    "tests/test_preflight_tw_stock_monitor_config.py",
+    "tests/test_build_tw_stock_data_quality_report.py",
+    "tests/test_report_tw_stock_monitor_health.py",
+    "tests/test_report_tw_stock_alert_review.py",
+    "tests/test_tw_stock_frontend_contract_docs.py",
+    "tests/test_tw_stock_backtest_plan_docs.py",
+    "tests/test_tw_stock_backtest.py",
 ]
 
+
+
+def _backend_env() -> Dict[str, str]:
+    env = dict(os.environ)
+    backend_path = str(BACKEND_ROOT)
+    env["PYTHONPATH"] = backend_path if not env.get("PYTHONPATH") else f"{backend_path}:{env['PYTHONPATH']}"
+    return env
 
 def _run_command(cmd: Sequence[str], *, env: Dict[str, str] | None = None) -> Dict[str, Any]:
     started = time.monotonic()
@@ -62,15 +73,15 @@ def _run_command(cmd: Sequence[str], *, env: Dict[str, str] | None = None) -> Di
 def run_verification(*, with_page_smoke: bool = False, screenshot: str = "/tmp/tw_stock_monitor_phase7a.png", tests: Sequence[str] | None = None) -> Dict[str, Any]:
     selected_tests = list(tests or DEFAULT_TESTS)
     steps: List[Dict[str, Any]] = []
-    pytest_cmd = [sys.executable, "-m", "pytest", *selected_tests, "-q"]
-    steps.append({"name": "pytest", **_run_command(pytest_cmd)})
+    normalized_tests = [str((BACKEND_ROOT / item).resolve()) if not str(item).startswith("/") else str(item) for item in selected_tests]
+    pytest_cmd = [sys.executable, "-m", "pytest", *normalized_tests, "-q"]
+    steps.append({"name": "pytest", **_run_command(pytest_cmd, env=_backend_env())})
 
     if with_page_smoke:
-        env = dict(os.environ)
-        env["PYTHONPATH"] = "backend" if not env.get("PYTHONPATH") else f"backend:{env['PYTHONPATH']}"
+        env = _backend_env()
         page_cmd = [
             sys.executable,
-            "backend/scripts/check_tw_stock_monitor_page_e2e.py",
+            str(BACKEND_ROOT / "scripts/check_tw_stock_monitor_page_e2e.py"),
             "--screenshot",
             screenshot,
         ]

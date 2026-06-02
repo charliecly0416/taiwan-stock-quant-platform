@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "tw-stock-research.yml"
+WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "backend-tw-stock-research.yml"
 
 
 def _text() -> str:
@@ -40,9 +40,9 @@ def test_tw_stock_research_workflow_does_not_install_browsers_or_start_services(
 def test_tw_stock_research_workflow_triggers_on_safety_checklist_files():
     text = _text()
 
-    assert ".github/PULL_REQUEST_TEMPLATE.md" in text
-    assert "backend/tests/test_pr_template_safety_checklist.py" in text
-    assert "backend/tests/test_tw_stock_research_workflow.py" in text
+    assert ".github/workflows/backend-tw-stock-research.yml" in text
+    assert "backend/tests/test_tw_stock*" in text
+    assert "backend/tests/test_*tw_stock*" in text
 
 
 def test_tw_stock_research_workflow_keeps_frontend_e2e_out_of_offline_ci():

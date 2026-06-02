@@ -1,6 +1,6 @@
 # Taiwan Stock Quant Platform
 
-A standalone Taiwan stock research platform that combines Scrapling-style market-data collection, QuantDinger backend services, qlib Option C quantitative signals, cross-analysis, an OpenAI-powered research agent, and a Vue monitoring frontend.
+A standalone packaged Taiwan stock research platform that combines QuantDinger backend services, qlib Option C signal consumption/ops integration, cross-analysis, an OpenAI-powered research agent, and a Vue monitoring frontend. It also documents the Scrapling/Yahoo data collection workflow used by the related qlib pipeline.
 
 The project is designed for research and human review. It does not place broker orders by default, and the Taiwan stock monitor keeps generated recommendations in a read-only research workflow.
 
@@ -15,8 +15,9 @@ The project is designed for research and human review. It does not place broker 
 ## Core Capabilities
 
 - Taiwan stock symbol sync and daily data archive.
-- Scrapling/Yahoo-style collection workflow documentation.
-- qlib Option C normalized data export, signal generation, accepted latest artifact publishing, EOD automation, and scheduler support.
+- Executable FinMind/TWSE Taiwan stock archive and validation scripts.
+- qlib Option C normalized data export, accepted latest artifact consumption, ops integration, EOD automation wrappers, and scheduler support.
+- Scrapling/Yahoo collection workflow documentation for the external qlib/Scrapling producer path.
 - QuantDinger cross-analysis between qlib research signals and monitor/trend data.
 - Read-only backtest templates and historical simulation.
 - OpenAI Agent module for questions such as top ranked stocks, trend metrics, and buy/sell research suggestions.
@@ -90,7 +91,7 @@ Ignored examples:
 - `frontend/dist/`
 - caches and virtual environments
 
-Use the scripts and docs to regenerate local data in your own environment.
+Use the scripts and docs to regenerate local data in your own environment. For a fully self-contained Scrapling/Yahoo -> qlib training/prediction loop, add the external qlib `examples/tw/*option_c*` scripts and Scrapling crawler into this repository or vendor them as a submodule.
 
 ## Attribution
 

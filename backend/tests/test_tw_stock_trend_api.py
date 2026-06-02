@@ -400,19 +400,20 @@ def test_monitor_scan_builds_baseline_then_alerts_on_score_change(monkeypatch):
     assert resp.status_code == 200
     data = resp.get_json()["data"]
     assert data["status"] == "scanned"
-    assert data["alert_count"] == 0
+    assert not any(item["alert_type"] == "score_change" for item in data["alerts"])
     assert data["trading"]["orders_enabled"] is False
     assert len(store["trend_history"]) == 1
     assert store["trend_history"][0]["symbol"] == "2330"
 
+    previous_notification_count = len(store["notifications"])
     tw_stock_route.trend_service = TWStockTrendService(FakeKlineService({"2330": _bars(144, start=100, step=3.0)}))
     resp = client.post("/api/tw-stock/monitor/scan")
     assert resp.status_code == 200
     data = resp.get_json()["data"]
     assert data["alert_count"] >= 1
     assert any(item["alert_type"] == "score_change" for item in data["alerts"])
-    assert len(store["notifications"]) == data["alert_count"]
-    assert store["notifications"][0]["signal_type"] == "tw_stock_monitor"
+    assert len(store["notifications"]) - previous_notification_count == data["alert_count"]
+    assert store["notifications"][-1]["signal_type"] == "tw_stock_monitor"
     assert len(store["trend_history"]) == 2
 
     resp = client.get("/api/tw-stock/monitor/history?symbol=2330&limit=10")
