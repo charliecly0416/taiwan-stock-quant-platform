@@ -1,0 +1,16 @@
+{
+  "name": "tw_conservative_research_watchlist",
+  "symbols": [
+    "2330",
+    "2317",
+    "2454",
+    "0050",
+    "0056",
+    "00878"
+  ],
+  "limit_bars": 120,
+  "refresh_interval_sec": 900,
+  "score_change_threshold": 8.0,
+  "enabled": false,
+  "notes": "Conservative TWStock research monitor sample for manual review only; disabled by default; no automatic trading, no broker connection, no paper/live order submission."
+}

@@ -1,0 +1,324 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const root = resolve(new URL('..', import.meta.url).pathname, '..')
+const read = (path) => readFileSync(resolve(root, path), 'utf8')
+
+const page = read('src/views/tw-stock-monitor/index.vue')
+const api = read('src/api/tw-stock.js')
+const routes = read('src/config/router.config.js')
+const permission = read('src/permission.js')
+const aiAssetPage = read('src/views/ai-asset-analysis/index.vue')
+
+assert.match(routes, /redirect:\s*'\/tw-stock-monitor'/)
+assert.match(permission, /defaultRoutePath\s*=\s*'\/tw-stock-monitor'/)
+assert.match(routes, /path:\s*'\/tw-stock-monitor'/)
+assert.match(routes, /menu\.dashboard\.twStockMonitor/)
+assert.match(api, /const BASE_URL = '\/api\/tw-stock'/)
+assert.doesNotMatch(aiAssetPage, /getTradingOpportunities/)
+assert.doesNotMatch(aiAssetPage, /QuickTradePanel/)
+assert.doesNotMatch(aiAssetPage, /quick-trade|qt-floating-btn|radar-section/)
+
+for (const endpoint of [
+  '/monitor/config',
+  '/monitor/alerts',
+  '/monitor/history',
+  '/monitor/scan',
+  '/monitor/scan-all',
+  '/monitor/scan-logs'
+]) {
+  assert.ok(api.includes(endpoint), `missing endpoint ${endpoint}`)
+}
+
+assert.match(page, /orders_enabled=false/)
+assert.match(page, /Human Review/)
+assert.match(page, /手動研究掃描/)
+assert.match(page, /degradedNotice/)
+assert.match(page, /一次性研究掃描/)
+assert.match(page, /結果未寫入提醒或歷史/)
+assert.match(page, /scanTwStockMonitor\(\{ name: this\.config\.name \|\| 'default', force: true \}\)/)
+assert.match(page, /日線 K 線 \/ 走勢/)
+assert.match(page, /ref="priceChart"/)
+assert.match(page, /ref="scoreChart"/)
+assert.match(page, /getTwStockHistory/)
+assert.match(page, /getTwStockKline/)
+assert.match(page, /refreshIntervalMs/)
+assert.match(page, /window\.setInterval/)
+assert.match(page, /showMovingAverages/)
+assert.match(page, /showVolume/)
+assert.match(page, /movingAveragePoints/)
+assert.match(page, /trendCustomRow/)
+assert.match(page, /selected-symbol-panel/)
+assert.match(page, /MA5/)
+assert.match(page, /MA20/)
+assert.match(page, /MA60/)
+assert.match(page, /量能/)
+assert.match(page, /Vol Ratio/)
+assert.match(page, /60D/)
+assert.match(page, /Bars/)
+assert.match(page, /chart-tooltip/)
+assert.match(page, /handleChartMouseMove/)
+assert.match(page, /clearChartHover/)
+assert.match(page, /chartLayouts/)
+assert.match(page, /priceDataStatusText/)
+assert.match(page, /priceDataStale/)
+assert.match(page, /chartEmptyText/)
+assert.match(page, /route\.query\.symbol/)
+assert.match(page, /日線資料可能過舊/)
+assert.match(page, /chartRangeBars/)
+assert.match(page, /displayedPriceCandles/)
+assert.match(page, /displayedHistoryItems/)
+assert.match(page, /handleChartRangeChange/)
+assert.match(page, /sliceByChartRange/)
+assert.match(page, /chartWindowText/)
+assert.match(page, /30D/)
+assert.match(page, /120D/)
+assert.match(page, /窗口/)
+assert.match(api, /getTwStockKline/)
+assert.match(api, /\/api\/indicator\/kline/)
+assert.match(api, /market:\s*'TWStock'/)
+assert.match(api, /getTwStockBacktestTemplates/)
+assert.match(api, /runTwStockReadonlyBacktest/)
+assert.match(api, /\/api\/indicator\/backtest\/tw-stock\/templates/)
+assert.match(api, /\/api\/indicator\/backtest/)
+assert.match(api, /persist:\s*false/)
+assert.match(api, /enableMtf:\s*false/)
+assert.match(api, /timeframe:\s*'1D'/)
+
+assert.match(api, /getQlibOptionCHealth/)
+assert.match(api, /\/quant\/signals\/health/)
+assert.match(page, /qlib Option C 数据状态/)
+assert.match(page, /getQlibOptionCHealth\(\)/)
+assert.match(page, /loadQlibHealth/)
+assert.match(page, /TWStock local daily bars/)
+assert.match(page, /qd_tw_stock_daily_bars/)
+assert.match(page, /accepted/)
+assert.match(page, /stale/)
+assert.match(page, /wait-state/)
+assert.match(page, /missing/)
+assert.match(page, /qlibHealthWarnings/)
+assert.match(api, /getLatestQlibOptionCSignals/)
+assert.match(api, /\/quant\/signals\/latest/)
+assert.match(api, /getQlibOptionCRuns/)
+assert.match(api, /getQlibOptionCRunDetail/)
+assert.match(api, /\/quant\/signals\/runs/)
+assert.match(api, /encodeURIComponent\(runId\)/)
+assert.match(api, /normalizedBucket = bucket === 'top50' \? 'top50' : 'top30'/)
+assert.match(api, /enrichTrend:\s*Boolean\(enrichTrend\)/)
+assert.match(api, /trendLimit:\s*Math\.max\(20,\s*Math\.min\(Number\(trendLimit \|\| 120\),\s*500\)\)/)
+assert.doesNotMatch(api, /enrich_trend\s*:\s*true/)
+
+
+assert.match(api, /triggerQlibOptionCDryRun/)
+assert.match(api, /getQlibOptionCJob/)
+assert.match(api, /getQlibOptionCJobLog/)
+assert.match(api, /getQlibOptionCLatestJob/)
+assert.match(api, /\/quant\/ops\/option-c\/dry-run/)
+assert.match(api, /\/quant\/ops\/option-c\/jobs/)
+assert.match(api, /\/quant\/ops\/option-c\/latest/)
+assert.match(api, /data:\s*\{ asof \}/)
+assert.doesNotMatch(api, /provider_uri|providerPath|provider_path|max_workers|maxWorkers|publish-job|refresh-provider/)
+assert.match(page, /qlib Option C Ops Dry-run/)
+assert.match(page, /Dry-run only/)
+assert.match(page, /Research ops/)
+assert.match(page, /No latest update/)
+assert.match(page, /No accepted artifact/)
+assert.match(page, /No trading/)
+assert.match(page, /triggerQlibOpsDryRun/)
+assert.match(page, /loadQlibOpsLatest/)
+assert.match(page, /refreshQlibOpsJob/)
+assert.match(page, /loadQlibOpsLog/)
+assert.match(page, /latest_signal_updated=/)
+assert.match(page, /normal_signal_run=/)
+assert.match(page, /accepted_artifact_generated=/)
+assert.match(page, /orders_enabled=/)
+assert.match(page, /writes_orders=/)
+assert.match(page, /writes_positions=/)
+assert.match(page, /stdout/)
+assert.match(page, /stderr/)
+assert.doesNotMatch(page, /刷新 qlib provider|正式发布|生成 latest|生成 accepted/)
+
+assert.match(page, /qlib Option C 研究排序/)
+assert.match(page, /qlib Option C 歷史研究 run/)
+assert.match(page, /qlibRunStatusFilter/)
+assert.match(page, /loadQlibRuns/)
+assert.match(page, /loadQlibRunDetail/)
+assert.match(page, /getQlibOptionCRuns\(\{ limit: 20, status: this\.qlibRunStatusFilter \}\)/)
+assert.match(page, /getQlibOptionCRunDetail\(run\.run_id/)
+assert.match(page, /回到 latest/)
+assert.match(page, /blocked\/wait-state run 不展示可用 signals/)
+assert.match(page, /研究觀察草稿/)
+assert.match(page, /加入觀察/)
+assert.match(page, /填入監控配置/)
+assert.match(page, /觀察草稿僅供人工復盤/)
+assert.match(page, /不會自動啟用掃描/)
+assert.match(page, /不會自動建立提醒/)
+assert.match(page, /不會產生訂單或持倉/)
+assert.match(page, /qlibWatchDraft/)
+assert.match(page, /addQlibWatchDraft/)
+assert.match(page, /fillMonitorConfigFromQlibDraft/)
+assert.match(page, /tw-stock-monitor-qlib-watch-draft/)
+assert.match(page, /Research only/)
+assert.match(page, /Not order/)
+assert.match(page, /Read-only/)
+assert.match(page, /Top 30/)
+assert.match(page, /Top 50/)
+assert.match(page, /asof/)
+assert.match(page, /run_id/)
+assert.match(page, /recorder_id/)
+assert.match(page, /qlib_score/)
+assert.match(page, /diagnostic_only/)
+assert.match(page, /research_signal_not_order/)
+assert.match(page, /qlibWarnings/)
+assert.match(page, /qlibSignalsAccepted/)
+assert.match(page, /qlibEmptyText/)
+assert.match(page, /getLatestQlibOptionCSignals\(\{ bucket: this\.qlibBucket, enrichTrend: true, trendLimit: 120 \}\)/)
+assert.match(page, /selectTrendSymbol\(record\.symbol\)/)
+assert.match(page, /enrichTrend:\s*true/)
+assert.match(page, /trendLimit:\s*120/)
+assert.doesNotMatch(page, /enrich_trend\s*:\s*true/)
+assert.doesNotMatch(page, /qlib_score[^\n]{0,80}(收益|勝率|胜率|漲幅|涨幅|概率|機率|仓位|倉位)/)
+assert.doesNotMatch(page, /(收益|勝率|胜率|漲幅|涨幅|概率|機率|仓位|倉位)[^\n]{0,80}qlib_score/)
+
+assert.match(page, /trend_label/)
+assert.match(page, /trend_score/)
+assert.match(page, /latest_close \/ latest_date/)
+assert.match(page, /quality_warnings/)
+assert.match(page, /trend unavailable/)
+assert.match(page, /qlibTrendAvailable/)
+assert.doesNotMatch(page, /combined_score/)
+assert.doesNotMatch(api, /combined_score/)
+assert.doesNotMatch(page, /buy_score/)
+assert.doesNotMatch(api, /buy_score/)
+assert.doesNotMatch(page, /target_weight/)
+assert.doesNotMatch(api, /target_weight/)
+assert.doesNotMatch(page, /target_position/)
+assert.doesNotMatch(api, /target_position/)
+
+assert.match(page, /回測驗證/)
+assert.match(page, /台股只讀回測驗證/)
+assert.match(page, /歷史模擬/)
+assert.match(page, /historical simulation/)
+assert.match(page, /connects_to_broker=false/)
+assert.match(page, /getTwStockBacktestTemplates/)
+assert.match(page, /runTwStockReadonlyBacktest/)
+assert.match(page, /strategyId/)
+assert.match(page, /ma_cross_builtin/)
+assert.match(page, /backtestEquityChart/)
+assert.match(page, /backtestDataQuality/)
+assert.match(page, /backtestAssumptions/)
+assert.match(page, /backtestTrades/)
+assert.match(page, /需要先更新本地日線歸檔/)
+
+assert.match(page, /研究动作/)
+assert.match(page, /@click\.stop="addQlibWatchDraft\(row\)"/)
+assert.match(page, /openQlibReadonlyBacktest/)
+assert.match(page, /@click\.stop="openQlibReadonlyBacktest\(row\)"/)
+assert.match(page, /readonlyBacktestPanel/)
+assert.match(page, /this\.backtestPanelVisible = true/)
+assert.match(page, /await this\.selectTrendSymbol\(row\.symbol\)/)
+assert.match(page, /scrollIntoView\(\{ behavior: 'smooth', block: 'start' \}\)/)
+assert.match(page, /回測結果不是 qlib score 的驗證結論/)
+assert.match(page, /不是未來收益承諾/)
+
+
+const draftActionMatch = page.match(/addQlibWatchDraft \(row\) \{[\s\S]*?\n    \},\n    removeQlibWatchDraft/)
+assert.ok(draftActionMatch, 'missing addQlibWatchDraft method')
+const draftActionBody = draftActionMatch[0]
+assert.match(page, /persistQlibWatchDraft \(\) \{[\s\S]*localStorage\.setItem/)
+assert.match(draftActionBody, /persistQlibWatchDraft\(\)/)
+assert.doesNotMatch(draftActionBody, /saveConfig\(/)
+assert.doesNotMatch(draftActionBody, /saveTwStockMonitorConfig\(/)
+assert.doesNotMatch(draftActionBody, /runScan\(/)
+assert.doesNotMatch(draftActionBody, /scanTwStockMonitor\(/)
+assert.doesNotMatch(draftActionBody, /runReadonlyBacktest\(/)
+assert.doesNotMatch(draftActionBody, /runTwStockReadonlyBacktest\(/)
+assert.doesNotMatch(draftActionBody, /quick-trade|broker|order|target_position|targetPosition/i)
+
+const fillDraftMatch = page.match(/fillMonitorConfigFromQlibDraft \(\) \{[\s\S]*?\n    \},\n    qlibTrendAvailable/)
+assert.ok(fillDraftMatch, 'missing fillMonitorConfigFromQlibDraft method')
+const fillDraftBody = fillDraftMatch[0]
+assert.match(fillDraftBody, /symbolsText/)
+assert.match(fillDraftBody, /configDrawerVisible = true/)
+assert.doesNotMatch(fillDraftBody, /saveConfig\(/)
+assert.doesNotMatch(fillDraftBody, /saveTwStockMonitorConfig\(/)
+assert.doesNotMatch(fillDraftBody, /runScan\(/)
+assert.doesNotMatch(fillDraftBody, /scanTwStockMonitor\(/)
+assert.doesNotMatch(fillDraftBody, /getTwStockAlerts\(/)
+assert.doesNotMatch(fillDraftBody, /enabled\s*:\s*true/)
+assert.doesNotMatch(fillDraftBody, /\.enabled\s*=\s*true/)
+
+const actionMatch = page.match(/async openQlibReadonlyBacktest \(row\) \{[\s\S]*?\n    \},\n    qlibCustomRow/)
+assert.ok(actionMatch, 'missing openQlibReadonlyBacktest method')
+const actionBody = actionMatch[0]
+assert.match(actionBody, /selectTrendSymbol\(row\.symbol\)/)
+assert.match(actionBody, /backtestPanelVisible = true/)
+assert.match(actionBody, /loadBacktestTemplates\(\)/)
+assert.doesNotMatch(actionBody, /saveConfig\(/)
+assert.doesNotMatch(actionBody, /runScan\(/)
+assert.doesNotMatch(actionBody, /scanTwStockMonitor\(/)
+assert.doesNotMatch(actionBody, /runReadonlyBacktest\(/)
+assert.doesNotMatch(actionBody, /runTwStockReadonlyBacktest\(/)
+
+for (const forbidden of [
+
+  '刷新 qlib provider',
+  '重新生成 qlib 信号',
+  '重新生成 qlib 信號',
+  '自动补数据',
+  '自動補數據',
+  '开始交易',
+  '開始交易',
+  '重新运行 qlib',
+  '重新運行 qlib',
+  '刷新数据源',
+  '刷新資料源',
+  'provider refresh',
+  '重训模型',
+  '重訓模型',
+  '导入交易计划',
+  '導入交易計劃',
+  'quick-trade',
+  'broker-accounts',
+  'ibkr',
+  'paper order',
+  'live order',
+  'submit order',
+  'auto buy',
+  'auto sell',
+  '下單',
+  '买入',
+  '買入',
+  '卖出',
+  '賣出',
+  '提交订单',
+  '提交訂單',
+  'automatic trading',
+  'target position',
+  'target weight',
+  'quick trade',
+  'quick_trade',
+  'broker connect',
+  '自動交易',
+  '自动交易',
+  '目標倉位',
+  '目标仓位',
+  '建議倉位',
+  '建议仓位',
+  '推薦買入',
+  '推荐买入',
+  '交易信號',
+  '交易信号',
+  '買入概率',
+  '买入概率',
+  '預測收益',
+  '预测收益',
+  '預期漲幅',
+  '预期涨幅'
+]) {
+  assert.ok(!page.toLowerCase().includes(forbidden), `page contains forbidden text: ${forbidden}`)
+  assert.ok(!api.toLowerCase().includes(forbidden), `api contains forbidden text: ${forbidden}`)
+}
+
+console.log('tw-stock-monitor static checks passed')

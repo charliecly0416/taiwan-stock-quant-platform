@@ -1,0 +1,66 @@
+name: Frontend TWStock Monitor
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'frontend/src/api/tw-stock.js'
+      - 'frontend/src/views/tw-stock-monitor/**'
+      - 'frontend/src/config/router.config.js'
+      - 'frontend/src/locales/lang/*.js'
+      - 'frontend/tests/unit/tw-stock-*.mjs'
+      - 'frontend/package.json'
+      - 'frontend/pnpm-lock.yaml'
+      - 'frontend/vite.config.js'
+      - 'frontend/docs/TW_STOCK_MONITOR*.md'
+      - '.github/workflows/frontend-tw-stock-monitor.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'frontend/src/api/tw-stock.js'
+      - 'frontend/src/views/tw-stock-monitor/**'
+      - 'frontend/src/config/router.config.js'
+      - 'frontend/src/locales/lang/*.js'
+      - 'frontend/tests/unit/tw-stock-*.mjs'
+      - 'frontend/package.json'
+      - 'frontend/pnpm-lock.yaml'
+      - 'frontend/vite.config.js'
+      - 'frontend/docs/TW_STOCK_MONITOR*.md'
+      - '.github/workflows/frontend-tw-stock-monitor.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: tw-stock-monitor-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    name: Frontend acceptance
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run TW stock monitor static checks
+        run: node tests/unit/tw-stock-monitor-static-check.mjs
+      - name: Run TW stock monitor workflow checks
+        run: node tests/unit/tw-stock-monitor-workflow-check.mjs
+      - name: Run TW stock monitor qlib ops checks
+        run: node tests/unit/tw-stock-monitor-qlib-ops-check.mjs
+      - name: Run TW stock cross-analysis checks
+        run: node tests/unit/tw-stock-cross-analysis-check.mjs
+      - name: Build frontend
+        run: pnpm build
