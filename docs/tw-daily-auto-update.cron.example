@@ -1,0 +1,16 @@
+# Taiwan stock daily unattended update.
+# Install with: crontab docs/tw-daily-auto-update.cron.example
+# Adjust PROJECT_ROOT and Python path before installing.
+#
+# Behavior:
+# - Tries after Taiwan market close every 2 hours.
+# - If today's data is unavailable, scripts/run_daily_tw_stock_auto_update.py
+#   writes data_tw/ops/daily_auto_update/pending_asof.json.
+# - Future runs keep retrying that pending asof, even after midnight, until
+#   accepted latest is published successfully.
+
+SHELL=/bin/bash
+PROJECT_ROOT=/path/to/taiwan-stock-quant-platform
+
+30 16,18,20,22 * * 1-5 cd "$PROJECT_ROOT" && flock -n data_tw/ops/daily_auto_update.lock python scripts/run_daily_tw_stock_auto_update.py >> data_tw/ops/daily_auto_update/cron.log 2>&1
+30 0,2,4 * * 2-6 cd "$PROJECT_ROOT" && flock -n data_tw/ops/daily_auto_update.lock python scripts/run_daily_tw_stock_auto_update.py >> data_tw/ops/daily_auto_update/cron.log 2>&1

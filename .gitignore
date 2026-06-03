@@ -31,6 +31,9 @@ qlib_pipeline/mlruns/
 *.sqlite
 *.sqlite3
 
+# Generated reports
+qlib_pipeline/docs/FULL_PRODUCTION_*_REPORT.md
+
 # Logs and runtime state
 logs/
 *.log

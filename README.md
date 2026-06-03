@@ -4,6 +4,14 @@ A standalone packaged Taiwan stock research platform that combines QuantDinger b
 
 The project is designed for research and human review. It does not place broker orders by default, and the Taiwan stock monitor keeps generated recommendations in a read-only research workflow.
 
+
+## Chinese Documentation
+
+- [项目介绍与原理](docs/PROJECT_INTRO_CN.md)
+- [使用文档](docs/USER_GUIDE_CN.md)
+- [每日自动更新闭环](docs/DAILY_AUTO_UPDATE_CN.md)
+- [最大生产闭环说明](docs/FULL_PRODUCTION_CLOSED_LOOP_CN.md)
+
 ## What It Contains
 
 - `backend/`: Flask/Python services extracted from QuantDinger for Taiwan stock data, qlib signals, cross-analysis, trend analysis, agent context, and safety guardrails.
