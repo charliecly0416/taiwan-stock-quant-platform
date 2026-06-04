@@ -203,6 +203,74 @@
           :message="qlibHealthError"
         />
       </div>
+      <div class="daily-auto-update-panel" data-testid="tw-stock-daily-auto-update-panel">
+        <div class="daily-auto-update-header">
+          <div>
+            <strong>每日自動更新狀態</strong>
+            <span class="muted">FinMind raw 與 Yahoo/Scrapling qlib 的只讀資料新鮮度。</span>
+          </div>
+          <a-button size="small" @click="loadDailyAutoUpdateStatus" :loading="loadingDailyAutoUpdateStatus">
+            <a-icon type="reload" /> 更新狀態
+          </a-button>
+        </div>
+        <div class="daily-auto-update-tags">
+          <a-tag :color="dailyAutoUpdateStatusColor">{{ dailyAutoUpdateData.last_job_status || dailyAutoUpdateData.latest_status || 'no-job' }}</a-tag>
+          <a-tag v-if="dailyAutoUpdateFreshWait" color="orange">fresh_data_wait</a-tag>
+          <a-tag :color="dailyAutoUpdateData.cron_installed_hint ? 'blue' : 'default'">{{ dailyAutoUpdateCronHintText }}</a-tag>
+          <a-tag color="green">orders_enabled=false</a-tag>
+          <a-tag color="green">connects_to_broker=false</a-tag>
+          <a-tag color="purple">research_signal_not_order=true</a-tag>
+        </div>
+        <div class="daily-auto-update-grid">
+          <span>latest accepted asof <strong>{{ dailyAutoUpdateData.latest_asof || '-' }}</strong></span>
+          <span>latest status <strong>{{ dailyAutoUpdateData.latest_status || '-' }}</strong></span>
+          <span>latest run_id <strong>{{ dailyAutoUpdateData.latest_run_id || '-' }}</strong></span>
+          <span>pending asof <strong>{{ dailyAutoUpdateData.pending_asof || '-' }}</strong></span>
+          <span>pending reason <strong>{{ dailyAutoUpdateData.pending_reason || '-' }}</strong></span>
+          <span>last job <strong>{{ dailyAutoUpdateData.last_job_status || '-' }}</strong></span>
+          <span>started <strong>{{ dailyAutoUpdateData.last_job_started_at || '-' }}</strong></span>
+          <span>finished <strong>{{ dailyAutoUpdateData.last_job_finished_at || '-' }}</strong></span>
+        </div>
+        <div class="daily-auto-update-source-grid">
+          <div class="daily-auto-update-source-card">
+            <span>FinMind raw</span>
+            <strong>{{ dailyAutoUpdateData.finmind_update_status || '-' }}</strong>
+            <small>archived_count={{ dailyAutoUpdateData.finmind_archived_count == null ? '-' : dailyAutoUpdateData.finmind_archived_count }}</small>
+          </div>
+          <div class="daily-auto-update-source-card">
+            <span>Yahoo/Scrapling qlib</span>
+            <strong>目标 {{ dailyAutoUpdateData.yahoo_target_asof || '-' }}，当前最大日期 {{ dailyAutoUpdateData.yahoo_date_max || '-' }}</strong>
+            <small>缺失 {{ dailyAutoUpdateData.yahoo_missing_asof_count == null ? '-' : dailyAutoUpdateData.yahoo_missing_asof_count }} 支。</small>
+          </div>
+          <div class="daily-auto-update-source-card">
+            <span>next retry</span>
+            <strong>{{ dailyAutoUpdateData.next_retry_hint || '-' }}</strong>
+            <small>{{ dailyAutoUpdateCronExplainText }}</small>
+          </div>
+          <div class="daily-auto-update-source-card">
+            <span>research boundary</span>
+            <strong>{{ dailyAutoUpdateNoTradingText }}</strong>
+            <small>只读狀態，不觸發資料拉取、產物切換或交易。</small>
+          </div>
+        </div>
+        <a-alert
+          v-if="dailyAutoUpdateFreshWait"
+          class="daily-auto-update-alert"
+          type="warning"
+          show-icon
+          message="FinMind raw 数据已更新，但 Yahoo/Scrapling qlib 复权数据尚未到目标日期。系统会继续按定时任务重试 pending asof。当前 latest 不更新是正确的保护行为。"
+        />
+        <a-alert
+          v-if="dailyAutoUpdateError"
+          class="daily-auto-update-alert"
+          type="warning"
+          show-icon
+          :message="dailyAutoUpdateError"
+        />
+        <div v-if="dailyAutoUpdateWarnings.length" class="daily-auto-update-warnings">
+          <a-tag v-for="warning in dailyAutoUpdateWarnings" :key="`daily-auto-${warning}`" color="orange">{{ warning }}</a-tag>
+        </div>
+      </div>
       <div class="qlib-run-browser">
         <div class="qlib-run-header">
           <strong>qlib Option C 歷史研究 run</strong>
@@ -333,6 +401,7 @@
         row-key="rank"
         size="small"
         class="qlib-signal-table"
+        data-testid="qlib-signal-table"
         :loading="loadingQlibSignals"
         :columns="qlibColumns"
         :data-source="qlibSignals"
@@ -358,7 +427,7 @@
         </template>
         <template slot="action" slot-scope="text, row">
           <div class="qlib-row-actions">
-            <a-button size="small" @click.stop="addQlibWatchDraft(row)">
+            <a-button size="small" data-testid="qlib-watch-add" @click.stop="addQlibWatchDraft(row)">
               <a-icon type="eye" /> 加入觀察
             </a-button>
             <a-button size="small" @click.stop="openQlibReadonlyBacktest(row)">
@@ -377,14 +446,14 @@
       <div v-else-if="!loadingQlibSignals" class="qlib-empty-state">
         {{ qlibEmptyText }}
       </div>
-      <div class="qlib-watch-draft">
+      <div class="qlib-watch-draft" data-testid="qlib-watch-draft">
         <div class="qlib-watch-draft-header">
           <div>
             <strong>研究觀察草稿</strong>
             <span class="muted">觀察草稿僅供人工復盤，不會自動啟用掃描，不會自動建立提醒，不會產生訂單或持倉。</span>
           </div>
           <div class="qlib-watch-draft-actions">
-            <a-button size="small" :disabled="!qlibWatchDraft.length" @click="fillMonitorConfigFromQlibDraft">
+            <a-button size="small" data-testid="qlib-watch-fill-config" :disabled="!qlibWatchDraft.length" @click="fillMonitorConfigFromQlibDraft">
               <a-icon type="form" /> 填入監控配置
             </a-button>
             <a-button size="small" :disabled="!qlibWatchDraft.length" @click="clearQlibWatchDraft">
@@ -858,13 +927,13 @@
       </a-table>
     </a-card>
 
-    <a-drawer title="監控配置" :visible="configDrawerVisible" width="420" @close="configDrawerVisible = false">
+    <a-drawer title="監控配置" :visible="configDrawerVisible" width="420" data-testid="monitor-config-drawer" @close="configDrawerVisible = false">
       <a-form layout="vertical">
         <a-form-item label="Name">
           <a-input v-model="configForm.name" />
         </a-form-item>
         <a-form-item label="Symbols">
-          <a-textarea v-model="configForm.symbolsText" :rows="4" />
+          <a-textarea v-model="configForm.symbolsText" data-testid="monitor-config-symbols" :rows="4" />
         </a-form-item>
         <a-form-item label="Limit bars">
           <a-input-number v-model="configForm.limit_bars" :min="20" :max="500" style="width: 100%" />
@@ -912,6 +981,7 @@ import {
   getQlibOptionCJob,
   getQlibOptionCJobLog,
   getQlibOptionCLatestJob,
+  getTwStockDailyAutoUpdateStatus,
   getQlibOptionCScheduler,
   getTwStockCrossAnalysisLatest,
   getTwStockCrossAnalysisSymbol,
@@ -937,6 +1007,7 @@ export default {
       loadingQlibOps: false,
       runningQlibOpsDryRun: false,
       loadingQlibOpsLog: false,
+      loadingDailyAutoUpdateStatus: false,
       loadingCrossAnalysis: false,
       loadingCrossAnalysisDetail: false,
       loadingAgentContext: false,
@@ -988,8 +1059,10 @@ export default {
       qlibOpsLogStream: 'stdout',
       qlibOpsLogTail: '',
       qlibOpsError: '',
+      dailyAutoUpdateStatus: null,
+      dailyAutoUpdateError: '',
       qlibOpsForm: {
-        asof: '2026-06-01'
+        asof: moment('2026-06-01', 'YYYY-MM-DD')
       },
       qlibWatchDraft: [],
       crossAnalysisBucket: 'top30',
@@ -1225,6 +1298,38 @@ export default {
       const staleReason = freshness.stale_reason ? [freshness.stale_reason] : []
       return Array.from(new Set([].concat(latestWarnings, dataWarnings, freshnessWarnings, staleReason).filter(Boolean)))
     },
+    dailyAutoUpdateData () {
+      return this.dailyAutoUpdateStatus || {}
+    },
+    dailyAutoUpdateFreshWait () {
+      return this.dailyAutoUpdateData.fresh_data_wait === true
+    },
+    dailyAutoUpdateWarnings () {
+      const warnings = this.dailyAutoUpdateData.warnings
+      return Array.isArray(warnings) ? warnings : []
+    },
+    dailyAutoUpdateTradingFlags () {
+      return this.dailyAutoUpdateData.trading || {}
+    },
+    dailyAutoUpdateStatusColor () {
+      const status = this.dailyAutoUpdateData.last_job_status || this.dailyAutoUpdateData.latest_status
+      if (status === 'daily_auto_update_passed' || status === 'already_up_to_date' || status === 'accepted') return 'green'
+      if (status === 'fresh_data_wait') return 'orange'
+      if (status === 'provider_publish_failed' || status === 'accepted_latest_failed') return 'red'
+      return 'default'
+    },
+    dailyAutoUpdateCronHintText () {
+      return this.dailyAutoUpdateData.cron_installed_hint ? 'auto schedule hint detected' : 'no schedule hint'
+    },
+    dailyAutoUpdateCronExplainText () {
+      return this.dailyAutoUpdateData.cron_installed_hint
+        ? '检测到自动更新计划配置或日志，系统会继续按配置重试。'
+        : '未检测到自动更新计划配置或日志，请检查 cron/systemd 安装。'
+    },
+    dailyAutoUpdateNoTradingText () {
+      const flags = this.dailyAutoUpdateTradingFlags
+      return `orders_enabled=${String(flags.orders_enabled === true)} / connects_to_broker=${String(flags.connects_to_broker === true)} / research_signal_not_order=${String(flags.research_signal_not_order === true)}`
+    },
     qlibOpsStatusColor () {
       const status = this.qlibOpsJob && this.qlibOpsJob.status
       if (status === 'dry_run_passed') return 'green'
@@ -1420,6 +1525,7 @@ export default {
     this.loadQlibRuns()
     this.loadQlibScheduler()
     this.loadQlibOpsLatest()
+    this.loadDailyAutoUpdateStatus()
     this.loadCrossAnalysis()
     this.loadTwStockAgentContext()
     this.refreshAll()
@@ -1477,6 +1583,20 @@ export default {
         this.qlibHealthError = (response && response.msg) || error.message || 'qlib Option C 数据状态讀取失敗'
       } finally {
         this.loadingQlibHealth = false
+      }
+    },
+    async loadDailyAutoUpdateStatus () {
+      this.loadingDailyAutoUpdateStatus = true
+      this.dailyAutoUpdateError = ''
+      try {
+        const data = this.unwrap(await getTwStockDailyAutoUpdateStatus())
+        this.dailyAutoUpdateStatus = data || null
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.dailyAutoUpdateStatus = response && response.data ? response.data : null
+        this.dailyAutoUpdateError = (response && response.msg) || error.message || '每日自动更新状态读取失败。'
+      } finally {
+        this.loadingDailyAutoUpdateStatus = false
       }
     },
     async loadQlibSignals () {
@@ -1958,7 +2078,7 @@ export default {
       this.loading = true
       try {
         await this.loadConfig()
-        await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs(), this.loadQlibHealth(), this.loadQlibSignals(), this.loadQlibOpsLatest(), this.loadCrossAnalysis(), this.loadTwStockAgentContext()])
+        await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs(), this.loadQlibHealth(), this.loadQlibSignals(), this.loadDailyAutoUpdateStatus(), this.loadQlibOpsLatest(), this.loadCrossAnalysis(), this.loadTwStockAgentContext()])
         this.lastRefreshedAt = new Date().toLocaleTimeString()
         this.syncAutoRefreshTimer()
       } finally {
@@ -2764,6 +2884,76 @@ export default {
   font-weight: 600;
 }
 
+
+.daily-auto-update-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #e4ecf7;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.daily-auto-update-header,
+.daily-auto-update-tags,
+.daily-auto-update-warnings {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.daily-auto-update-header strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.daily-auto-update-tags,
+.daily-auto-update-warnings {
+  justify-content: flex-start;
+}
+
+.daily-auto-update-grid,
+.daily-auto-update-source-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.daily-auto-update-grid span,
+.daily-auto-update-source-card {
+  min-width: 0;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid #eef2f7;
+  border-radius: 6px;
+  color: #475467;
+  overflow-wrap: anywhere;
+}
+
+.daily-auto-update-grid strong,
+.daily-auto-update-source-card strong {
+  color: #111827;
+  font-weight: 600;
+}
+
+.daily-auto-update-source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.daily-auto-update-source-card span,
+.daily-auto-update-source-card small {
+  color: #667085;
+  font-size: 12px;
+}
+
+.daily-auto-update-alert {
+  margin-top: 8px;
+}
 
 .qlib-run-browser {
   margin-bottom: 12px;

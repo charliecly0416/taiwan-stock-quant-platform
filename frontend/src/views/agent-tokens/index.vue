@@ -216,7 +216,7 @@
         </div>
         <div class="reveal-row">
           <span class="reveal-label">{{ $t('agentTokens.token') || 'Token' }}:</span>
-          <a-input :value="revealed.token" readOnly class="reveal-token-input" />
+          <a-input :value="revealed.token" read-only class="reveal-token-input" />
           <a-button type="primary" @click="copyToken(revealed.token)" style="margin-left: 8px">
             <a-icon type="copy" /> {{ $t('agentTokens.copy') || 'Copy' }}
           </a-button>

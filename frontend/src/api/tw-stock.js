@@ -226,6 +226,13 @@ export function getQlibOptionCLatestJob () {
   })
 }
 
+export function getTwStockDailyAutoUpdateStatus () {
+  return request({
+    url: `${BASE_URL}/quant/ops/daily-auto-update/status`,
+    method: 'get'
+  })
+}
+
 export function getQlibOptionCScheduler () {
   return request({
     url: `${BASE_URL}/quant/ops/option-c/scheduler`,

@@ -115,7 +115,7 @@
                   <div class="link-box">
                     <a-input
                       :value="referralLink"
-                      readonly
+                      read-only
                       size="small"
                     >
                       <a-tooltip slot="suffix" :title="$t('profile.referral.copyLink') || '复制链接'">

@@ -21,6 +21,7 @@ from app.services.tw_stock_qlib_option_c_normal_publish import option_c_normal_p
 from app.services.tw_stock_qlib_option_c_accepted_latest_scheduler import option_c_accepted_latest_scheduler
 from app.services.tw_stock_qlib_option_c_eod_pipeline import option_c_eod_pipeline
 from app.services.tw_stock_qlib_option_c_eod_automation import option_c_eod_automation_scheduler
+from app.services.tw_stock_daily_auto_update_status import TWStockDailyAutoUpdateStatusService
 from app.services.tw_stock_cross_analysis import TWStockCrossAnalysisService
 from app.services.tw_stock_cross_analysis_history import TWStockCrossAnalysisHistoryService
 from app.services.tw_stock_agent_context import TWStockAgentContextService
@@ -38,6 +39,7 @@ cross_analysis_service = TWStockCrossAnalysisService(trend_service=trend_service
 cross_analysis_history_service = TWStockCrossAnalysisHistoryService(cross_service=cross_analysis_service)
 tw_stock_agent_service = TWStockAgentContextService(cross_service=cross_analysis_service)
 tw_stock_agent_chat_service = TWStockAgentChatService(context_service=tw_stock_agent_service)
+daily_auto_update_status_service = TWStockDailyAutoUpdateStatusService()
 
 
 def _parse_limit() -> int:
@@ -515,6 +517,13 @@ def get_qlib_option_c_ops_job_log_tail(job_id: str):
 def get_qlib_option_c_ops_latest():
     """Return latest Option C dry-run ops job without triggering commands."""
     payload = option_c_ops_runner.latest()
+    return jsonify({"code": 1, "msg": "success", "data": payload})
+
+
+@tw_stock_bp.route("/quant/ops/daily-auto-update/status", methods=["GET"])
+def get_daily_auto_update_status():
+    """Return read-only daily FinMind/Yahoo/qlib auto-update status."""
+    payload = daily_auto_update_status_service.status()
     return jsonify({"code": 1, "msg": "success", "data": payload})
 
 

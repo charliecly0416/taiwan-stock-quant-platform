@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from '/tmp/travel-agent-e2e/node_modules/playwright/index.mjs'
 
 const baseUrl = process.env.TW_STOCK_MONITOR_BASE_URL || 'http://127.0.0.1:8000'
-const username = process.env.TW_STOCK_MONITOR_USERNAME || 'localadmin'
-const password = process.env.TW_STOCK_MONITOR_PASSWORD || 'QuantDinger123!'
-const screenshotDir = process.env.TW_STOCK_MONITOR_SCREENSHOT_DIR || '/tmp/quantdinger_tw_qlib_e2e'
+const username = process.env.TW_STOCK_MONITOR_USERNAME || 'quantdinger'
+const password = process.env.TW_STOCK_MONITOR_PASSWORD || '123456'
+const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').replace('Z', 'Z')
+const artifactDir = process.env.TW_STOCK_FULL_E2E_ARTIFACT_DIR || `../data_tw/ops/e2e_full_scenario/${timestamp}`
+const screenshotDir = artifactDir
 
 function qlibRows (count, bucket) {
   return Array.from({ length: count }, (_, index) => {
@@ -161,17 +163,42 @@ await mkdir(screenshotDir, { recursive: true })
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1440, height: 980 }, deviceScaleFactor: 1 })
 page.setDefaultTimeout(45000)
+const consoleIssues = []
+const pageErrors = []
+const failedResponses = []
+const networkRequests = []
+const forbiddenRequests = []
+page.on('console', message => {
+  if (['warning', 'error'].includes(message.type())) consoleIssues.push({ type: message.type(), text: message.text() })
+})
+page.on('pageerror', error => pageErrors.push(String(error && (error.stack || error.message || error))))
+page.on('response', response => {
+  if (response.status() >= 400) failedResponses.push({ status: response.status(), url: response.url() })
+})
 let readonlyBacktestPostCount = 0
 let monitorConfigWriteCount = 0
 let monitorScanPostCount = 0
 let monitorAlertsRequestCount = 0
+let monitorAlertsWriteCount = 0
 const suspiciousRequests = []
 page.on('request', request => {
-  const url = request.url().toLowerCase()
+  const rawUrl = request.url()
+  const url = rawUrl.toLowerCase()
   const method = request.method().toUpperCase()
+  const entry = { method, url: rawUrl }
+  networkRequests.push(entry)
   if (url.includes('/api/tw-stock/monitor/config') && (method === 'POST' || method === 'PUT')) monitorConfigWriteCount += 1
   if (url.includes('/api/tw-stock/monitor/scan') && method === 'POST') monitorScanPostCount += 1
   if (url.includes('/api/tw-stock/monitor/alerts')) monitorAlertsRequestCount += 1
+  if (url.includes('/api/tw-stock/monitor/alerts') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) monitorAlertsWriteCount += 1
+  if ((url.includes('/api/tw-stock/monitor/config') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) ||
+      (url.includes('/api/tw-stock/monitor/scan') && method === 'POST') ||
+      (url.includes('/api/tw-stock/quant/ops/') && method === 'POST' && /(refresh|publish|accepted|provider)/.test(url)) ||
+      (url.includes('/api/quick-trade/') && method === 'POST') ||
+      url.includes('/api/broker/') ||
+      (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && /(order|target-position|target_weight)/.test(url))) {
+    forbiddenRequests.push(entry)
+  }
   if (url.includes('quick-trade') || url.includes('submit_order') || url.includes('place_order') || url.includes('provider/refresh') || url.includes('qlib/run') || url.includes('target_position') || url.includes('target-position') || url.includes('/broker/connect') || url.includes('/broker/order') || url.includes('/orders/submit') || url.includes('/quant/ops/option-c/publish') || url.includes('/quant/ops/option-c/refresh') || url.includes('/quant/ops/option-c/provider')) {
     suspiciousRequests.push(request.url())
   }
@@ -236,6 +263,31 @@ await page.route('**/api/tw-stock/quant/ops/option-c/jobs/**', async route => {
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse(opsJob)) })
 })
 
+
+await page.route('**/api/tw-stock/quant/ops/daily-auto-update/status**', async route => {
+  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse({
+    ok: true,
+    latest_asof: '2026-06-01',
+    latest_status: 'accepted',
+    latest_run_id: latestRunId,
+    pending_asof: '2026-06-02',
+    pending_reason: 'fresh_data_wait',
+    last_job_status: 'fresh_data_wait',
+    last_job_started_at: '2026-06-02T09:00:00+08:00',
+    last_job_finished_at: '2026-06-02T09:05:00+08:00',
+    finmind_update_status: 'raw_updated',
+    finmind_archived_count: 2284,
+    yahoo_target_asof: '2026-06-02',
+    yahoo_date_max: '2026-06-01',
+    yahoo_missing_asof_count: 12,
+    next_retry_hint: 'next scheduled retry',
+    fresh_data_wait: true,
+    cron_installed_hint: true,
+    warnings: ['fixture_fresh_data_wait'],
+    trading: { orders_enabled: false, connects_to_broker: false, research_signal_not_order: true }
+  })) })
+})
+
 await page.route('**/api/indicator/backtest', async route => {
   if (route.request().method().toUpperCase() === 'POST') readonlyBacktestPostCount += 1
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse({ result: null })) })
@@ -280,6 +332,10 @@ await page.waitForFunction(() => document.body.innerText.includes('accepted') &&
 await page.waitForFunction(() => document.body.innerText.includes('TWStock local daily bars') && document.body.innerText.includes('qd_tw_stock_daily_bars'))
 await page.waitForFunction(() => document.body.innerText.includes('fresh_data_wait_state_present'))
 await page.screenshot({ path: `${screenshotDir}/qlib-health.png`, fullPage: true })
+await page.waitForFunction(() => document.body.innerText.includes('每日自動更新狀態'))
+await page.waitForFunction(() => document.body.innerText.includes('FinMind raw') && document.body.innerText.includes('Yahoo/Scrapling qlib'))
+await page.waitForFunction(() => document.body.innerText.includes('pending asof') && document.body.innerText.includes('latest accepted asof'))
+await page.screenshot({ path: `${screenshotDir}/daily-auto-update.png`, fullPage: true })
 await page.waitForFunction(() => document.body.innerText.includes('qlib Option C Ops Dry-run'))
 await page.waitForFunction(() => document.body.innerText.includes('Dry-run only') && document.body.innerText.includes('No latest update') && document.body.innerText.includes('No accepted artifact') && document.body.innerText.includes('No trading'))
 await page.waitForFunction(() => document.body.innerText.includes('dry_run_passed') && document.body.innerText.includes('dry_run_preflight_pass'))
@@ -287,12 +343,6 @@ await page.waitForFunction(() => document.body.innerText.includes('latest_signal
 await page.waitForFunction(() => document.body.innerText.includes('normal_signal_run=false'))
 await page.waitForFunction(() => document.body.innerText.includes('orders_enabled=false'))
 await page.screenshot({ path: `${screenshotDir}/ops-latest.png`, fullPage: true })
-await page.getByText('運行 dry-run', { exact: true }).click()
-await page.waitForFunction(() => document.body.innerText.includes('option_c_dry_run_20260601_20260602T045532Z_9026a4e2_manual'))
-await page.screenshot({ path: `${screenshotDir}/ops-dry-run.png`, fullPage: true })
-await page.locator('.qlib-ops-log .ant-radio-button-wrapper').filter({ hasText: 'stderr' }).click()
-await page.waitForFunction(() => document.body.innerText.includes('empty log tail'))
-await page.screenshot({ path: `${screenshotDir}/ops-log-tail.png`, fullPage: true })
 await page.waitForFunction(() => document.body.innerText.includes('qlib_score'))
 await page.waitForFunction(() => document.body.innerText.includes('trend_label') && document.body.innerText.includes('trend_score'))
 await page.waitForFunction(() => document.body.innerText.includes('latest_close / latest_date'))
@@ -458,6 +508,9 @@ const result = await page.evaluate(({ beforeSelectedSymbol, afterSelectedSymbol,
     qlibHistoryVisible: document.body.innerText.includes('qlib Option C 歷史研究 run'),
     qlibOpsVisible: document.body.innerText.includes('qlib Option C Ops Dry-run') && document.body.innerText.includes('dry_run_passed') && document.body.innerText.includes('latest_signal_updated=false') && document.body.innerText.includes('normal_signal_run=false'),
     qlibHealthVisible: document.body.innerText.includes('qlib Option C 数据状态') && document.body.innerText.includes('TWStock local daily bars') && document.body.innerText.includes('qd_tw_stock_daily_bars'),
+    dailyAutoUpdateVisible: document.body.innerText.includes('每日自動更新狀態') && document.body.innerText.includes('FinMind raw') && document.body.innerText.includes('Yahoo/Scrapling qlib'),
+    crossAnalysisVisible: document.body.innerText.includes('台股交叉分析') && (document.body.innerText.includes('Top30') || document.body.innerText.includes('overlap') || document.body.innerText.includes('consensus')),
+    agentContextVisible: document.body.innerText.includes('台股研究助手') && document.body.innerText.includes('Top30') && document.body.innerText.includes('accepted latest'),
     readonlyBacktestPanelVisible: document.body.innerText.includes('台股只讀回測驗證'),
     watchDraftVisible: document.body.innerText.includes('研究觀察草稿') && document.body.innerText.includes('2330'),
     monitorConfigWriteCount,
@@ -474,7 +527,10 @@ assert.equal(result.qlibLatestVisible, true)
 assert.equal(result.qlibHistoryVisible, true)
 assert.equal(result.qlibHealthVisible, true)
 assert.equal(result.qlibOpsVisible, true)
-assert.equal(result.opsDryRunPostCount, 1)
+assert.equal(result.opsDryRunPostCount, 0, 'full scenario readonly e2e must not trigger qlib dry-run')
+assert.equal(result.dailyAutoUpdateVisible, true)
+assert.equal(result.crossAnalysisVisible, true)
+assert.equal(result.agentContextVisible, true)
 assert.equal(result.readonlyBacktestPanelVisible, true)
 assert.equal(result.watchDraftVisible, true)
 assert.equal(result.monitorConfigWriteCount, 0)
@@ -491,5 +547,65 @@ assert.equal(result.rowClickChangedSymbol, true)
 assert.ok(result.canvases.length >= 2, 'expected price and score chart canvases')
 assert.ok(result.canvases[0].nonWhite > 100, 'price chart appears blank')
 
+const allowedConsoleTexts = ['[antd-pro] NOTICE: Antd use lazy-load.']
+const nonAllowedConsoleIssues = consoleIssues.filter(item => !allowedConsoleTexts.includes(item.text))
+const networkAudit = {
+  generated_at: new Date().toISOString(),
+  base_url: baseUrl,
+  request_count: networkRequests.length,
+  forbidden_request_count: forbiddenRequests.length,
+  forbidden_requests: forbiddenRequests,
+  suspicious_requests: suspiciousRequests,
+  monitor_config_write_count: monitorConfigWriteCount,
+  monitor_scan_post_count: monitorScanPostCount,
+  monitor_alerts_request_count: monitorAlertsRequestCount,
+  monitor_alerts_write_count: monitorAlertsWriteCount,
+  readonly_backtest_post_count: readonlyBacktestPostCount,
+  ops_dry_run_post_count: opsDryRunPostCount,
+  failed_response_count: failedResponses.length,
+  failed_responses: failedResponses
+}
+const consoleAudit = {
+  generated_at: new Date().toISOString(),
+  console_issue_count: consoleIssues.length,
+  console_issues: consoleIssues,
+  non_allowed_console_issue_count: nonAllowedConsoleIssues.length,
+  non_allowed_console_issues: nonAllowedConsoleIssues,
+  page_error_count: pageErrors.length,
+  page_errors: pageErrors
+}
+const forbiddenRequestCount = forbiddenRequests.length + suspiciousRequests.length + monitorConfigWriteCount + monitorScanPostCount + monitorAlertsWriteCount
+const consoleErrorCount = nonAllowedConsoleIssues.filter(item => item.type === 'error').length + pageErrors.length
+const summary = {
+  generated_at: new Date().toISOString(),
+  base_url: baseUrl,
+  latest_asof: '2026-06-01',
+  selected_symbol: result.afterSelectedSymbol || result.beforeSelectedSymbol || null,
+  topn_visible: result.qlibLatestVisible,
+  daily_auto_update_visible: result.dailyAutoUpdateVisible,
+  cross_analysis_visible: result.crossAnalysisVisible,
+  agent_context_visible: result.agentContextVisible,
+  watchlist_refill_ok: result.watchDraftVisible && result.monitorConfigWriteCount === 0 && result.monitorScanPostCount === 0,
+  chart_nonblank_ok: result.canvases.length >= 2 && result.canvases[0].nonWhite > 100,
+  forbidden_request_count: forbiddenRequestCount,
+  console_error_count: consoleErrorCount,
+  non_allowed_console_issue_count: nonAllowedConsoleIssues.length,
+  artifact_dir: screenshotDir,
+  screenshots: {
+    qlib_health: `${screenshotDir}/qlib-health.png`,
+    daily_auto_update: `${screenshotDir}/daily-auto-update.png`,
+    latest: `${screenshotDir}/latest.png`,
+    watchlist_before_fill: `${screenshotDir}/watchlist-draft-before-fill.png`,
+    watchlist_after_fill: `${screenshotDir}/watchlist-draft-after-fill.png`,
+    readonly_backtest: `${screenshotDir}/readonly-backtest-linkage.png`
+  },
+  raw_result: result,
+  overall_passed: true
+}
+summary.overall_passed = summary.topn_visible && summary.daily_auto_update_visible && summary.cross_analysis_visible && summary.agent_context_visible && summary.watchlist_refill_ok && summary.chart_nonblank_ok && summary.forbidden_request_count === 0 && summary.console_error_count === 0
+await writeFile(`${screenshotDir}/summary.json`, JSON.stringify(summary, null, 2))
+await writeFile(`${screenshotDir}/network_audit.json`, JSON.stringify(networkAudit, null, 2))
+await writeFile(`${screenshotDir}/console_audit.json`, JSON.stringify(consoleAudit, null, 2))
+assert.equal(summary.overall_passed, true, `full scenario readonly e2e failed: ${JSON.stringify(summary)}`)
 await browser.close()
-console.log(`tw-stock-monitor local smoke passed: ${JSON.stringify(result)}`)
+console.log(`tw-stock full scenario readonly e2e passed: ${JSON.stringify(summary)}`)
