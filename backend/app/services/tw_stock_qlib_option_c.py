@@ -10,6 +10,7 @@ import json
 import math
 import os
 import re
+from functools import lru_cache
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -18,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 QLIB_PIPELINE_ROOT = REPO_ROOT / "qlib_pipeline"
 from typing import Any, Dict, List, Optional
 
+from app.data.market_symbols_seed import get_symbol_name
 from app.services.tw_stock_trend import TWStockTrendService
 
 DEFAULT_SIGNAL_ROOT = str(QLIB_PIPELINE_ROOT / "data_tw/experiments/option_c_daily_signal")
@@ -35,6 +37,14 @@ _REQUIRED_CSV_COLUMNS = {
 }
 _INSTRUMENT_RE = re.compile(r"^TW([0-9]{2,12})$")
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+@lru_cache(maxsize=4096)
+def _tw_stock_name(symbol: str) -> str:
+    clean = str(symbol or "").strip().upper()
+    if not clean:
+        return ""
+    return get_symbol_name("TWStock", clean) or ""
 
 
 class QlibOptionCSignalError(ValueError):
@@ -862,10 +872,12 @@ class QlibOptionCSignalReader:
             raise QlibOptionCSignalError("blocked_validation_failed", f"{bucket} row {row_number} score must be finite") from exc
         if not math.isfinite(qlib_score):
             raise QlibOptionCSignalError("blocked_validation_failed", f"{bucket} row {row_number} score must be finite")
+        symbol = match.group(1)
         return {
             "asof": row_asof,
             "instrument": instrument,
-            "symbol": match.group(1),
+            "symbol": symbol,
+            "name": _tw_stock_name(symbol),
             "qlib_score": qlib_score,
             "rank": rank,
             "bucket": bucket,
@@ -952,3 +964,225 @@ class QlibOptionCSignalReader:
             "research_signal_not_order",
         }
         return {key: metadata.get(key) for key in allowed if key in metadata}
+
+
+class QlibOptionCRankChangeReader(QlibOptionCSignalReader):
+    """Read-only rank change analysis between latest and previous accepted runs."""
+
+    def rank_changes(self, *, bucket: str = "top30", lookback: int = 10) -> Dict[str, Any]:
+        bucket = self._normalize_rank_change_bucket(bucket)
+        lookback = self._normalize_rank_change_lookback(lookback)
+        paths, latest_doc = self._load_latest_and_paths()
+        current_run_id = paths.run_dir.name
+        current_summary = self._load_json(paths.summary, "missing_signal_summary")
+        current_metadata = self._load_json(paths.metadata, "missing_run_metadata")
+        warnings = self._validate_documents(paths=paths, latest_doc=latest_doc, summary=current_summary, metadata=current_metadata)
+        current_asof = str(latest_doc.get("asof") or current_summary.get("asof") or current_metadata.get("asof") or "")
+        runs = self._accepted_runs_for_changes(limit=max(lookback + 8, 20))
+        if not any(str(item.get("run_id") or "") == current_run_id for item in runs):
+            runs.insert(0, {"run_id": current_run_id, "asof": current_asof, "created_at": current_metadata.get("created_at"), "accepted_validated": True})
+        runs = self._unique_runs_by_asof(runs)
+        runs.sort(key=lambda item: (str(item.get("asof") or ""), str(item.get("created_at") or "")), reverse=True)
+        current_index = next((idx for idx, item in enumerate(runs) if str(item.get("run_id") or "") == current_run_id), 0)
+        ordered_runs = runs[current_index:]
+        previous = next((item for item in ordered_runs[1:] if str(item.get("asof") or "") < current_asof), None)
+        current = self._run_rows(current_run_id, bucket=bucket)
+        current_top50 = self._run_rows(current_run_id, bucket="top50")
+        previous_rows = self._run_rows(str(previous.get("run_id")), bucket=bucket) if previous else []
+        previous_top50 = self._run_rows(str(previous.get("run_id")), bucket="top50") if previous else []
+        current_map = self._row_map(current)
+        previous_map = self._row_map(previous_rows)
+        current_top50_map = self._row_map(current_top50)
+        previous_top50_map = self._row_map(previous_top50)
+
+        entered_symbols = [row["symbol"] for row in current if row.get("symbol") not in previous_map]
+        exited_symbols = [row["symbol"] for row in previous_rows if row.get("symbol") not in current_map]
+        stayed_symbols = [row["symbol"] for row in current if row.get("symbol") in previous_map]
+
+        entered = [self._change_item(symbol, current_map.get(symbol), previous_map.get(symbol), current_top50_map, previous_top50_map, ordered_runs, bucket, "entered") for symbol in entered_symbols]
+        exited = [self._change_item(symbol, current_map.get(symbol), previous_map.get(symbol), current_top50_map, previous_top50_map, ordered_runs, bucket, "exited") for symbol in exited_symbols]
+        stayed = [self._change_item(symbol, current_map.get(symbol), previous_map.get(symbol), current_top50_map, previous_top50_map, ordered_runs, bucket, "stayed") for symbol in stayed_symbols]
+        top_gainers = sorted([item for item in stayed if item.get("rank_delta") is not None], key=lambda item: item.get("rank_delta") or 0, reverse=True)[:8]
+        top_decliners = sorted([item for item in stayed if item.get("rank_delta") is not None], key=lambda item: item.get("rank_delta") or 0)[:8]
+        longest_streaks = sorted(stayed + entered, key=lambda item: (int(item.get("streak_days") or 0), -int(item.get("current_rank") or 999)), reverse=True)[:8]
+        watch_candidates = self._watch_candidates(current_top50, previous_top50_map) if bucket == "top30" else []
+        rank_deltas = [item.get("rank_delta") for item in stayed if item.get("rank_delta") is not None]
+        avg_rank_delta = round(sum(rank_deltas) / len(rank_deltas), 2) if rank_deltas else None
+        status = "ok" if previous else "no_previous_accepted_run"
+        message = "success" if previous else "No previous accepted run is available for comparison."
+        return {
+            "ok": True,
+            "status": status,
+            "message": message,
+            "bucket": bucket,
+            "asof": current_asof,
+            "run_id": current_run_id,
+            "previous_asof": previous.get("asof") if previous else None,
+            "previous_run_id": previous.get("run_id") if previous else None,
+            "lookback": lookback,
+            "summary": {
+                "entered_count": len(entered),
+                "exited_count": len(exited),
+                "stayed_count": len(stayed),
+                "current_count": len(current),
+                "previous_count": len(previous_rows),
+                "avg_rank_delta": avg_rank_delta,
+                "watch_candidates_count": len(watch_candidates),
+            },
+            "entered": entered,
+            "exited": exited,
+            "stayed": stayed,
+            "top_gainers": top_gainers,
+            "top_decliners": top_decliners,
+            "longest_streaks": longest_streaks,
+            "watch_candidates": watch_candidates,
+            "warnings": warnings,
+            "trading": research_only_trading_flags(),
+        }
+
+    @staticmethod
+    def _normalize_rank_change_bucket(bucket: str) -> str:
+        normalized = str(bucket or "top30").strip().lower()
+        if normalized not in {"top30", "top50"}:
+            raise QlibOptionCSignalError("invalid_bucket", "bucket must be one of: top30, top50")
+        return normalized
+
+    @staticmethod
+    def _normalize_rank_change_lookback(lookback: int) -> int:
+        try:
+            value = int(lookback or 10)
+        except Exception:
+            value = 10
+        return max(2, min(value, 60))
+
+    def _accepted_runs_for_changes(self, *, limit: int) -> List[Dict[str, Any]]:
+        runs_payload = self.list_runs(limit=limit, status="accepted")
+        runs = [item for item in runs_payload.get("items") or [] if item.get("status") == "accepted" and item.get("accepted_validated") is True]
+        return runs
+
+    @staticmethod
+    def _unique_runs_by_asof(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        by_asof: Dict[str, Dict[str, Any]] = {}
+        for item in sorted(runs, key=lambda row: str(row.get("created_at") or row.get("run_id") or ""), reverse=True):
+            asof = str(item.get("asof") or "")
+            if asof and asof not in by_asof:
+                by_asof[asof] = item
+        return list(by_asof.values())
+
+    def _run_rows(self, run_id: str, *, bucket: str) -> List[Dict[str, Any]]:
+        if not run_id:
+            return []
+        paths, _latest_doc = self._paths_for_run_id(run_id)
+        summary = self._load_json(paths.summary, "missing_signal_summary")
+        metadata = self._load_json(paths.metadata, "missing_run_metadata")
+        if str(summary.get("status") or metadata.get("status") or "") != "accepted" or metadata.get("status") != "accepted":
+            return []
+        asof = str(summary.get("asof") or metadata.get("asof") or "")
+        path = paths.top30 if bucket == "top30" else paths.top50
+        rows = self._read_csv(path, bucket=bucket, asof=asof)
+        return rows
+
+    @staticmethod
+    def _row_map(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        return {str(row.get("symbol") or ""): row for row in rows if row.get("symbol")}
+
+    def _change_item(
+        self,
+        symbol: str,
+        current: Optional[Dict[str, Any]],
+        previous: Optional[Dict[str, Any]],
+        current_top50: Dict[str, Dict[str, Any]],
+        previous_top50: Dict[str, Dict[str, Any]],
+        ordered_runs: List[Dict[str, Any]],
+        bucket: str,
+        change_type: str,
+    ) -> Dict[str, Any]:
+        row = current or previous or {}
+        current_rank = int(current.get("rank")) if current and current.get("rank") is not None else None
+        previous_rank = int(previous.get("rank")) if previous and previous.get("rank") is not None else None
+        current_score = current.get("qlib_score") if current else None
+        previous_score = previous.get("qlib_score") if previous else None
+        rank_delta = previous_rank - current_rank if current_rank is not None and previous_rank is not None else None
+        score_delta = round(float(current_score) - float(previous_score), 12) if current_score is not None and previous_score is not None else None
+        streak_symbol = symbol if current else ""
+        streak_days = self._streak_days(streak_symbol, ordered_runs, bucket=bucket) if streak_symbol else 0
+        label = self._change_label(change_type=change_type, rank_delta=rank_delta, streak_days=streak_days)
+        current_top50_rank = self._rank_or_none(current_top50.get(symbol))
+        previous_top50_rank = self._rank_or_none(previous_top50.get(symbol))
+        return {
+            "symbol": symbol,
+            "instrument": row.get("instrument") or (f"TW{symbol}" if symbol else ""),
+            "name": _tw_stock_name(symbol),
+            "change_type": change_type,
+            "change_label": label,
+            "current_rank": current_rank,
+            "previous_rank": previous_rank,
+            "rank_delta": rank_delta,
+            "current_score": current_score,
+            "previous_score": previous_score,
+            "score_delta": score_delta,
+            "current_top50_rank": current_top50_rank,
+            "previous_top50_rank": previous_top50_rank,
+            "streak_days": streak_days,
+            "in_current_top50": current_top50_rank is not None,
+            "in_previous_top50": previous_top50_rank is not None,
+            "trading": research_only_trading_flags(),
+        }
+
+    @staticmethod
+    def _rank_or_none(row: Optional[Dict[str, Any]]) -> Optional[int]:
+        if not row or row.get("rank") is None:
+            return None
+        return int(row.get("rank"))
+
+    def _streak_days(self, symbol: str, runs: List[Dict[str, Any]], *, bucket: str) -> int:
+        count = 0
+        for run in runs:
+            rows = self._run_rows(str(run.get("run_id") or ""), bucket=bucket)
+            if symbol in self._row_map(rows):
+                count += 1
+                continue
+            break
+        return count
+
+    @staticmethod
+    def _change_label(*, change_type: str, rank_delta: Optional[int], streak_days: int) -> str:
+        if change_type == "entered":
+            return "新进榜" if streak_days <= 1 else "重回榜单"
+        if change_type == "exited":
+            return "掉出榜"
+        if rank_delta is None or rank_delta == 0:
+            return "排名持平"
+        if rank_delta >= 10:
+            return "快速上升"
+        if rank_delta > 0:
+            return "排名上升"
+        if rank_delta <= -10:
+            return "明显回落"
+        return "排名回落"
+
+    def _watch_candidates(self, current_top50: List[Dict[str, Any]], previous_top50: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+        candidates = []
+        for row in current_top50:
+            rank = int(row.get("rank") or 0)
+            if rank <= 30 or rank > 50:
+                continue
+            symbol = str(row.get("symbol") or "")
+            previous = previous_top50.get(symbol)
+            previous_rank = self._rank_or_none(previous)
+            rank_delta = previous_rank - rank if previous_rank is not None else None
+            item = {
+                "symbol": symbol,
+                "instrument": row.get("instrument") or f"TW{symbol}",
+                "name": _tw_stock_name(symbol),
+                "current_rank": rank,
+                "previous_rank": previous_rank,
+                "rank_delta": rank_delta,
+                "current_score": row.get("qlib_score"),
+                "previous_score": previous.get("qlib_score") if previous else None,
+                "score_delta": round(float(row.get("qlib_score")) - float(previous.get("qlib_score")), 12) if previous and row.get("qlib_score") is not None and previous.get("qlib_score") is not None else None,
+                "change_label": "Top30 候补" if rank <= 40 else "Top50 观察",
+                "trading": research_only_trading_flags(),
+            }
+            candidates.append(item)
+        return sorted(candidates, key=lambda item: (int(item.get("current_rank") or 999), -(item.get("rank_delta") or 0)))[:10]

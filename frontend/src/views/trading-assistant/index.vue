@@ -55,6 +55,27 @@
         <dashboard-overview v-if="topTab === 'overview'" :hide-setup-guide="true" />
       </a-tab-pane>
       <a-tab-pane key="strategy" :tab="$t('trading-assistant.tabs.strategyManage')">
+        <div class="tw-strategy-baseline-panel">
+          <div class="tw-strategy-baseline-head">
+            <div>
+              <div class="tw-strategy-baseline-kicker">台股策略模板</div>
+              <h3>台股研究策略基础模板</h3>
+              <p>当前台股适合先做信号、回测和模拟账户验证，不建议在这里直接进入实盘自动交易。</p>
+            </div>
+            <div class="tw-strategy-baseline-actions">
+              <a-button @click="goToTwStockMonitor"><a-icon type="line-chart" />台股趋势监控</a-button>
+              <a-button @click="goToTwSimAccount"><a-icon type="wallet" />模拟账户</a-button>
+              <a-button type="primary" @click="openTwSignalBaseline"><a-icon type="plus" />新建台股信号</a-button>
+            </div>
+          </div>
+          <div class="tw-strategy-baseline-grid">
+            <div v-for="item in twStrategyBaselines" :key="item.key" class="tw-strategy-baseline-card">
+              <div class="tw-strategy-baseline-card-title">{{ item.name }}</div>
+              <div class="tw-strategy-baseline-card-desc">{{ item.desc }}</div>
+              <div class="tw-strategy-baseline-card-meta">{{ item.meta }}</div>
+            </div>
+          </div>
+        </div>
         <a-row :gutter="24" class="strategy-layout">
           <!-- 左侧：策略列表 -->
           <a-col
@@ -1041,6 +1062,7 @@
                           style="display: none;" />
                         <div class="execution-mode-cards">
                           <div
+                            v-if="showLiveExecutionCard"
                             :class="['execution-mode-card', 'live-card', { active: executionModeUi === 'live', disabled: !canUseLiveTrading }]"
                             @click="canUseLiveTrading && setExecutionModeUi('live')">
                             <div class="execution-mode-card-icon live">
@@ -1606,6 +1628,10 @@ export default {
       }
       return false
     },
+    showLiveExecutionCard () {
+      return this.selectedMarketCategory !== 'TWStock'
+    },
+
     // 是否显示模拟交易开关
     showDemoTradingSwitch () {
       // 目前仅支持 Binance 的 Demo Trading
@@ -1784,6 +1810,29 @@ export default {
 
       return { groups: groupList, ungrouped }
     },
+    twStrategyBaselines () {
+      return [
+        {
+          key: 'rank-hold',
+          name: 'Top30 持有过滤',
+          desc: '只考虑榜单内且 qlib 与技术趋势不冲突的标的，减少每天频繁换股。',
+          meta: '适合：模拟账户候选池'
+        },
+        {
+          key: 'dual-bad-exit',
+          name: '双弱退出观察',
+          desc: '持仓同时出现排名走弱和技术趋势转弱时，进入人工复盘或模拟卖出候选。',
+          meta: '适合：卖出候选解释'
+        },
+        {
+          key: 'manual-review',
+          name: '冲突人工审查',
+          desc: 'qlib 分数高但技术面转弱，或技术面强但榜单质量不足时，不自动动作。',
+          meta: '适合：保留/观察'
+        }
+      ]
+    },
+
     // Check if selected channels are configured in user profile
     unconfiguredChannels () {
       const missing = []
@@ -1827,7 +1876,15 @@ export default {
         }
       },
       deep: true
-    }
+    },
+    selectedMarketCategory (val) {
+      if (val !== 'TWStock') return
+      this.executionModeUi = 'signal'
+      try {
+        this.form && this.form.setFieldsValue && this.form.setFieldsValue({ execution_mode: 'signal' })
+      } catch (e) { }
+    },
+
   },
   data () {
     return {
@@ -1848,7 +1905,7 @@ export default {
       showModeSelector: false,
       // Only indicator strategy in local mode
       strategyType: 'indicator',
-      selectedMarketCategory: 'Crypto', // USStock / Crypto / Forex / Futures
+      selectedMarketCategory: 'Crypto', // TWStock / USStock / Crypto / Forex / Futures
       currentStep: 0,
       saving: false,
       loadingIndicators: false,
@@ -1904,6 +1961,7 @@ export default {
       showAddSymbolModal: false,
       addSymbolMarket: 'Crypto',
       addSymbolMarketTypes: [
+        { value: 'TWStock', i18nKey: 'dashboard.analysis.market.TWStock' },
         { value: 'Crypto', i18nKey: 'dashboard.analysis.market.Crypto' },
         { value: 'USStock', i18nKey: 'dashboard.analysis.market.USStock' },
         { value: 'Forex', i18nKey: 'dashboard.analysis.market.Forex' },
@@ -1978,6 +2036,38 @@ export default {
     goToStrategyTab () {
       this.topTab = 'strategy'
     },
+    goToTwStockMonitor () {
+      this.$router.push('/tw-stock-monitor')
+    },
+
+    goToTwSimAccount () {
+      this.$router.push('/tw-stock-sim-account')
+    },
+
+    openTwSignalBaseline () {
+      this.strategyMode = 'signal'
+      this.pendingScriptTemplateKey = ''
+      this.showModeSelector = false
+      this._openCreateModal()
+      this.$nextTick(() => {
+        this.selectedMarketCategory = 'TWStock'
+        this.executionModeUi = 'signal'
+        this.currentExchangeId = ''
+        try {
+          this.form && this.form.setFieldsValue && this.form.setFieldsValue({
+            strategy_name: '台股日线信号模板',
+            symbol: 'TWStock:2330',
+            execution_mode: 'signal',
+            initial_capital: 1000000,
+            market_type: 'spot',
+            leverage: 1,
+            trade_direction: 'long',
+            timeframe: '1D'
+          })
+        } catch (e) { }
+      })
+    },
+
     openCreateStrategyFromGuide () {
       this.topTab = 'strategy'
       this.$nextTick(() => {
@@ -2283,10 +2373,11 @@ export default {
     },
     getMarketColor (market) {
       const colors = {
+        TWStock: 'cyan',
         USStock: 'green',
         Crypto: 'purple',
         Forex: 'gold',
-        Futures: 'cyan'
+        Futures: 'blue'
       }
       return colors[market] || 'default'
     },
@@ -4250,6 +4341,83 @@ export default {
   height: calc(100vh - 120px);
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 
+  .tw-strategy-baseline-panel {
+    margin: 0 0 14px;
+    padding: 16px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+  }
+
+  .tw-strategy-baseline-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+
+    h3 {
+      margin: 2px 0 4px;
+      font-size: 18px;
+      color: #0f172a;
+    }
+
+    p {
+      margin: 0;
+      color: #64748b;
+      line-height: 1.6;
+    }
+  }
+
+  .tw-strategy-baseline-kicker {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0f766e;
+  }
+
+  .tw-strategy-baseline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .tw-strategy-baseline-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  .tw-strategy-baseline-card {
+    min-height: 112px;
+    padding: 13px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  .tw-strategy-baseline-card-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .tw-strategy-baseline-card-desc {
+    margin-top: 7px;
+    min-height: 42px;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .tw-strategy-baseline-card-meta {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #0f766e;
+    font-weight: 600;
+  }
+
   .strategy-layout {
     height: calc(100vh - 120px);
     align-items: stretch;
@@ -4277,6 +4445,19 @@ export default {
           flex: 1;
         }
       }
+    }
+
+    .tw-strategy-baseline-head {
+      flex-direction: column;
+    }
+
+    .tw-strategy-baseline-actions {
+      justify-content: flex-start;
+      width: 100%;
+    }
+
+    .tw-strategy-baseline-grid {
+      grid-template-columns: 1fr;
     }
 
     .strategy-layout {
@@ -5627,6 +5808,32 @@ export default {
       .mode-hint {
         color: rgba(255, 255, 255, 0.45);
       }
+    }
+
+    .tw-strategy-baseline-panel {
+      background: #1c1c1c;
+      border-color: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+    }
+
+    .tw-strategy-baseline-head h3,
+    .tw-strategy-baseline-card-title {
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .tw-strategy-baseline-head p,
+    .tw-strategy-baseline-card-desc {
+      color: rgba(255, 255, 255, 0.62);
+    }
+
+    .tw-strategy-baseline-card {
+      background: #14181f;
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .tw-strategy-baseline-kicker,
+    .tw-strategy-baseline-card-meta {
+      color: #5eead4;
     }
 
     // 左侧策略列表卡片

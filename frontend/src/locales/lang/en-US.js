@@ -42,7 +42,8 @@ const locale = {
   'menu.dashboard.indicatorIde': 'Indicator IDE',
   'menu.dashboard.tradingBot': 'Trading Bot',
   'menu.dashboard.brokerAccounts': 'Live Broker Accounts',
-  'menu.dashboard.twStockMonitor': 'TW Stock Monitor',
+  'menu.dashboard.twStockMonitor': 'TW Stock Research',
+  'menu.dashboard.twStockSimAccount': 'TW Stock Sim Account',
   'menu.dashboard.scriptStrategies': 'Python Script Strategies',
   // ---- Trading Bot Page ----
   'trading-bot.pageTitle': 'Trading Bots',
@@ -1017,6 +1018,8 @@ const locale = {
   'dashboard.analysis.modal.addStock.willAutoFetchName': 'Name will be fetched automatically',
   'dashboard.analysis.modal.addStock.addDirectly': 'Add Directly',
   'dashboard.analysis.modal.addStock.nameWillBeFetched': 'Name will be fetched automatically when adding',
+  'dashboard.analysis.market.TWStock': 'Taiwan Stock',
+  'dashboard.analysis.market.tws': 'Taiwan Stock',
   'dashboard.analysis.market.USStock': 'US Stock',
   'dashboard.analysis.market.CNStock': 'A-Shares',
   'dashboard.analysis.market.HKStock': 'HK Stocks',

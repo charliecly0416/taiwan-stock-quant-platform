@@ -2,11 +2,9 @@
   <div class="tw-stock-monitor">
     <div class="topbar">
       <div>
-        <h2>台股趨勢監控</h2>
+        <h2>台股研究</h2>
         <div class="subline">
-          <a-tag color="blue">Research</a-tag>
-          <a-tag color="green">orders_enabled=false</a-tag>
-          <a-tag color="purple">Human Review</a-tag>
+          <span>进入页面先看今日 Top30/50 排名，再按需要查看交叉分析、图表和研究解释。</span>
         </div>
       </div>
       <div class="top-actions">
@@ -18,37 +16,41 @@
         />
         <span class="refresh-status">{{ refreshStatusText }}</span>
         <a-button @click="openConfigDrawer">
-          <a-icon type="setting" /> 配置
+          <a-icon type="setting" /> 高级配置
         </a-button>
         <a-button @click="refreshAll" :loading="loading">
           <a-icon type="reload" /> 刷新
         </a-button>
-        <a-button type="primary" @click="runScan" :loading="scanning">
-          <a-icon type="scan" /> 手動研究掃描
-        </a-button>
       </div>
     </div>
 
+    <a-alert
+      class="research-boundary-alert"
+      type="info"
+      show-icon
+      message="本页面仅用于台股研究信号的人工复盘与历史验证，不连接券商，不提交真实订单，不构成投资建议。"
+    />
+
     <div class="summary-grid">
       <div class="metric-card">
-        <span class="metric-label">監控名稱</span>
-        <strong>{{ config.name || 'default' }}</strong>
-        <small>{{ config.enabled ? 'enabled' : 'disabled' }}</small>
+        <span class="metric-label">当前榜单</span>
+        <strong>{{ rankingBucketText }}</strong>
+        <small>{{ qlibSignals.length }} 支候选</small>
       </div>
       <div class="metric-card">
-        <span class="metric-label">觀察標的</span>
-        <strong>{{ config.symbols.length }}</strong>
-        <small>{{ config.symbols.join(', ') || '-' }}</small>
+        <span class="metric-label">模型日期</span>
+        <strong>{{ rankingDateText }}</strong>
+        <small>行情 {{ rankingRawDateText }}</small>
       </div>
       <div class="metric-card">
-        <span class="metric-label">掃描健康度</span>
-        <strong :class="healthClass">{{ scanHealth.status || 'unknown' }}</strong>
-        <small>success {{ scanHealth.success_rate == null ? '-' : (scanHealth.success_rate * 100).toFixed(1) + '%' }}</small>
+        <span class="metric-label">榜首标的</span>
+        <strong>{{ qlibTopSymbol }}</strong>
+        <small>{{ qlibTopScoreText }}</small>
       </div>
       <div class="metric-card">
-        <span class="metric-label">未讀提醒</span>
-        <strong>{{ unreadCount }}</strong>
-        <small>{{ alertItems.length }} alerts loaded</small>
+        <span class="metric-label">数据提示</span>
+        <strong>{{ rankingQualityStatus }}</strong>
+        <small>{{ rankingQualityBrief }}</small>
       </div>
     </div>
 
@@ -59,6 +61,127 @@
       show-icon
       :message="degradedNotice"
     />
+
+    <a-card class="rank-tech-replay-card" :bordered="false" data-testid="rank-tech-portfolio-replay-readonly">
+      <template slot="title">
+        <div class="card-title-line">
+          <span>今日复盘与历史模拟</span>
+          <div class="readonly-tags">
+            <a-tag color="blue">只读研究</a-tag>
+            <a-tag color="green">不连接券商</a-tag>
+          </div>
+        </div>
+      </template>
+      <div class="rank-tech-toolbar" data-testid="rank-tech-replay-controls">
+        <a-radio-group v-model="rankTechBucket" size="small" @change="handleRankTechReplayControlChange">
+          <a-radio-button value="top30">Top30</a-radio-button>
+          <a-radio-button value="top50">Top50</a-radio-button>
+        </a-radio-group>
+        <a-radio-group v-model="rankTechRange" size="small" @change="handlePortfolioReplayControlChange">
+          <a-radio-button value="half_year">近半年</a-radio-button>
+          <a-radio-button value="one_year">近一年</a-radio-button>
+        </a-radio-group>
+        <a-select v-model="rankTechVariant" size="small" style="width: 210px" @change="handlePortfolioReplayControlChange">
+          <a-select-option value="all">全部规则</a-select-option>
+          <a-select-option value="qlib_only">qlib-only</a-select-option>
+          <a-select-option value="qlib_plus_trend">qlib + trend</a-select-option>
+          <a-select-option value="qlib_plus_trend_indicators">qlib + trend + indicators</a-select-option>
+        </a-select>
+        <a-button size="small" :loading="loadingRankTechCross || runningPortfolioReplay" @click="loadRankTechPortfolioPanel">
+          <a-icon type="reload" /> 刷新复盘
+        </a-button>
+      </div>
+      <a-alert
+        class="rank-tech-readonly-note"
+        type="info"
+        show-icon
+        message="只读历史模拟，不是投资建议，不连接券商，不生成订单。"
+      />
+      <a-alert
+        v-if="rankTechLatestError"
+        class="rank-tech-alert"
+        type="warning"
+        show-icon
+        :message="rankTechLatestError"
+      />
+      <div class="rank-tech-grid">
+        <section class="rank-tech-panel">
+          <div class="rank-tech-panel-head">
+            <strong>今天先看什么</strong>
+            <a-tag :color="rankTechAccepted ? 'green' : 'orange'">{{ rankTechStatusText }}</a-tag>
+          </div>
+          <div v-if="loadingRankTechCross" class="rank-tech-empty">正在读取今日复盘...</div>
+          <div v-else-if="rankTechPriorityItems.length" class="rank-tech-priority-list">
+            <div v-for="item in rankTechPriorityItems" :key="`rank-tech-${item.symbol}`" class="rank-tech-priority-item">
+              <div class="rank-tech-symbol-line">
+                <strong>{{ item.symbol }}</strong>
+                <span>{{ item.name || displayStockName(item) }}</span>
+                <a-tag :color="rankTechDecisionColor(item)">{{ rankTechDecisionLabel(item) }}</a-tag>
+              </div>
+              <div class="rank-tech-reason-line">
+                <span>{{ rankTechTierLabel(item.rankTier || (item.qlib && item.qlib.rank)) }}</span>
+                <span>{{ rankTechTechnicalLabel(item.technical && item.technical.status) }}</span>
+                <span>{{ rankTechReasonText(item) }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-else class="rank-tech-empty">暂无可展示的今日复盘。</div>
+        </section>
+        <section class="rank-tech-panel">
+          <div class="rank-tech-panel-head">
+            <strong>为什么</strong>
+            <span>{{ rankTechBucketLabel }} · {{ rankTechDateText }}</span>
+          </div>
+          <div v-if="rankTechPriorityItems.length" class="rank-tech-why-list">
+            <div v-for="item in rankTechPriorityItems.slice(0, 4)" :key="`rank-tech-why-${item.symbol}`" class="rank-tech-why-item">
+              <strong>{{ item.symbol }} {{ item.name || '' }}</strong>
+              <span>qlib {{ rankTechTierLabel(item.rankTier || (item.qlib && item.qlib.rank)) }}</span>
+              <span>QuantDinger {{ rankTechTrendLabel(item.trend && item.trend.label) }}</span>
+              <span>{{ rankTechIndicatorSummary(item) }}</span>
+              <small>{{ rankTechQualityBrief(item) }}</small>
+            </div>
+          </div>
+          <div v-else class="rank-tech-empty">等待今日复盘数据。</div>
+        </section>
+      </div>
+      <div class="portfolio-replay-section">
+        <div class="rank-tech-panel-head">
+          <strong>过去表现</strong>
+          <span>{{ portfolioReplayRangeText }}</span>
+        </div>
+        <a-alert
+          v-if="portfolioReplayError"
+          class="rank-tech-alert"
+          type="warning"
+          show-icon
+          :message="portfolioReplayError"
+        />
+        <div v-if="runningPortfolioReplay" class="rank-tech-empty">正在计算历史模拟表现...</div>
+        <div v-else-if="portfolioReplayComparisonItems.length" class="portfolio-replay-grid">
+          <div v-for="item in portfolioReplayComparisonItems" :key="item.variant" class="portfolio-replay-card">
+            <strong>{{ portfolioVariantLabel(item.variant) }}</strong>
+            <div class="portfolio-metric-row">
+              <span>总收益</span>
+              <b>{{ formatReplayPercent(item.metrics.totalReturn) }}</b>
+            </div>
+            <div class="portfolio-metric-row">
+              <span>最大回撤</span>
+              <b>{{ formatReplayPercent(item.metrics.maxDrawdown) }}</b>
+            </div>
+            <div class="portfolio-metric-row">
+              <span>动作次数</span>
+              <b>{{ item.metrics.actionCount == null ? '-' : item.metrics.actionCount }}</b>
+            </div>
+            <div class="portfolio-metric-row">
+              <span>费用税费估算</span>
+              <b>{{ formatCompactNumber(item.metrics.feeAndTax) }}</b>
+            </div>
+            <div class="portfolio-warning-line">{{ portfolioReplayWarningText(item) }}</div>
+          </div>
+        </div>
+        <div v-else class="rank-tech-empty">暂无历史模拟表现。</div>
+      </div>
+    </a-card>
 
     <a-card ref="readonlyBacktestPanel" v-if="backtestPanelVisible" class="readonly-backtest-card" :bordered="false">
       <template slot="title">
@@ -149,11 +272,10 @@
     <a-card class="qlib-option-c-card" :bordered="false">
       <template slot="title">
         <div class="card-title-line">
-          <span>qlib Option C 研究排序</span>
+          <span>今日研究排名</span>
           <div class="readonly-tags">
-            <a-tag color="blue">Research only</a-tag>
-            <a-tag color="green">Not order</a-tag>
-            <a-tag color="purple">Read-only</a-tag>
+            <a-tag color="blue">研究排序</a-tag>
+            <a-tag color="green">非交易建议</a-tag>
           </div>
         </div>
       </template>
@@ -163,12 +285,14 @@
           <a-radio-button value="top50">Top 50</a-radio-button>
         </a-radio-group>
         <a-button size="small" @click="loadQlibSignals" :loading="loadingQlibSignals">
-          <a-icon type="reload" /> 更新研究排序
+          <a-icon type="reload" /> 刷新榜单
         </a-button>
         <a-button v-if="selectedQlibRunId" size="small" @click="returnToLatestQlib" :loading="loadingQlibSignals">
           <a-icon type="rollback" /> 回到 latest
         </a-button>
       </div>
+      <a-collapse class="advanced-ops-collapse" :bordered="false">
+        <a-collapse-panel key="ops" header="高级信息与维护工具">
       <div class="qlib-health-panel">
         <div class="qlib-health-header">
           <div>
@@ -380,6 +504,8 @@
           :message="qlibOpsError"
         />
       </div>
+        </a-collapse-panel>
+      </a-collapse>
       <a-alert
         v-if="qlibStateNotice"
         class="qlib-state-alert"
@@ -387,12 +513,20 @@
         show-icon
         :message="qlibStateNotice"
       />
-      <div v-if="qlibSignalsAccepted" class="qlib-meta-grid">
-        <span>asof <strong>{{ qlibPayload.asof || '-' }}</strong></span>
-        <span>run_id <strong>{{ qlibPayload.run_id || '-' }}</strong></span>
-        <span>recorder_id <strong>{{ qlibPayload.recorder_id || '-' }}</strong></span>
-        <span>rows <strong>{{ qlibSignals.length }}</strong></span>
+      <div v-if="qlibSignalsAccepted" class="ranking-meta-grid">
+        <span>榜单 <strong>{{ rankingBucketText }}</strong></span>
+        <span>模型日期 <strong>{{ rankingDateText }}</strong></span>
+        <span>行情日期 <strong>{{ rankingRawDateText }}</strong></span>
+        <span>榜首 <strong>{{ qlibTopSymbol }}</strong></span>
+        <span>提示 <strong>{{ rankingQualityStatus }}</strong></span>
       </div>
+      <a-alert
+        v-if="rankingDataNote"
+        class="ranking-data-note"
+        type="info"
+        show-icon
+        :message="rankingDataNote"
+      />
       <div v-if="qlibWarnings.length" class="qlib-warning-list">
         <a-tag v-for="warning in qlibWarnings" :key="warning" color="orange">{{ warning }}</a-tag>
       </div>
@@ -409,38 +543,37 @@
         :custom-row="qlibCustomRow"
       >
         <template slot="symbol" slot-scope="text, row">
-          <strong>{{ row.symbol }}</strong>
-          <span class="muted">{{ row.instrument }}</span>
+          <div class="symbol-name-cell">
+            <strong>{{ displayInstrument(row) }}</strong>
+            <span class="muted instrument-code">{{ displayStockName(row) }}</span>
+          </div>
         </template>
         <template slot="qlib_score" slot-scope="score">
           <span>{{ formatNumber(score, 6) }}</span>
         </template>
-        <template slot="trend_label" slot-scope="text, row">
-          <a-tag :color="qlibTrendAvailable(row) ? 'blue' : 'default'">{{ qlibTrendAvailable(row) ? row.trend.trend_label : 'trend unavailable' }}</a-tag>
-        </template>
-        <template slot="trend_score" slot-scope="text, row">
-          <span>{{ qlibTrendAvailable(row) ? formatNumber(row.trend.trend_score, 2) : '-' }}</span>
-        </template>
         <template slot="latest" slot-scope="text, row">
-          <span>{{ qlibTrendAvailable(row) ? formatNumber(row.trend.latest_close, 2) : '-' }}</span>
-          <span class="muted">{{ row.trend && row.trend.latest_date ? row.trend.latest_date : '-' }}</span>
+          <div class="price-date-cell">
+            <strong>{{ qlibTrendAvailable(row) ? formatNumber(row.trend.latest_close, 2) : '-' }}</strong>
+            <span class="muted">{{ row.trend && row.trend.latest_date ? row.trend.latest_date : '-' }}</span>
+          </div>
         </template>
         <template slot="action" slot-scope="text, row">
           <div class="qlib-row-actions">
             <a-button size="small" data-testid="qlib-watch-add" @click.stop="addQlibWatchDraft(row)">
               <a-icon type="eye" /> 加入觀察
             </a-button>
-            <a-button size="small" @click.stop="openQlibReadonlyBacktest(row)">
+            <a-button size="small" data-testid="qlib-sim-draft" @click.stop="prefillSimDraftFromQlib(row)">
+              <a-icon type="wallet" /> 生成模拟草稿
+            </a-button>
+            <a-button
+              size="small"
+              :loading="runningBacktest && chartSymbol === row.symbol"
+              :disabled="runningBacktest && chartSymbol !== row.symbol"
+              @click.stop="openQlibReadonlyBacktest(row)"
+            >
               <a-icon type="area-chart" /> 回測驗證
             </a-button>
           </div>
-        </template>
-        <template slot="quality" slot-scope="text, row">
-          <a-tag :color="row.diagnostic_only ? 'green' : 'orange'">diagnostic_only={{ String(row.diagnostic_only) }}</a-tag>
-          <a-tag :color="row.research_signal_not_order ? 'green' : 'orange'">research_signal_not_order={{ String(row.research_signal_not_order) }}</a-tag>
-          <template v-if="row.trend && row.trend.quality_warnings && row.trend.quality_warnings.length">
-            <a-tag v-for="warning in row.trend.quality_warnings" :key="`${row.symbol}-${warning}`" color="orange">{{ warning }}</a-tag>
-          </template>
         </template>
       </a-table>
       <div v-else-if="!loadingQlibSignals" class="qlib-empty-state">
@@ -475,9 +608,97 @@
         <div v-else class="qlib-watch-draft-empty">尚未加入觀察草稿</div>
       </div>
       <div class="qlib-footnote">
-        qlib_score 是橫截面研究分數，用於候選觀察與人工復盤；不與趨勢分數合成，不產生委託或持倉。
+        模型分数只用于候选排序和人工复盘，不代表方向判断、胜率或未来收益，也不会产生委托或持仓。
       </div>
     </a-card>
+
+    <a-card class="rank-change-card" :bordered="false">
+      <template slot="title">
+        <div class="card-title-line">
+          <span>排名变化</span>
+          <div class="readonly-tags">
+            <a-tag color="blue">{{ rankingBucketText }}</a-tag>
+            <a-tag color="green">只读比较</a-tag>
+          </div>
+        </div>
+      </template>
+      <div class="rank-change-toolbar">
+        <span>{{ rankChangesDateText }}</span>
+        <a-button size="small" @click="loadRankChanges" :loading="loadingRankChanges">
+          <a-icon type="reload" /> 更新变化
+        </a-button>
+      </div>
+      <a-alert
+        v-if="rankChangesError"
+        class="rank-change-alert"
+        type="warning"
+        show-icon
+        :message="rankChangesError"
+      />
+      <div v-if="rankChangesAccepted" class="rank-change-summary">
+        <div class="rank-change-summary-item">
+          <span>新进榜</span>
+          <strong>{{ rankChangesSummary.entered_count || 0 }}</strong>
+        </div>
+        <div class="rank-change-summary-item">
+          <span>掉出榜</span>
+          <strong>{{ rankChangesSummary.exited_count || 0 }}</strong>
+        </div>
+        <div class="rank-change-summary-item">
+          <span>连续在榜</span>
+          <strong>{{ rankChangesSummary.stayed_count || 0 }}</strong>
+        </div>
+        <div class="rank-change-summary-item">
+          <span>平均升降</span>
+          <strong>{{ rankChangesSummary.avg_rank_delta == null ? '-' : rankChangesSummary.avg_rank_delta }}</strong>
+        </div>
+      </div>
+      <a-tabs v-if="rankChangesAccepted" v-model="rankChangesActiveTab" size="small" class="rank-change-tabs">
+        <a-tab-pane key="entered" :tab="`新进榜 ${rankChangesEntered.length}`" />
+        <a-tab-pane key="exited" :tab="`掉出榜 ${rankChangesExited.length}`" />
+        <a-tab-pane key="stayed" :tab="`持续在榜 ${rankChangesStayed.length}`" />
+        <a-tab-pane key="gainers" tab="上升最快" />
+        <a-tab-pane key="decliners" tab="下降最快" />
+        <a-tab-pane v-if="qlibBucket === 'top30'" key="candidates" tab="候补观察" />
+      </a-tabs>
+      <a-table
+        v-if="rankChangesAccepted"
+        row-key="symbol"
+        size="small"
+        class="rank-change-table"
+        :loading="loadingRankChanges"
+        :columns="rankChangeColumns"
+        :data-source="rankChangesCurrentItems"
+        :pagination="{ pageSize: 8 }"
+      >
+        <template slot="rank_change_symbol" slot-scope="text, row">
+          <div class="symbol-name-cell">
+            <strong>{{ row.instrument || displayInstrument(row) }}</strong>
+            <span class="muted instrument-code">{{ row.name || row.symbol }}</span>
+          </div>
+        </template>
+        <template slot="rank_change_delta" slot-scope="text, row">
+          <div class="rank-change-rank-cell">
+            <strong>{{ rankChangeRankText(row) }}</strong>
+            <span :class="['rank-change-delta', Number(row.rank_delta || 0) >= 0 ? 'positive' : 'negative']">{{ rankChangeDeltaText(row) }}</span>
+          </div>
+        </template>
+        <template slot="rank_change_score" slot-scope="text, row">
+          <div class="rank-change-score-cell">
+            <strong>{{ row.current_score == null ? '-' : formatNumber(row.current_score, 6) }}</strong>
+            <span>{{ row.score_delta == null ? '分数变化 -' : formatSignedNumber(row.score_delta, 6) }}</span>
+          </div>
+        </template>
+        <template slot="rank_change_streak" slot-scope="text, row">
+          <span>{{ row.streak_days ? `${row.streak_days} 日` : '-' }}</span>
+        </template>
+        <template slot="rank_change_label" slot-scope="text, row">
+          <a-tag :color="rankChangeLabelColor(row)">{{ row.change_label || '-' }}</a-tag>
+        </template>
+      </a-table>
+      <div v-else-if="!loadingRankChanges" class="qlib-empty-state">尚无可比较的 accepted 排名历史</div>
+    </a-card>
+
 
 
 
@@ -499,53 +720,42 @@
           <a-radio-button value="all">All</a-radio-button>
         </a-radio-group>
         <a-select v-model="crossAnalysisCategory" size="small" style="width: 220px">
-          <a-select-option value="all">全部 category</a-select-option>
-          <a-select-option v-for="category in crossAnalysisCategories" :key="category" :value="category">{{ category }}</a-select-option>
+          <a-select-option value="all">全部分组</a-select-option>
+          <a-select-option v-for="category in crossAnalysisCategories" :key="category" :value="category">{{ crossCategoryLabel(category) }}</a-select-option>
         </a-select>
         <a-button size="small" @click="loadCrossAnalysis" :loading="loadingCrossAnalysis">
           <a-icon type="reload" /> 更新交叉分析
         </a-button>
       </div>
-      <div class="cross-analysis-basis">
-        <a-tag color="blue">Yahoo adjusted 模型信号</a-tag>
-        <a-tag color="cyan">QuantDinger raw 日线趋势</a-tag>
-        <a-tag color="green">orders_enabled=false</a-tag>
-        <span>priority 是研究展示排序；qlib score 不是收益率、胜率、涨幅或上涨概率。</span>
-      </div>
-      <div class="cross-freshness-dashboard">
-        <div class="freshness-card">
-          <span>freshness status</span>
-          <strong>{{ crossFreshness.status || 'unknown' }}</strong>
-          <a-tag :color="crossFreshnessStatusColor">{{ crossFreshness.status || 'unknown' }}</a-tag>
+      <div class="cross-analysis-summary">
+        <div class="cross-summary-item">
+          <span>模型 / 行情日期</span>
+          <strong>{{ crossModelRawDateText }}</strong>
         </div>
-        <div class="freshness-card">
-          <span>qlib asof</span>
-          <strong>{{ crossFreshnessQlib.asof || crossAnalysisQlib.asof || '-' }}</strong>
-          <small>{{ crossFreshnessQlib.run_id || crossAnalysisQlib.run_id || '-' }}</small>
+        <div class="cross-summary-item">
+          <span>当前筛选</span>
+          <strong>{{ crossAnalysisBucketLabel }} / {{ crossAnalysisCategoryLabel }}</strong>
         </div>
-        <div class="freshness-card">
-          <span>target_horizon</span>
-          <strong>{{ crossFreshnessQlib.target_horizon || crossAnalysisQlib.target_horizon || '-' }}</strong>
-          <small>research ranking</small>
+        <div class="cross-summary-item">
+          <span>研究分组</span>
+          <strong>{{ crossCategorySummaryText }}</strong>
         </div>
-        <div class="freshness-card">
-          <span>raw latest date range</span>
-          <strong>{{ crossRawDateRangeText }}</strong>
-          <small>{{ crossFreshnessQuant.source || 'raw TWStock daily KlineService data' }}</small>
-        </div>
-        <div class="freshness-card">
-          <span>date gap range</span>
-          <strong>{{ crossDateGapRangeText }}</strong>
-          <small>qlib asof vs raw latest date</small>
+        <div class="cross-summary-item">
+          <span>QuantDinger 状态</span>
+          <strong>{{ crossTrendSummaryText }}</strong>
         </div>
       </div>
-      <div class="cross-basis-note">
-        <span>{{ crossBasisNote }}</span>
-        <span>qlib score 来自 Yahoo adjusted 模型信号。QuantDinger 趋势来自 raw 日线。两者可能因复权、除权息、数据源延迟出现差异。该状态只用于研究可见性，不会触发自动补数或交易。</span>
-      </div>
-      <div v-if="crossFreshnessWarnings.length" class="qlib-warning-list">
-        <a-tag v-for="warning in crossFreshnessWarnings" :key="`cross-fresh-${warning}`" color="orange">{{ warning }}</a-tag>
-      </div>
+      <a-collapse class="advanced-ops-collapse compact" :bordered="false">
+        <a-collapse-panel key="basis" header="查看数据口径">
+          <div class="cross-basis-note">
+            <span>{{ crossBasisNote }}</span>
+            <span>模型分数来自 Yahoo adjusted 研究信号；趋势和日线来自本地 raw 行情。交叉分析只帮助人工复盘，不触发补数、委托或持仓。</span>
+          </div>
+          <div v-if="crossFreshnessWarnings.length" class="qlib-warning-list">
+            <a-tag v-for="warning in crossFreshnessWarnings" :key="`cross-fresh-${warning}`" color="orange">{{ qualityWarningLabel(warning) }}</a-tag>
+          </div>
+        </a-collapse-panel>
+      </a-collapse>
       <div class="tw-stock-agent-panel">
         <div class="agent-panel-header">
           <div>
@@ -557,12 +767,6 @@
             <a-tag :color="agentModeColor">{{ agentModeText }}</a-tag>
             <a-tag v-if="agentBlocked" color="red">blocked</a-tag>
           </div>
-        </div>
-        <div class="agent-context-grid">
-          <span>qlib asof <strong>{{ agentQlibAsof }}</strong></span>
-          <span>run_id <strong>{{ agentQlibRunId }}</strong></span>
-          <span>freshness <strong>{{ agentFreshnessStatus }}</strong></span>
-          <span>items <strong>{{ agentItems.length }}</strong></span>
         </div>
         <div class="agent-suggestions">
           <a-button
@@ -611,34 +815,42 @@
           <p>{{ agentAnswer }}</p>
         </div>
         <div class="agent-disclaimer">{{ agentResearchDisclaimer }}</div>
-        <div v-if="agentCitations.length" class="agent-citations">
-          <strong>引用来源</strong>
-          <a-tag v-for="citation in agentCitations" :key="citation" color="blue">{{ citation }}</a-tag>
-        </div>
-        <div v-if="agentWarnings.length" class="agent-warning-list">
-          <strong>warnings</strong>
-          <a-tag v-for="warning in agentWarnings" :key="warning" color="orange">{{ warning }}</a-tag>
-        </div>
         <div v-if="agentItems.length" class="agent-item-list">
           <div v-for="item in agentItems" :key="`${item.symbol}-${item.qlib_rank || item.cross_category || 'agent'}`" class="agent-item">
             <strong>{{ item.symbol }}</strong>
-            <span>rank {{ item.qlib_rank == null ? '-' : item.qlib_rank }}</span>
-            <span>qlib score {{ item.qlib_score == null ? '-' : formatNumber(item.qlib_score, 6) }}</span>
-            <span>trend {{ item.trend_label || '-' }}</span>
-            <span>category {{ item.cross_category || '-' }}</span>
+            <span>排名 {{ item.qlib_rank == null ? '-' : item.qlib_rank }}</span>
+            <span>分数 {{ item.qlib_score == null ? '-' : formatNumber(item.qlib_score, 6) }}</span>
             <span>{{ item.human_action || '人工复盘' }}</span>
-            <template v-if="item.quality_warnings && item.quality_warnings.length">
-              <a-tag v-for="warning in item.quality_warnings" :key="`${item.symbol}-${warning}`" color="orange">{{ warning }}</a-tag>
-            </template>
           </div>
         </div>
         <div v-else-if="agentResponse" class="agent-empty-state">本次回答没有附带项目列表。</div>
+        <a-collapse v-if="agentResponse" class="agent-detail-collapse" :bordered="false">
+          <a-collapse-panel key="agent-detail" header="查看回答来源与边界">
+            <div class="agent-context-grid">
+              <span>数据日期 <strong>{{ agentQlibAsof }}</strong></span>
+              <span>上下文状态 <strong>{{ agentFreshnessStatus }}</strong></span>
+              <span>相关标的 <strong>{{ agentItems.length }}</strong></span>
+              <span>回答模式 <strong>{{ agentModeText }}</strong></span>
+            </div>
+            <div v-if="agentCitations.length" class="agent-citations">
+              <strong>引用来源</strong>
+              <a-tag v-for="citation in agentCitations" :key="citation" color="blue">{{ citation }}</a-tag>
+            </div>
+            <div v-if="agentWarnings.length" class="agent-warning-list">
+              <strong>提示</strong>
+              <a-tag v-for="warning in agentWarnings" :key="warning" color="orange">{{ qualityWarningLabel(warning) }}</a-tag>
+            </div>
+            <div v-if="agentSkills.length" class="agent-skill-list">
+              <strong>调用能力</strong>
+              <a-tag v-for="skill in agentSkills" :key="`${skill.name}-${skill.status}`" color="purple">{{ skill.title || skill.name }} · {{ skill.status || skill.mode }}</a-tag>
+            </div>
+          </a-collapse-panel>
+        </a-collapse>
       </div>
       <div v-if="crossAnalysisAccepted" class="qlib-meta-grid">
-        <span>asof <strong>{{ crossAnalysisQlib.asof || '-' }}</strong></span>
-        <span>run_id <strong>{{ crossAnalysisQlib.run_id || '-' }}</strong></span>
-        <span>target_horizon <strong>{{ crossAnalysisQlib.target_horizon || '-' }}</strong></span>
-        <span>items <strong>{{ filteredCrossAnalysisItems.length }}</strong></span>
+        <span>模型日期 <strong>{{ crossAnalysisQlib.asof || '-' }}</strong></span>
+        <span>行情日期 <strong>{{ crossRawDateRangeText }}</strong></span>
+        <span>标的数量 <strong>{{ filteredCrossAnalysisItems.length }}</strong></span>
       </div>
       <a-alert
         v-if="crossAnalysisStateNotice"
@@ -663,30 +875,49 @@
           <span class="muted">{{ row.qlib && row.qlib.bucket }}</span>
         </template>
         <template slot="cross_symbol" slot-scope="text, row">
-          <strong>{{ row.symbol }}</strong>
-          <span class="muted">{{ row.instrument }}</span>
+          <div class="symbol-name-cell">
+            <strong>{{ displayInstrument(row) }}</strong>
+            <span class="muted">{{ displayStockName(row) }}</span>
+          </div>
         </template>
         <template slot="cross_score" slot-scope="text, row">
           <span>{{ formatNumber(row.qlib && row.qlib.score, 6) }}</span>
         </template>
         <template slot="cross_trend" slot-scope="text, row">
-          <a-tag :color="crossTrendColor(row)">{{ row.quantdinger && row.quantdinger.trend_label ? row.quantdinger.trend_label : 'trend_unavailable' }}</a-tag>
-          <span>{{ row.quantdinger && row.quantdinger.trend_score == null ? '-' : formatNumber(row.quantdinger && row.quantdinger.trend_score, 2) }}</span>
+          <div class="cross-trend-cell">
+            <a-tag :color="crossTrendColor(row)">{{ crossTrendDisplayLabel(row) }}</a-tag>
+            <span>分数 {{ row.quantdinger && row.quantdinger.trend_score == null ? '-' : formatNumber(row.quantdinger && row.quantdinger.trend_score, 2) }}</span>
+            <small>{{ row.quantdinger && row.quantdinger.latest_date ? row.quantdinger.latest_date : '-' }}</small>
+          </div>
         </template>
         <template slot="cross_category" slot-scope="text, row">
-          <a-tag :color="crossCategoryColor(row.cross && row.cross.category)">{{ row.cross && row.cross.category }}</a-tag>
+          <a-tag :color="crossCategoryColor(row.cross && row.cross.category)">{{ crossCategoryLabel(row.cross && row.cross.category) }}</a-tag>
         </template>
         <template slot="cross_alignment" slot-scope="text, row">
           <a-tag :color="crossAlignmentColor(row.cross && row.cross.alignment)">{{ row.cross && row.cross.alignment }}</a-tag>
         </template>
-        <template slot="cross_action" slot-scope="text, row">
-          <span>{{ row.cross && row.cross.human_action }}</span>
+        <template slot="cross_summary" slot-scope="text, row">
+          <div class="cross-summary-cell">
+            <strong>{{ crossPriorityLabel(row.cross && row.cross.priority) }}</strong>
+            <span>{{ row.cross && row.cross.summary ? row.cross.summary : crossActionLabel(row.cross && row.cross.human_action) }}</span>
+          </div>
         </template>
         <template slot="cross_basis" slot-scope="text, row">
           <div class="cross-basis-cell">
-            <a-tag :color="crossBasisColor(row.data_basis && row.data_basis.data_basis_status)">{{ row.data_basis && row.data_basis.data_basis_status }}</a-tag>
-            <span>date gap {{ row.data_basis && row.data_basis.date_gap_days == null ? '-' : row.data_basis.date_gap_days }}</span>
+            <a-tag :color="crossBasisColor(row.data_basis && row.data_basis.data_basis_status)">{{ crossBasisLabel(row.data_basis && row.data_basis.data_basis_status) }}</a-tag>
+            <span>{{ crossQualityBrief(row) }}</span>
+            <small>{{ crossDateGapLabel(row.data_basis && row.data_basis.date_gap_days) }}</small>
           </div>
+        </template>
+        <template slot="cross_sim_draft" slot-scope="text, row">
+          <a-button
+            size="small"
+            data-testid="cross-sim-draft"
+            :disabled="!canPrefillSimDraftFromCross(row)"
+            @click.stop="prefillSimDraftFromCross(row)"
+          >
+            <a-icon type="wallet" /> 生成模拟草稿
+          </a-button>
         </template>
       </a-table>
       <div v-else-if="!loadingCrossAnalysis" class="qlib-empty-state">{{ crossAnalysisEmptyText }}</div>
@@ -697,10 +928,10 @@
           <a-button size="small" type="link" @click="selectedCrossAnalysisDetail = null">关闭</a-button>
         </div>
         <div v-if="selectedCrossAnalysisDetail.item" class="cross-detail-grid">
-          <span>category <strong>{{ selectedCrossAnalysisDetail.item.cross && selectedCrossAnalysisDetail.item.cross.category }}</strong></span>
-          <span>human_action <strong>{{ selectedCrossAnalysisDetail.item.cross && selectedCrossAnalysisDetail.item.cross.human_action }}</strong></span>
-          <span>qlib rank <strong>{{ selectedCrossAnalysisDetail.item.qlib && selectedCrossAnalysisDetail.item.qlib.rank }}</strong></span>
-          <span>trend <strong>{{ selectedCrossAnalysisDetail.item.quantdinger && selectedCrossAnalysisDetail.item.quantdinger.trend_label }}</strong></span>
+          <span>综合分组 <strong>{{ crossCategoryLabel(selectedCrossAnalysisDetail.item.cross && selectedCrossAnalysisDetail.item.cross.category) }}</strong></span>
+          <span>复盘提示 <strong>{{ crossActionLabel(selectedCrossAnalysisDetail.item.cross && selectedCrossAnalysisDetail.item.cross.human_action) }}</strong></span>
+          <span>qlib 排名 <strong>{{ selectedCrossAnalysisDetail.item.qlib && selectedCrossAnalysisDetail.item.qlib.rank }}</strong></span>
+          <span>QuantDinger 趋势 <strong>{{ crossTrendDisplayLabel(selectedCrossAnalysisDetail.item) }}</strong></span>
         </div>
         <div v-else class="cross-detail-grid">
           <span>status <strong>{{ selectedCrossAnalysisDetail.status }}</strong></span>
@@ -721,15 +952,61 @@
             </a-select>
             <a-input v-model="crossReviewForm.user_note" size="small" placeholder="人工复盘备注" />
             <a-button size="small" type="primary" :loading="savingCrossReview" @click="saveCrossAnalysisReview">保存复盘</a-button>
-            <a-button size="small" @click="openCrossAnalysisHistoricalSimulation">历史模拟</a-button>
+            <a-button size="small" @click="openCrossAnalysisHistoricalSimulation" :loading="runningBacktest">查看资金曲线</a-button>
+            <a-button size="small" type="primary" ghost :loading="crossBacktestValidation.loading" @click="runCrossHistoricalValidation">
+              <a-icon type="experiment" /> 多策略验证
+            </a-button>
           </div>
-          <div class="cross-review-note">该回测是对选定股票的技术模板历史模拟，不代表 qlib 策略历史收益。</div>
+          <div class="cross-review-note">多策略验证会比较多个内置日线策略，按综合稳健评分选择较优模板；只用于模拟复盘，不是收益承诺，也不是实盘指令。</div>
           <a-alert v-if="crossReviewError" class="cross-review-alert" type="warning" :message="crossReviewError" show-icon />
           <a-alert v-if="crossReviewNotice" class="cross-review-alert" type="info" :message="crossReviewNotice" show-icon />
+          <div class="cross-backtest-validation">
+            <div class="cross-validation-header">
+              <strong>回测验证分析</strong>
+              <a-tag :color="crossValidationStateColor">{{ crossValidationStateText }}</a-tag>
+            </div>
+            <a-alert
+              v-if="crossBacktestValidation.error"
+              class="cross-review-alert"
+              type="warning"
+              show-icon
+              :message="crossBacktestValidation.error"
+            />
+            <div v-if="crossBacktestValidation.best" class="cross-validation-best">
+              <div>
+                <span>较优策略</span>
+                <strong>{{ crossBacktestValidation.best.strategyName }}</strong>
+              </div>
+              <div>
+                <span>总收益</span>
+                <strong>{{ formatSignedPercentFromNumber(crossBacktestValidation.best.totalReturn) }}</strong>
+              </div>
+              <div>
+                <span>最大回撤</span>
+                <strong>{{ formatSignedPercentFromNumber(crossBacktestValidation.best.maxDrawdown) }}</strong>
+              </div>
+              <div>
+                <span>今日模拟动作</span>
+                <strong>{{ crossBacktestValidation.actionLabel }}</strong>
+              </div>
+            </div>
+            <div v-if="crossBacktestValidation.reason" class="cross-validation-reason">{{ crossBacktestValidation.reason }}</div>
+            <div v-if="crossBacktestValidation.results.length" class="cross-validation-list">
+              <div v-for="item in crossBacktestValidation.results" :key="item.strategyId" class="cross-validation-item">
+                <strong>{{ item.strategyName }}</strong>
+                <span>收益 {{ formatSignedPercentFromNumber(item.totalReturn) }}</span>
+                <span>回撤 {{ formatSignedPercentFromNumber(item.maxDrawdown) }}</span>
+                <span>胜率 {{ formatSignedPercentFromNumber(item.winRate) }}</span>
+                <span>交易 {{ item.totalTrades == null ? '-' : item.totalTrades }}</span>
+                <a-tag :color="item.ok ? 'blue' : 'orange'">{{ item.ok ? '完成' : '不可用' }}</a-tag>
+              </div>
+            </div>
+            <div v-else-if="!crossBacktestValidation.loading" class="cross-validation-empty">选择一只股票后点击“多策略验证”。</div>
+          </div>
         </div>
       </div>
       <div class="qlib-footnote">
-        数据口径差异：qlib 使用 Yahoo adjusted 模型信号；QuantDinger 使用 raw 日线趋势。交叉分析只用于人工复盘和观察名单，不调用 qlib ops；复盘仅保存状态和备注，历史模拟不会自动运行。
+        数据口径差异：qlib 使用 Yahoo adjusted 模型信号；QuantDinger 使用 raw 日线趋势。交叉分析只用于人工复盘和观察名单，不调用 qlib ops；复盘仅保存状态和备注，查看资金曲线和多策略验证都只做只读历史模拟。
       </div>
     </a-card>
 
@@ -743,9 +1020,35 @@
             </div>
           </template>
           <div class="chart-toolbar">
-            <a-select v-model="chartSymbol" size="small" style="width: 140px" @change="handleChartSymbolChange">
-              <a-select-option v-for="symbol in chartSymbols" :key="symbol" :value="symbol">{{ symbol }}</a-select-option>
+            <a-radio-group v-model="chartSymbolSource" size="small" @change="handleChartSourceChange">
+              <a-radio-button value="top30">Top30</a-radio-button>
+              <a-radio-button value="top50">Top50</a-radio-button>
+              <a-radio-button value="custom">输入代码</a-radio-button>
+            </a-radio-group>
+            <a-select
+              v-if="chartSymbolSource !== 'custom'"
+              v-model="chartSymbol"
+              size="small"
+              show-search
+              option-filter-prop="children"
+              :filter-option="filterChartSymbolOption"
+              :loading="loadingChartSymbols"
+              style="width: 220px"
+              @change="handleChartSymbolChange"
+            >
+              <a-select-option v-for="item in chartSymbolOptions" :key="item.symbol" :value="item.symbol">
+                {{ item.label }}
+              </a-select-option>
             </a-select>
+            <a-input-search
+              v-else
+              v-model="chartSymbolInput"
+              size="small"
+              placeholder="输入台股代码，如 2357 / TW6290"
+              enter-button="查看"
+              style="width: 260px"
+              @search="handleManualChartSymbolSearch"
+            />
             <a-radio-group v-model="priceChartMode" size="small" @change="drawPriceChart">
               <a-radio-button value="candles">K 線</a-radio-button>
               <a-radio-button value="line">收盤線</a-radio-button>
@@ -765,18 +1068,24 @@
               <a-icon type="reload" /> 更新圖表
             </a-button>
           </div>
-          <div class="selected-symbol-panel" v-if="selectedTrendItem">
+          <div class="selected-symbol-panel" v-if="chartSymbol">
             <div class="selected-symbol-main">
-              <strong>{{ selectedTrendItem.symbol }}</strong>
-              <a-tag :color="trendTagColor(selectedTrendItem)">{{ selectedTrendItem.trend && selectedTrendItem.trend.label }}</a-tag>
-              <span>Score {{ selectedTrendItem.trend && selectedTrendItem.trend.score }}</span>
+              <strong>{{ selectedChartSymbolTitle }}</strong>
+              <template v-if="selectedTrendItem">
+                <a-tag :color="trendTagColor(selectedTrendItem)">{{ selectedTrendItem.trend && selectedTrendItem.trend.label }}</a-tag>
+                <span>Score {{ selectedTrendItem.trend && selectedTrendItem.trend.score }}</span>
+              </template>
+              <a-tag v-else color="blue">K 线查看</a-tag>
             </div>
             <div class="selected-symbol-stats">
-              <span>5D {{ formatPercent(selectedTrendItem.returns && selectedTrendItem.returns.ret_5d) }}</span>
-              <span>20D {{ formatPercent(selectedTrendItem.returns && selectedTrendItem.returns.ret_20d) }}</span>
-              <span>60D {{ formatPercent(selectedTrendItem.returns && selectedTrendItem.returns.ret_60d) }}</span>
-              <span>Vol {{ formatPercent(selectedTrendItem.risk && selectedTrendItem.risk.volatility_20d_annualized) }}</span>
-              <span>量比 {{ formatNumber(selectedTrendItem.volume && selectedTrendItem.volume.ratio_to_avg20, 2) }}</span>
+              <template v-if="selectedTrendItem">
+                <span>5D {{ formatPercent(selectedTrendItem.returns && selectedTrendItem.returns.ret_5d) }}</span>
+                <span>20D {{ formatPercent(selectedTrendItem.returns && selectedTrendItem.returns.ret_20d) }}</span>
+                <span>60D {{ formatPercent(selectedTrendItem.returns && selectedTrendItem.returns.ret_60d) }}</span>
+                <span>Vol {{ formatPercent(selectedTrendItem.risk && selectedTrendItem.risk.volatility_20d_annualized) }}</span>
+                <span>量比 {{ formatNumber(selectedTrendItem.volume && selectedTrendItem.volume.ratio_to_avg20, 2) }}</span>
+              </template>
+              <span v-if="latestPriceBar">最新 {{ latestPriceBar.date }} · C {{ formatNumber(latestPriceBar.close, 2) }}</span>
               <span>{{ priceDataStatusText }}</span>
               <span>{{ chartWindowText }}</span>
             </div>
@@ -812,8 +1121,12 @@
             <span><i class="ma-dot ma20"></i>MA20</span>
             <span><i class="ma-dot ma60"></i>MA60</span>
           </div>
-          <div class="chart-footnote">
-            日線 K 線來自只讀行情接口；非盤中即時行情，僅供人工復盤，不產生任何委託。
+          <div class="chart-footnote chart-footnote-actions">
+            <span>日線 K 線來自只讀行情接口；非盤中即時行情，僅供人工復盤，不產生任何委託。</span>
+            <a-button size="small" ghost :loading="loadingSimTradeMarkers" @click="loadSimTradeMarkers">
+              <a-icon type="flag" /> 加载模拟成交标记
+            </a-button>
+            <span v-if="chartSimTradeMarkers.length">模拟成交标记 {{ chartSimTradeMarkers.length }} 笔，仅来自模拟账户成交记录。</span>
           </div>
         </a-card>
       </a-col>
@@ -848,9 +1161,16 @@
       </a-col>
     </a-row>
 
+    <a-collapse class="monitor-tools-collapse" :bordered="false">
+      <a-collapse-panel key="monitor-tools" header="监控工具与提醒记录">
+        <div class="monitor-tools-actions">
+          <a-button size="small" @click="runScan" :loading="scanning">
+            <a-icon type="scan" /> 更新监控
+          </a-button>
+        </div>
     <a-row :gutter="16" class="content-row">
       <a-col :xs="24" :xl="15">
-        <a-card title="趨勢列表" :bordered="false">
+        <a-card title="趋势列表" :bordered="false">
           <a-table
             row-key="symbol"
             size="middle"
@@ -926,6 +1246,8 @@
         </template>
       </a-table>
     </a-card>
+      </a-collapse-panel>
+    </a-collapse>
 
     <a-drawer title="監控配置" :visible="configDrawerVisible" width="420" data-testid="monitor-config-drawer" @close="configDrawerVisible = false">
       <a-form layout="vertical">
@@ -977,6 +1299,7 @@ import {
   getQlibOptionCHealth,
   getQlibOptionCRuns,
   getQlibOptionCRunDetail,
+  getQlibOptionCRankChanges,
   triggerQlibOptionCDryRun,
   getQlibOptionCJob,
   getQlibOptionCJobLog,
@@ -985,10 +1308,15 @@ import {
   getQlibOptionCScheduler,
   getTwStockCrossAnalysisLatest,
   getTwStockCrossAnalysisSymbol,
+  getTwStockRankTechCrossLatest,
+  getTwStockObservationReplay,
+  runTwStockPortfolioReplay,
   getTwStockCrossAnalysisReviews,
   saveTwStockCrossAnalysisReview,
   getTwStockAgentContext,
-  chatTwStockAgent
+  chatTwStockAgent,
+  getTwStockSimAccounts,
+  getTwStockSimTrades
 } from '@/api/tw-stock'
 
 export default {
@@ -1004,6 +1332,7 @@ export default {
       loadingQlibSignals: false,
       loadingQlibHealth: false,
       loadingQlibRuns: false,
+      loadingRankChanges: false,
       loadingQlibOps: false,
       runningQlibOpsDryRun: false,
       loadingQlibOpsLog: false,
@@ -1021,12 +1350,18 @@ export default {
       autoRefreshTimer: null,
       lastRefreshedAt: '',
       chartSymbol: '',
+      chartSymbolInput: '',
+      chartSymbolSource: 'top30',
+      loadingChartSymbols: false,
+      chartSignalPayloads: { top30: null, top50: null },
       priceChartMode: 'candles',
       chartRangeBars: 120,
       showMovingAverages: true,
       showVolume: true,
       historyItems: [],
       priceCandles: [],
+      simTradeMarkers: [],
+      loadingSimTradeMarkers: false,
       chartHover: {
         price: null,
         score: null
@@ -1053,6 +1388,9 @@ export default {
       qlibError: '',
       qlibRuns: [],
       qlibRunStatusFilter: 'all',
+      rankChangesPayload: null,
+      rankChangesError: '',
+      rankChangesActiveTab: 'entered',
       selectedQlibRunId: '',
       qlibOpsJob: null,
       qlibScheduler: {},
@@ -1076,6 +1414,15 @@ export default {
       },
       crossReviewError: '',
       crossReviewNotice: '',
+      crossBacktestValidation: this.emptyCrossBacktestValidation(),
+      crossBacktestValidationCache: {},
+      rankTechBucket: 'top30',
+      rankTechRange: 'half_year',
+      rankTechVariant: 'all',
+      rankTechLatestPayload: null,
+      rankTechLatestError: '',
+      portfolioReplayPayload: null,
+      portfolioReplayError: '',
       agentContext: null,
       agentContextError: '',
       agentQuestion: '',
@@ -1083,9 +1430,6 @@ export default {
       agentError: '',
       agentSuggestedQuestions: [
         '今天 top30 是哪些？',
-        '今天模型和趋势都支持的股票有哪些？',
-        '今天建议回避或人工复盘的股票有哪些？',
-        '2330 的指标是多少？',
         '当前数据新鲜度和口径是什么？'
       ],
       configDrawerVisible: false,
@@ -1131,25 +1475,28 @@ export default {
         { title: 'warnings', dataIndex: 'warnings', scopedSlots: { customRender: 'warnings' }, width: 260 }
       ],
       qlibColumns: [
-        { title: 'Rank', dataIndex: 'rank', width: 80 },
-        { title: 'Symbol', dataIndex: 'symbol', scopedSlots: { customRender: 'symbol' }, width: 150 },
-        { title: 'qlib_score', dataIndex: 'qlib_score', scopedSlots: { customRender: 'qlib_score' }, width: 140 },
-        { title: 'trend_label', dataIndex: 'trend.trend_label', scopedSlots: { customRender: 'trend_label' }, width: 130 },
-        { title: 'trend_score', dataIndex: 'trend.trend_score', scopedSlots: { customRender: 'trend_score' }, width: 120 },
-        { title: 'latest_close / latest_date', dataIndex: 'trend.latest_close', scopedSlots: { customRender: 'latest' }, width: 170 },
-        { title: '研究动作', dataIndex: 'action', scopedSlots: { customRender: 'action' }, width: 220 },
-        { title: 'quality_warnings', dataIndex: 'quality', scopedSlots: { customRender: 'quality' } }
+        { title: '排名', dataIndex: 'rank', width: 80 },
+        { title: '标的', dataIndex: 'symbol', scopedSlots: { customRender: 'symbol' }, width: 150 },
+        { title: '模型分数', dataIndex: 'qlib_score', scopedSlots: { customRender: 'qlib_score' }, width: 140 },
+        { title: '最新价 / 行情日期', dataIndex: 'trend.latest_close', scopedSlots: { customRender: 'latest' }, width: 180 },
+        { title: '操作', dataIndex: 'action', scopedSlots: { customRender: 'action' }, width: 330 }
+      ],
+      rankChangeColumns: [
+        { title: '标的', dataIndex: 'symbol', scopedSlots: { customRender: 'rank_change_symbol' }, width: 150 },
+        { title: '排名变化', dataIndex: 'rank_delta', scopedSlots: { customRender: 'rank_change_delta' }, width: 150 },
+        { title: '模型分数变化', dataIndex: 'score_delta', scopedSlots: { customRender: 'rank_change_score' }, width: 150 },
+        { title: '连续在榜', dataIndex: 'streak_days', scopedSlots: { customRender: 'rank_change_streak' }, width: 110 },
+        { title: '状态', dataIndex: 'change_label', scopedSlots: { customRender: 'rank_change_label' } }
       ],
       crossAnalysisColumns: [
-        { title: '研究排行', dataIndex: 'qlib.rank', scopedSlots: { customRender: 'cross_rank' }, width: 100 },
-        { title: 'Symbol', dataIndex: 'symbol', scopedSlots: { customRender: 'cross_symbol' }, width: 140 },
-        { title: 'qlib score', dataIndex: 'qlib.score', scopedSlots: { customRender: 'cross_score' }, width: 120 },
-        { title: 'raw trend', dataIndex: 'quantdinger.trend_label', scopedSlots: { customRender: 'cross_trend' }, width: 150 },
-        { title: 'latest date', dataIndex: 'quantdinger.latest_date', width: 120 },
-        { title: 'category', dataIndex: 'cross.category', scopedSlots: { customRender: 'cross_category' }, width: 190 },
-        { title: 'alignment', dataIndex: 'cross.alignment', scopedSlots: { customRender: 'cross_alignment' }, width: 110 },
-        { title: 'human_action', dataIndex: 'cross.human_action', scopedSlots: { customRender: 'cross_action' } },
-        { title: 'data_basis', dataIndex: 'data_basis.data_basis_status', scopedSlots: { customRender: 'cross_basis' }, width: 220 }
+        { title: '排名', dataIndex: 'qlib.rank', scopedSlots: { customRender: 'cross_rank' }, width: 90 },
+        { title: '标的', dataIndex: 'symbol', scopedSlots: { customRender: 'cross_symbol' }, width: 130 },
+        { title: 'qlib 模型分数', dataIndex: 'qlib.score', scopedSlots: { customRender: 'cross_score' }, width: 130 },
+        { title: 'QuantDinger 趋势', dataIndex: 'quantdinger.trend_label', scopedSlots: { customRender: 'cross_trend' }, width: 190 },
+        { title: '综合分组', dataIndex: 'cross.category', scopedSlots: { customRender: 'cross_category' }, width: 160 },
+        { title: '综合结论', dataIndex: 'cross.summary', scopedSlots: { customRender: 'cross_summary' } },
+        { title: '数据提示', dataIndex: 'data_basis.data_basis_status', scopedSlots: { customRender: 'cross_basis' }, width: 170 },
+        { title: '模拟验证', dataIndex: 'cross_sim_draft', scopedSlots: { customRender: 'cross_sim_draft' }, width: 150 }
       ],
       backtestTradeColumns: [
         { title: 'Time', dataIndex: 'time', width: 150 },
@@ -1168,12 +1515,48 @@ export default {
     healthClass () {
       return `health-${this.scanHealth.status || 'unknown'}`
     },
+    chartSymbolOptions () {
+      const source = this.chartSymbolSource === 'top50' ? 'top50' : 'top30'
+      const payload = this.chartSignalPayloads[source] || {}
+      const rows = Array.isArray(payload.signals) ? payload.signals : []
+      const seen = new Set()
+      const out = []
+      rows.forEach(row => {
+        const symbol = this.normalizeTwSymbol(row && row.symbol)
+        if (!symbol || seen.has(symbol)) return
+        seen.add(symbol)
+        const name = row.name || row.symbol_name || ''
+        const rank = row.rank ? `#${row.rank}` : ''
+        out.push({
+          symbol,
+          name,
+          rank,
+          label: [symbol, name, rank].filter(Boolean).join(' · ')
+        })
+      })
+      ;(this.trendItems || []).forEach(item => {
+        const symbol = this.normalizeTwSymbol(item && item.symbol)
+        if (!symbol || seen.has(symbol)) return
+        seen.add(symbol)
+        out.push({ symbol, name: '', rank: '监控', label: `${symbol} · 监控` })
+      })
+      const current = this.normalizeTwSymbol(this.chartSymbol)
+      if (current && !seen.has(current)) out.unshift({ symbol: current, name: '', rank: '当前', label: `${current} · 当前` })
+      return out
+    },
     chartSymbols () {
-      const symbols = this.trendItems.filter(item => item && item.ok !== false).map(item => item.symbol).filter(Boolean)
-      return symbols.length ? symbols : (this.config.symbols || [])
+      const symbols = this.chartSymbolOptions.map(item => item.symbol).filter(Boolean)
+      if (symbols.length) return symbols
+      const trendSymbols = this.trendItems.filter(item => item && item.ok !== false).map(item => item.symbol).filter(Boolean)
+      return trendSymbols.length ? trendSymbols : (this.config.symbols || [])
     },
     selectedTrendItem () {
-      return this.trendItems.find(item => item.symbol === this.chartSymbol) || this.trendItems.find(item => item && item.ok !== false) || this.trendItems[0] || null
+      return this.trendItems.find(item => this.normalizeTwSymbol(item.symbol) === this.normalizeTwSymbol(this.chartSymbol)) || null
+    },
+    selectedChartSymbolTitle () {
+      const option = this.chartSymbolOptions.find(item => item.symbol === this.normalizeTwSymbol(this.chartSymbol))
+      if (option && option.name) return `${option.symbol} ${option.name}`
+      return this.chartSymbol || '-'
     },
     refreshIntervalMs () {
       const seconds = Number(this.config.refresh_interval_sec || 0)
@@ -1192,6 +1575,22 @@ export default {
     },
     displayedPriceCandles () {
       return this.sliceByChartRange(this.priceCandles)
+    },
+    chartSimTradeMarkers () {
+      const symbol = this.normalizeTwSymbol(this.chartSymbol)
+      if (!symbol) return []
+      const dates = new Set(this.displayedPriceCandles.map(item => item.date).filter(Boolean))
+      return this.simTradeMarkers
+        .filter(item => this.normalizeTwSymbol(item.symbol) === symbol)
+        .filter(item => !dates.size || dates.has(String(item.price_date || '').slice(0, 10)))
+        .map(item => ({
+          date: String(item.price_date || '').slice(0, 10),
+          price: Number(item.price || 0),
+          side: item.side,
+          quantity: item.quantity,
+          source_type: item.source_type || 'manual'
+        }))
+        .filter(item => item.date && Number.isFinite(item.price) && item.price > 0)
     },
     displayedHistoryItems () {
       return this.sliceByChartRange(this.historyItems)
@@ -1253,6 +1652,22 @@ export default {
     backtestTrades () {
       const trades = this.backtestResult && this.backtestResult.trades
       return Array.isArray(trades) ? trades.map((item, index) => Object.assign({ _key: `${item.time || 'trade'}-${index}` }, item)) : []
+    },
+    crossValidationStateText () {
+      if (this.crossBacktestValidation.loading) return '验证中'
+      if (this.crossBacktestValidation.error) return '验证失败'
+      if (this.crossBacktestValidation.best) return this.crossBacktestValidation.actionLabel || '已验证'
+      return '未验证'
+    },
+    crossValidationStateColor () {
+      const type = this.crossBacktestValidation.actionType
+      if (this.crossBacktestValidation.loading) return 'blue'
+      if (this.crossBacktestValidation.error || type === 'error') return 'red'
+      if (type === 'sim_buy_candidate') return 'green'
+      if (type === 'avoid_new_buy' || type === 'risk_review_if_holding') return 'orange'
+      if (type === 'manual_review') return 'purple'
+      if (type === 'watch_only') return 'blue'
+      return 'default'
     },
     qlibHealthLatest () {
       return (this.qlibHealth && this.qlibHealth.latest) || {}
@@ -1382,9 +1797,124 @@ export default {
       const rows = this.qlibPayload && this.qlibPayload.signals
       return Array.isArray(rows) ? rows : []
     },
+    rankingBucketText () {
+      const bucket = (this.qlibPayload && this.qlibPayload.bucket) || this.qlibBucket || 'top30'
+      return String(bucket).replace('top', 'Top ')
+    },
+    rankingDateText () {
+      return (this.qlibPayload && this.qlibPayload.asof) || (this.qlibHealthLatest && this.qlibHealthLatest.asof) || '-'
+    },
+    rankingRawDateText () {
+      const dates = this.qlibSignals
+        .map(row => row && row.trend && row.trend.latest_date)
+        .filter(Boolean)
+      if (!dates.length) return '-'
+      const sorted = Array.from(new Set(dates)).sort()
+      return sorted.length === 1 ? sorted[0] : `${sorted[0]} ~ ${sorted[sorted.length - 1]}`
+    },
+    qlibTopRow () {
+      return this.qlibSignals.length ? this.qlibSignals[0] : null
+    },
+    qlibTopSymbol () {
+      return (this.qlibTopRow && this.qlibTopRow.symbol) || '-'
+    },
+    qlibTopScoreText () {
+      if (!this.qlibTopRow || this.qlibTopRow.qlib_score == null) return 'score -'
+      return 'score ' + this.formatNumber(this.qlibTopRow.qlib_score, 6)
+    },
+    qlibTrendUnknownCount () {
+      return this.qlibSignals.filter(row => {
+        const trend = row && row.trend
+        return !trend || trend.ok === false || trend.trend_label === 'unknown'
+      }).length
+    },
+    qlibQualityWarningCounts () {
+      const counts = {}
+      this.qlibSignals.forEach(row => {
+        const warnings = row && row.trend && Array.isArray(row.trend.quality_warnings) ? row.trend.quality_warnings : []
+        warnings.forEach(warning => {
+          const key = String(warning || '').trim()
+          if (key) counts[key] = (counts[key] || 0) + 1
+        })
+      })
+      return counts
+    },
+    rankingQualityStatus () {
+      if (!this.qlibSignals.length) return '-'
+      const warningTotal = Object.values(this.qlibQualityWarningCounts).reduce((sum, count) => sum + Number(count || 0), 0)
+      if (warningTotal || this.qlibTrendUnknownCount) return '需留意'
+      return '正常'
+    },
+    rankingQualityBrief () {
+      if (!this.qlibSignals.length) return '尚未载入'
+      const warnings = Object.entries(this.qlibQualityWarningCounts)
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .slice(0, 1)
+      if (warnings.length) return this.qualityWarningLabel(warnings[0][0]) + ' x ' + String(warnings[0][1])
+      if (this.qlibTrendUnknownCount) return 'trend unknown x ' + String(this.qlibTrendUnknownCount)
+      return '无集中警告'
+    },
+    rankingDataNote () {
+      if (!this.qlibSignals.length) return ''
+      const notes = []
+      if (this.qlibTrendUnknownCount >= Math.ceil(this.qlibSignals.length * 0.8)) {
+        notes.push('多数标的的趋势标签为 unknown，逐行展示价值不高，已从排名表中隐藏；可在交叉分析或个股详情中查看原始趋势分数。')
+      }
+      const warnings = Object.entries(this.qlibQualityWarningCounts).sort((a, b) => Number(b[1]) - Number(a[1]))
+      if (warnings.length && Number(warnings[0][1]) >= Math.ceil(this.qlibSignals.length * 0.5)) {
+        notes.push('主要数据提示为 ' + this.qualityWarningLabel(warnings[0][0]) + '，影响 ' + String(warnings[0][1]) + ' 支，已汇总展示而不是在每行重复。')
+      }
+      return notes.join(' ')
+    },
+    rankChangesAccepted () {
+      return !!(this.rankChangesPayload && this.rankChangesPayload.ok)
+    },
+    rankChangesSummary () {
+      return (this.rankChangesPayload && this.rankChangesPayload.summary) || {}
+    },
+    rankChangesDateText () {
+      if (!this.rankChangesPayload) return '-'
+      return `${this.rankChangesPayload.asof || '-'} vs ${this.rankChangesPayload.previous_asof || '-'}`
+    },
+    rankChangesEntered () {
+      const items = this.rankChangesPayload && this.rankChangesPayload.entered
+      return Array.isArray(items) ? items : []
+    },
+    rankChangesExited () {
+      const items = this.rankChangesPayload && this.rankChangesPayload.exited
+      return Array.isArray(items) ? items : []
+    },
+    rankChangesStayed () {
+      const items = this.rankChangesPayload && this.rankChangesPayload.stayed
+      return Array.isArray(items) ? items : []
+    },
+    rankChangesGainers () {
+      const items = this.rankChangesPayload && this.rankChangesPayload.top_gainers
+      return Array.isArray(items) ? items : []
+    },
+    rankChangesDecliners () {
+      const items = this.rankChangesPayload && this.rankChangesPayload.top_decliners
+      return Array.isArray(items) ? items : []
+    },
+    rankChangesCandidates () {
+      const items = this.rankChangesPayload && this.rankChangesPayload.watch_candidates
+      return Array.isArray(items) ? items : []
+    },
+    rankChangesCurrentItems () {
+      const map = {
+        entered: this.rankChangesEntered,
+        exited: this.rankChangesExited,
+        stayed: this.rankChangesStayed,
+        gainers: this.rankChangesGainers,
+        decliners: this.rankChangesDecliners,
+        candidates: this.rankChangesCandidates
+      }
+      return map[this.rankChangesActiveTab] || []
+    },
     qlibWarnings () {
       const warnings = this.qlibPayload && this.qlibPayload.warnings
-      return Array.isArray(warnings) ? warnings : []
+      if (!Array.isArray(warnings)) return []
+      return warnings.map(this.qualityWarningLabel).filter(Boolean)
     },
     qlibStateNotice () {
       if (this.qlibError) return this.qlibError
@@ -1396,6 +1926,54 @@ export default {
     qlibEmptyText () {
       if (!this.qlibPayload && !this.qlibError) return '尚未載入 qlib Option C 研究排序'
       return '目前沒有可用 qlib 研究排序表'
+    },
+    rankTechAccepted () {
+      return !!(this.rankTechLatestPayload && this.rankTechLatestPayload.ok && this.rankTechLatestPayload.status === 'accepted')
+    },
+    rankTechItems () {
+      const items = this.rankTechLatestPayload && this.rankTechLatestPayload.items
+      return Array.isArray(items) ? items : []
+    },
+    rankTechPriorityItems () {
+      const priority = {
+        new_watch: 1,
+        continue_watch: 2,
+        risk_review: 3,
+        manual_review: 4,
+        observe_only: 5,
+        data_insufficient: 6
+      }
+      return this.rankTechItems.slice().sort((a, b) => {
+        const ac = a && a.decision && a.decision.code
+        const bc = b && b.decision && b.decision.code
+        const ar = Number(a && (a.rank || (a.qlib && a.qlib.rank)) || 999)
+        const br = Number(b && (b.rank || (b.qlib && b.qlib.rank)) || 999)
+        return (priority[ac] || 9) - (priority[bc] || 9) || ar - br
+      }).slice(0, 8)
+    },
+    rankTechStatusText () {
+      if (this.rankTechLatestError) return '读取异常'
+      if (!this.rankTechLatestPayload) return '待读取'
+      if (this.rankTechAccepted) return '已载入'
+      return this.rankTechLatestPayload.status || '暂不可用'
+    },
+    rankTechBucketLabel () {
+      return this.rankTechBucket === 'top50' ? 'Top50' : 'Top30'
+    },
+    rankTechDateText () {
+      const qlib = (this.rankTechLatestPayload && this.rankTechLatestPayload.qlib) || {}
+      return qlib.asof || this.rankingDateText || '-'
+    },
+    portfolioReplayComparisonItems () {
+      const comparison = (this.portfolioReplayPayload && this.portfolioReplayPayload.comparison) || {}
+      return ['qlib_only', 'qlib_plus_trend', 'qlib_plus_trend_indicators']
+        .filter(variant => this.rankTechVariant === 'all' || this.rankTechVariant === variant)
+        .map(variant => ({ variant, payload: comparison[variant] || {}, metrics: (comparison[variant] && comparison[variant].metrics) || {} }))
+        .filter(item => item.payload && Object.keys(item.payload).length)
+    },
+    portfolioReplayRangeText () {
+      const range = this.portfolioReplayDateRange()
+      return `${range.startDate || '-'} 至 ${range.endDate || '-'}`
     },
     crossAnalysisAccepted () {
       return !!(this.crossAnalysisPayload && this.crossAnalysisPayload.ok && this.crossAnalysisPayload.status === 'accepted')
@@ -1446,6 +2024,65 @@ export default {
     },
     crossAnalysisCategories () {
       return Array.from(new Set(this.crossAnalysisItems.map(item => item && item.cross && item.cross.category).filter(Boolean)))
+    },
+    crossAnalysisBucketLabel () {
+      if (this.crossAnalysisBucket === 'top30') return 'Top30'
+      if (this.crossAnalysisBucket === 'top50') return 'Top50'
+      return '全部'
+    },
+    crossAnalysisCategoryLabel () {
+      if (this.crossAnalysisCategory === 'all') return '全部分组'
+      const labels = {
+        focus_watch: '重点观察',
+        secondary_watch: '次级观察',
+        model_trend_divergence: '模型趋势分歧',
+        data_review_required: '需要数据复核',
+        trend_unavailable: '趋势不可用',
+        model_watch_trend_neutral: '中性观察'
+      }
+      return labels[this.crossAnalysisCategory] || this.crossAnalysisCategory
+    },
+    crossFreshnessUserText () {
+      const status = this.crossFreshness.status
+      if (status === 'fresh') return '正常'
+      if (status === 'historical') return '历史数据'
+      if (status === 'stale') return '可能延迟'
+      if (status === 'blocked') return '暂不可用'
+      return '待确认'
+    },
+    crossModelRawDateText () {
+      const model = (this.crossFreshnessQlib && this.crossFreshnessQlib.asof) || (this.crossAnalysisQlib && this.crossAnalysisQlib.asof) || '-'
+      return `${model} / ${this.crossRawDateRangeText}`
+    },
+    crossCategorySummaryText () {
+      const counts = this.crossCategoryCounts
+      const entries = Object.entries(counts).sort((a, b) => Number(b[1]) - Number(a[1]))
+      if (!entries.length) return '-'
+      return entries.slice(0, 2).map(([category, count]) => `${this.crossCategoryLabel(category)} ${count}`).join(' / ')
+    },
+    crossCategoryCounts () {
+      const counts = {}
+      this.filteredCrossAnalysisItems.forEach(item => {
+        const category = (item && item.cross && item.cross.category) || 'uncategorized'
+        counts[category] = (counts[category] || 0) + 1
+      })
+      return counts
+    },
+    crossTrendSummaryText () {
+      const items = this.filteredCrossAnalysisItems
+      if (!items.length) return '-'
+      const unknown = items.filter(item => this.isUnknownTrend(item && item.quantdinger && item.quantdinger.trend_label)).length
+      const unavailable = items.filter(item => item && item.quantdinger && item.quantdinger.ok === false).length
+      const scored = items.map(item => Number(item && item.quantdinger && item.quantdinger.trend_score)).filter(Number.isFinite)
+      const avg = scored.length ? scored.reduce((sum, value) => sum + value, 0) / scored.length : null
+      const shortHistory = items.filter(item => {
+        const warnings = item && item.quantdinger && Array.isArray(item.quantdinger.quality_warnings) ? item.quantdinger.quality_warnings : []
+        return warnings.includes('short_history_below_60_bars')
+      }).length
+      if (unavailable === items.length) return '趋势不可用'
+      if (shortHistory >= Math.ceil(items.length * 0.8)) return `多数样本不足，均分 ${avg == null ? '-' : this.formatNumber(avg, 1)}`
+      if (unknown >= Math.ceil(items.length * 0.8)) return `多为中性/未知，均分 ${avg == null ? '-' : this.formatNumber(avg, 1)}`
+      return `已读取 ${items.length} 支，均分 ${avg == null ? '-' : this.formatNumber(avg, 1)}`
     },
     filteredCrossAnalysisItems () {
       if (this.crossAnalysisCategory === 'all') return this.crossAnalysisItems
@@ -1509,6 +2146,10 @@ export default {
       const warnings = this.agentResponse && this.agentResponse.warnings
       return Array.isArray(warnings) ? warnings : []
     },
+    agentSkills () {
+      const skills = this.agentResponse && this.agentResponse.invoked_skills
+      return Array.isArray(skills) ? skills : []
+    },
     agentItems () {
       const items = this.agentResponse && this.agentResponse.items
       return Array.isArray(items) ? items : []
@@ -1522,11 +2163,13 @@ export default {
     this.loadQlibWatchDraft()
     this.loadQlibHealth()
     this.loadQlibSignals()
+    this.loadRankChanges()
     this.loadQlibRuns()
     this.loadQlibScheduler()
     this.loadQlibOpsLatest()
     this.loadDailyAutoUpdateStatus()
     this.loadCrossAnalysis()
+    this.loadRankTechPortfolioPanel()
     this.loadTwStockAgentContext()
     this.refreshAll()
     window.addEventListener('resize', this.redrawCharts)
@@ -1536,7 +2179,43 @@ export default {
     window.removeEventListener('resize', this.redrawCharts)
   },
   methods: {
+    emptyCrossBacktestValidation () {
+      return {
+        symbol: '',
+        loading: false,
+        error: '',
+        results: [],
+        best: null,
+        actionLabel: '待验证',
+        actionType: 'pending',
+        reason: ''
+      }
+    },
+
+    qualityWarningLabel (warning) {
+      const key = String(warning || '').trim()
+      const labels = {
+        short_history_below_60_bars: '历史不足60日',
+        target_date_unavailable: '目标日数据未完全到齐',
+        run_metadata_missing_research_only_flags_verified_by_latest_and_summary: ''
+      }
+      return Object.prototype.hasOwnProperty.call(labels, key) ? labels[key] : key
+    },
+    displayInstrument (row) {
+      const instrument = row && row.instrument ? String(row.instrument).trim().toUpperCase() : ''
+      if (instrument) return instrument
+      const symbol = row && row.symbol ? String(row.symbol).trim().toUpperCase() : ''
+      return symbol ? `TW${symbol.replace(/^TW/, '')}` : '-'
+    },
+    displayStockName (row) {
+      const name = row && (row.name || row.symbol_name || row.stock_name)
+      if (name) return String(name).trim()
+      return row && row.symbol ? String(row.symbol).trim().toUpperCase() : '-'
+    },
     unwrap (response) {
+      if (response && Object.prototype.hasOwnProperty.call(response, 'code') && Object.prototype.hasOwnProperty.call(response, 'data')) {
+        return response.data
+      }
       if (response && response.data && Object.prototype.hasOwnProperty.call(response.data, 'data')) {
         return response.data.data
       }
@@ -1616,6 +2295,20 @@ export default {
         this.loadingQlibSignals = false
       }
     },
+    async loadRankChanges () {
+      this.loadingRankChanges = true
+      this.rankChangesError = ''
+      try {
+        const data = this.unwrap(await getQlibOptionCRankChanges({ bucket: this.qlibBucket, lookback: 10 }))
+        this.rankChangesPayload = data || null
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.rankChangesPayload = response && response.data ? response.data : null
+        this.rankChangesError = (response && response.msg) || error.message || '排名变化读取失败'
+      } finally {
+        this.loadingRankChanges = false
+      }
+    },
     async loadQlibRuns () {
       this.loadingQlibRuns = true
       try {
@@ -1654,6 +2347,7 @@ export default {
         if (run) return this.loadQlibRunDetail(run)
       }
       this.loadQlibSignals()
+      this.loadRankChanges()
     },
     qlibRunStatusColor (run) {
       const status = run && run.status
@@ -1675,6 +2369,7 @@ export default {
       try {
         const data = this.unwrap(await getTwStockAgentContext({ maxItems: 10 }))
         this.agentContext = data || null
+        this.refreshAgentSuggestedQuestions(data)
       } catch (error) {
         const response = error && error.response && error.response.data
         this.agentContext = response && response.data ? response.data : null
@@ -1687,6 +2382,34 @@ export default {
       if (event && event.shiftKey) return
       if (event && typeof event.preventDefault === 'function') event.preventDefault()
       this.askTwStockAgent()
+    },
+    refreshAgentSuggestedQuestions (context) {
+      const source = context || this.agentContext || {}
+      const summary = (source.cross_analysis && source.cross_analysis.summary) || {}
+      const counts = summary.category_counts || {}
+      const top30 = Array.isArray(source.top30_preview) ? source.top30_preview : []
+      const focus = Array.isArray(source.focus_watch_preview) ? source.focus_watch_preview : []
+      const divergence = Array.isArray(source.divergence_preview) ? source.divergence_preview : []
+      const dataReview = Array.isArray(source.data_review_preview) ? source.data_review_preview : []
+      const questions = ['今天 top30 是哪些？']
+      if (focus.length || Number(counts.focus_watch || 0) > 0) {
+        questions.push('今天模型和趋势都支持的股票有哪些？')
+      }
+      if (divergence.length || Number(counts.model_trend_divergence || 0) > 0) {
+        questions.push('今天模型和趋势分歧的股票有哪些？')
+      }
+      if (dataReview.length || Number(counts.data_review_required || 0) > 0) {
+        questions.push('今天需要数据复核或人工复盘的股票有哪些？')
+      }
+      if (Number(counts.model_watch_trend_neutral || 0) > 0 && questions.length === 1) {
+        questions.push('今天 top30 中性观察名单有哪些？')
+      }
+      const firstSymbol = top30.find(item => item && item.symbol)
+      if (firstSymbol && firstSymbol.symbol) {
+        questions.push(String(firstSymbol.symbol) + ' 的指标是多少？')
+      }
+      questions.push('当前数据新鲜度和口径是什么？')
+      this.agentSuggestedQuestions = Array.from(new Set(questions)).slice(0, 5)
     },
     useAgentSuggestion (question) {
       this.agentQuestion = question
@@ -1710,6 +2433,7 @@ export default {
         this.agentResponse = data || null
         if (data && data.context_digest && !this.agentContext) {
           this.agentContext = { qlib: { asof: data.context_digest.qlib_asof, run_id: data.context_digest.qlib_run_id }, freshness: { status: data.context_digest.freshness_status } }
+          this.refreshAgentSuggestedQuestions(this.agentContext)
         }
       } catch (error) {
         const response = error && error.response && error.response.data
@@ -1718,6 +2442,177 @@ export default {
       } finally {
         this.sendingAgentQuestion = false
       }
+    },
+    portfolioReplayDateRange () {
+      const end = new Date()
+      const start = new Date(end.getTime())
+      if (this.rankTechRange === 'one_year') start.setFullYear(start.getFullYear() - 1)
+      else start.setMonth(start.getMonth() - 6)
+      return {
+        startDate: this.formatDateOnly(start),
+        endDate: this.formatDateOnly(end)
+      }
+    },
+    formatDateOnly (date) {
+      const parsed = date instanceof Date ? date : new Date(date)
+      if (Number.isNaN(parsed.getTime())) return ''
+      const year = parsed.getFullYear()
+      const month = String(parsed.getMonth() + 1).padStart(2, '0')
+      const day = String(parsed.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    },
+    async loadRankTechCrossLatest () {
+      this.loadingRankTechCross = true
+      this.rankTechLatestError = ''
+      try {
+        const maxItems = this.rankTechBucket === 'top50' ? 50 : 30
+        const data = this.unwrap(await getTwStockRankTechCrossLatest({
+          bucket: this.rankTechBucket,
+          limit: 120,
+          maxItems,
+          includeTechnicalStrategies: true,
+          technicalStrategies: ['ma', 'rsi', 'macd', 'bollinger']
+        }))
+        this.rankTechLatestPayload = data || null
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.rankTechLatestPayload = response && response.data ? response.data : null
+        this.rankTechLatestError = (response && response.msg) || error.message || '今日复盘读取失败；历史模拟区仍保持只读。'
+      } finally {
+        this.loadingRankTechCross = false
+      }
+    },
+    observationReplayReader () {
+      return getTwStockObservationReplay
+    },
+    async loadPortfolioReplay () {
+      this.runningPortfolioReplay = true
+      this.portfolioReplayError = ''
+      try {
+        const range = this.portfolioReplayDateRange()
+        const maxItems = this.rankTechBucket === 'top50' ? 50 : 30
+        const data = this.unwrap(await runTwStockPortfolioReplay({
+          ...range,
+          bucket: this.rankTechBucket,
+          maxItems,
+          variant: this.rankTechVariant,
+          initialCash: 1000000,
+          maxHoldings: 10,
+          lotSize: 10,
+          maxAddPerDay: 1,
+          maxRiskActionPerDay: 1,
+          technicalStrategies: ['ma', 'rsi', 'macd', 'bollinger'],
+          persist: false
+        }))
+        this.portfolioReplayPayload = data || null
+        const flags = data && data.trading
+        if (data && (data.persist !== false || data.writes_business_db !== false || data.simulation_only !== true || (flags && flags.connects_to_broker === true))) {
+          this.portfolioReplayError = '历史模拟返回的只读标记异常，已仅展示状态。'
+        }
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.portfolioReplayPayload = response && response.data ? response.data : null
+        this.portfolioReplayError = (response && response.msg) || error.message || '过去表现暂不可用；今日复盘可继续查看。'
+      } finally {
+        this.runningPortfolioReplay = false
+      }
+    },
+    async loadRankTechPortfolioPanel () {
+      await Promise.all([this.loadRankTechCrossLatest(), this.loadPortfolioReplay()])
+    },
+    handleRankTechReplayControlChange () {
+      this.rankTechVariant = this.rankTechVariant || 'all'
+      this.loadRankTechPortfolioPanel()
+    },
+    handlePortfolioReplayControlChange () {
+      this.loadPortfolioReplay()
+    },
+    rankTechDecisionLabel (item) {
+      const code = item && item.decision && item.decision.code
+      const labels = {
+        new_watch: '新增观察',
+        continue_watch: '继续观察',
+        risk_review: '风险复盘',
+        manual_review: '人工复核',
+        observe_only: '仅观察',
+        data_insufficient: '数据不足'
+      }
+      return labels[code] || '人工复核'
+    },
+    rankTechDecisionColor (item) {
+      const code = item && item.decision && item.decision.code
+      if (code === 'new_watch' || code === 'continue_watch') return 'green'
+      if (code === 'risk_review') return 'orange'
+      if (code === 'manual_review') return 'purple'
+      if (code === 'data_insufficient') return 'red'
+      return 'blue'
+    },
+    rankTechTierLabel (value) {
+      const rank = Number(value)
+      const key = String(value || '').toLowerCase()
+      if (key === 'top10' || rank <= 10) return 'Top10'
+      if (key === 'top30' || rank <= 30) return 'Top30'
+      if (key === 'top50' || rank <= 50) return 'Top50'
+      return 'Top50 外'
+    },
+    rankTechTechnicalLabel (status) {
+      const labels = {
+        technical_strong: '技术状态偏强',
+        technical_neutral: '技术状态中性',
+        technical_weak: '技术状态偏弱',
+        technical_data_insufficient: '技术数据不足'
+      }
+      return labels[status] || '技术状态待确认'
+    },
+    rankTechTrendLabel (label) {
+      const value = String(label || '').toLowerCase()
+      if (value === 'uptrend' || value === 'rebound') return '偏强'
+      if (value === 'downtrend' || value === 'pullback') return '偏弱'
+      if (value === 'sideways' || value === 'unknown') return '中性'
+      return '数据不足'
+    },
+    rankTechIndicatorSummary (item) {
+      const summary = item && item.technical && item.technical.summary
+      if (!summary) return '指标：数据不足'
+      const supportive = Number(summary.supportive_count || summary.supportive || 0)
+      const neutral = Number(summary.neutral_count || summary.neutral || 0)
+      const caution = Number(summary.caution_count || summary.caution || 0)
+      const insufficient = Number(summary.data_insufficient_count || summary.data_insufficient || 0)
+      return `指标：支持 ${supportive} / 中性 ${neutral} / 谨慎 ${caution} / 数据不足 ${insufficient}`
+    },
+    rankTechQualityBrief (item) {
+      const warnings = []
+        .concat((item && item.trend && item.trend.warnings) || [])
+        .concat((item && item.technical && item.technical.warnings) || [])
+        .map(this.qualityWarningLabel)
+        .filter(Boolean)
+      return warnings.length ? `数据提示：${Array.from(new Set(warnings)).slice(0, 2).join(' / ')}` : '数据提示：无集中提示'
+    },
+    rankTechReasonText (item) {
+      const reason = item && item.technical && item.technical.reason
+      if (reason) return reason
+      const decisionReason = item && item.decision && item.decision.reason
+      return decisionReason || this.rankTechQualityBrief(item)
+    },
+    portfolioVariantLabel (variant) {
+      const labels = {
+        qlib_only: 'qlib-only',
+        qlib_plus_trend: 'qlib + trend',
+        qlib_plus_trend_indicators: 'qlib + trend + indicators'
+      }
+      return labels[variant] || variant || '-'
+    },
+    formatReplayPercent (value) {
+      if (value == null || value === '') return '-'
+      const num = Number(value)
+      if (!Number.isFinite(num)) return '-'
+      const percent = Math.abs(num) <= 1 ? num * 100 : num
+      return `${percent >= 0 ? '+' : ''}${percent.toFixed(2)}%`
+    },
+    portfolioReplayWarningText (item) {
+      const warnings = (item && item.payload && item.payload.dataQuality && item.payload.dataQuality.warnings) || []
+      const normalized = Array.isArray(warnings) ? warnings.slice(0, 2) : []
+      return normalized.length ? `数据提示：${normalized.join(' / ')}` : '数据提示：无集中提示'
     },
     async loadCrossAnalysis () {
       this.loadingCrossAnalysis = true
@@ -1728,7 +2623,7 @@ export default {
           bucket: this.crossAnalysisBucket,
           limit: 120,
           maxItems,
-          includeRawTrend: false
+          includeRawTrend: true
         }))
         this.crossAnalysisPayload = data || null
         if (this.crossAnalysisCategory !== 'all' && !this.crossAnalysisCategories.includes(this.crossAnalysisCategory)) {
@@ -1754,10 +2649,12 @@ export default {
         const data = this.unwrap(await getTwStockCrossAnalysisSymbol(row.symbol, { limit: 120, includeRawTrend: true }))
         this.selectedCrossAnalysisDetail = data || null
         this.prepareCrossReviewForm()
+        this.restoreCrossBacktestValidation(row.symbol)
       } catch (error) {
         const response = error && error.response && error.response.data
         this.selectedCrossAnalysisDetail = (response && response.data) || { ok: false, status: 'read_error', symbol: row.symbol }
         this.prepareCrossReviewForm()
+        this.restoreCrossBacktestValidation(row.symbol)
       } finally {
         this.loadingCrossAnalysisDetail = false
       }
@@ -1814,10 +2711,131 @@ export default {
         this.savingCrossReview = false
       }
     },
+    restoreCrossBacktestValidation (symbol) {
+      const normalized = this.normalizeTwSymbol(symbol)
+      if (!normalized) {
+        this.crossBacktestValidation = this.emptyCrossBacktestValidation()
+        return
+      }
+      const cached = this.crossBacktestValidationCache[normalized]
+      this.crossBacktestValidation = cached ? Object.assign(this.emptyCrossBacktestValidation(), cached) : Object.assign(this.emptyCrossBacktestValidation(), { symbol: normalized })
+    },
+
+    crossDetailItemForValidation () {
+      const detail = this.selectedCrossAnalysisDetail || {}
+      if (detail.item) return detail.item
+      const symbol = this.normalizeTwSymbol(detail.symbol)
+      return this.crossAnalysisItems.find(item => this.normalizeTwSymbol(item && item.symbol) === symbol) || null
+    },
+
+    async runCrossHistoricalValidation () {
+      const detail = this.selectedCrossAnalysisDetail || {}
+      const symbol = this.normalizeTwSymbol(detail.symbol || (detail.item && detail.item.symbol))
+      if (!symbol || this.crossBacktestValidation.loading) return
+      const cached = this.crossBacktestValidationCache[symbol]
+      if (cached && cached.results && cached.results.length) {
+        this.crossBacktestValidation = Object.assign(this.emptyCrossBacktestValidation(), cached)
+        return
+      }
+      this.crossBacktestValidation = Object.assign(this.emptyCrossBacktestValidation(), { symbol, loading: true, actionLabel: '验证中' })
+      try {
+        if (!this.backtestTemplates.length) await this.loadBacktestTemplates()
+        const templates = (this.backtestTemplates || []).slice(0, 4)
+        if (!templates.length) throw new Error('没有可用的台股回测模板。')
+        const results = []
+        for (const template of templates) {
+          try {
+            const data = this.unwrap(await runTwStockReadonlyBacktest({
+              symbol,
+              strategyId: template.id,
+              startDate: this.formatPickerDate(this.backtestForm.startDate),
+              endDate: this.formatPickerDate(this.backtestForm.endDate),
+              initialCapital: Number(this.backtestForm.initialCapital || 1000000),
+              strategyConfig: { template: {} }
+            }))
+            const result = data && data.result ? data.result : data
+            results.push(this.normalizeCrossBacktestResult(template, result, null))
+          } catch (error) {
+            const response = error && error.response && error.response.data
+            results.push(this.normalizeCrossBacktestResult(template, null, (response && response.msg) || error.message || '回测失败'))
+          }
+        }
+        const best = this.pickBestCrossBacktest(results)
+        const decision = this.buildCrossBacktestDecision(best, this.crossDetailItemForValidation())
+        const payload = Object.assign(this.emptyCrossBacktestValidation(), {
+          symbol,
+          loading: false,
+          results,
+          best,
+          actionLabel: decision.label,
+          actionType: decision.type,
+          reason: decision.reason
+        })
+        this.crossBacktestValidation = payload
+        this.$set(this.crossBacktestValidationCache, symbol, payload)
+      } catch (error) {
+        this.crossBacktestValidation = Object.assign(this.emptyCrossBacktestValidation(), {
+          symbol,
+          error: error.message || '历史验证失败',
+          actionLabel: '验证失败',
+          actionType: 'error'
+        })
+      }
+    },
+
+    normalizeCrossBacktestResult (template, result, error) {
+      const metrics = (result && (result.metrics || result)) || {}
+      const totalReturn = Number(metrics.totalReturn)
+      const maxDrawdown = Number(metrics.maxDrawdown)
+      const winRate = Number(metrics.winRate)
+      const totalTrades = Number(metrics.totalTrades)
+      const ok = !error && Number.isFinite(totalReturn)
+      const robustScore = ok
+        ? totalReturn - Math.abs(Number.isFinite(maxDrawdown) ? maxDrawdown : 0) * 0.8 + (Number.isFinite(winRate) ? winRate : 0) * 0.05 - (Number.isFinite(totalTrades) && totalTrades < 2 ? 10 : 0)
+        : -Infinity
+      return {
+        ok,
+        error: error || '',
+        strategyId: template.id,
+        strategyName: template.name || template.id,
+        totalReturn: Number.isFinite(totalReturn) ? totalReturn : null,
+        maxDrawdown: Number.isFinite(maxDrawdown) ? maxDrawdown : null,
+        winRate: Number.isFinite(winRate) ? winRate : null,
+        totalTrades: Number.isFinite(totalTrades) ? totalTrades : null,
+        robustScore
+      }
+    },
+
+    pickBestCrossBacktest (results) {
+      const valid = (results || []).filter(item => item && item.ok)
+      if (!valid.length) return null
+      const scoreOf = item => Number.isFinite(Number(item && item.robustScore)) ? Number(item.robustScore) : -Infinity
+      return valid.slice().sort((a, b) => scoreOf(b) - scoreOf(a))[0]
+    },
+
+    buildCrossBacktestDecision (best, item) {
+      if (!best) return { type: 'manual_review', label: '人工复盘', reason: '没有可用的历史验证结果，不能据此做模拟动作。' }
+      const category = item && item.cross && item.cross.category
+      const alignment = item && item.cross && item.cross.alignment
+      const trend = item && item.quantdinger && item.quantdinger.trend_label
+      const totalReturn = Number(best.totalReturn || 0)
+      const maxDrawdown = Math.abs(Number(best.maxDrawdown || 0))
+      const trades = Number(best.totalTrades || 0)
+      if (trades < 2) return { type: 'manual_review', label: '人工复盘', reason: '历史交易次数太少，样本不足。' }
+      if (totalReturn <= 0) return { type: 'avoid_new_buy', label: '不新增模拟买入', reason: '较优策略历史收益不为正，先观察。' }
+      if (maxDrawdown >= Math.max(20, Math.abs(totalReturn) * 1.2)) return { type: 'manual_review', label: '人工复盘', reason: '历史回撤相对收益偏大，不适合自动进入候选。' }
+      if (category === 'focus_watch' && alignment === 'aligned' && ['uptrend', 'rebound'].includes(trend)) {
+        return { type: 'sim_buy_candidate', label: '模拟买入候选', reason: '模型、趋势与历史验证相对一致，可放入模拟账户观察。' }
+      }
+      if (category === 'model_trend_divergence' || alignment === 'divergent') return { type: 'manual_review', label: '人工复盘', reason: '模型和趋势存在分歧，即使历史验证较好也不直接给动作。' }
+      if (['downtrend', 'pullback'].includes(trend)) return { type: 'risk_review_if_holding', label: '若已持有则复盘风险', reason: '趋势偏弱，历史验证只能作为风险参考，不直接给减仓指令。' }
+      return { type: 'watch_only', label: '观察/保留', reason: '历史验证可用，但当前交叉信号还不足以进入模拟买入候选。' }
+    },
+
     async openCrossAnalysisHistoricalSimulation () {
       const detail = this.selectedCrossAnalysisDetail
       const symbol = detail && detail.symbol
-      if (!symbol) return
+      if (!symbol || this.runningBacktest) return
       await this.selectTrendSymbol(symbol)
       this.backtestForm = Object.assign({}, this.backtestForm, {
         strategyId: 'ma_cross_builtin',
@@ -1826,15 +2844,10 @@ export default {
       this.backtestPanelVisible = true
       this.backtestResult = null
       this.backtestError = ''
-      if (!this.backtestTemplates.length) this.loadBacktestTemplates()
-      this.$nextTick(() => {
-        const panel = this.$refs.readonlyBacktestPanel
-        const node = panel && (panel.$el || panel)
-        if (node && typeof node.scrollIntoView === 'function') {
-          node.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }
-        this.drawBacktestEquityChart()
-      })
+      if (!this.backtestTemplates.length) await this.loadBacktestTemplates()
+      await this.$nextTick()
+      this.scrollToBacktestPanel()
+      await this.runReadonlyBacktest()
     },
     crossAnalysisCustomRow (record) {
       return {
@@ -1850,12 +2863,90 @@ export default {
       if (label === 'sideways' || label === 'unknown') return 'orange'
       return 'default'
     },
+    isUnknownTrend (label) {
+      const value = String(label || '').trim().toLowerCase()
+      return !value || value === 'unknown' || value === 'trend_unavailable'
+    },
+    crossTrendLabel (label) {
+      const labels = {
+        uptrend: '上升趋势',
+        rebound: '反弹',
+        sideways: '震荡',
+        downtrend: '下降趋势',
+        pullback: '回落',
+        unknown: '中性/未知',
+        trend_unavailable: '趋势不可用'
+      }
+      const key = String(label || 'trend_unavailable').trim()
+      return labels[key] || key || '趋势不可用'
+    },
+    crossTrendDisplayLabel (row) {
+      const warnings = row && row.quantdinger && Array.isArray(row.quantdinger.quality_warnings) ? row.quantdinger.quality_warnings : []
+      if (warnings.includes('short_history_below_60_bars')) return '样本不足'
+      return this.crossTrendLabel(row && row.quantdinger && row.quantdinger.trend_label)
+    },
     crossCategoryColor (category) {
       if (category === 'focus_watch') return 'green'
       if (category === 'secondary_watch') return 'blue'
       if (category === 'model_trend_divergence') return 'orange'
       if (category === 'data_review_required' || category === 'trend_unavailable') return 'red'
       return 'default'
+    },
+    crossCategoryLabel (category) {
+      const labels = {
+        focus_watch: '重点观察',
+        secondary_watch: '次级观察',
+        model_trend_divergence: '模型趋势分歧',
+        data_review_required: '需要数据复核',
+        trend_unavailable: '趋势不可用',
+        model_watch_trend_neutral: '中性观察',
+        low_priority_watch: '低优先观察',
+        uncategorized: '未分类'
+      }
+      const key = String(category || 'uncategorized').trim()
+      return labels[key] || key || '未分类'
+    },
+    crossActionLabel (action) {
+      const labels = {
+        manual_review_watchlist: '加入人工观察名单',
+        manual_review_required: '人工复盘',
+        data_review_required: '先复核数据',
+        watch_only: '仅观察',
+        avoid_until_data_ready: '等数据完整后再看'
+      }
+      return labels[action] || action || '人工复盘'
+    },
+    crossPriorityLabel (priority) {
+      const labels = {
+        high: '高优先级',
+        medium: '中优先级',
+        low: '低优先级',
+        blocked: '先复核数据'
+      }
+      return labels[priority] || '人工复盘'
+    },
+    crossBasisLabel (status) {
+      const labels = {
+        ok: '口径正常',
+        date_gap: '日期有落差',
+        quantdinger_raw_unavailable: '趋势数据缺失'
+      }
+      return labels[status] || status || '待确认'
+    },
+    crossDateGapLabel (gap) {
+      if (gap == null || gap === '') return '日期差 -'
+      const value = Number(gap)
+      if (!Number.isFinite(value)) return `日期差 ${gap}`
+      if (value === 0) return '模型与行情同日'
+      if (value < 0) return `行情比模型新 ${Math.abs(value)} 日`
+      return `模型比行情新 ${value} 日`
+    },
+    crossQualityBrief (row) {
+      const warnings = row && row.quantdinger && Array.isArray(row.quantdinger.quality_warnings) ? row.quantdinger.quality_warnings : []
+      if (warnings.length) return warnings.map(this.qualityWarningLabel).filter(Boolean).slice(0, 2).join(' / ')
+      const basis = row && row.data_basis
+      if (basis && basis.date_gap_days != null) return `日期差 ${basis.date_gap_days}`
+      return '无集中提示'
     },
     crossAlignmentColor (alignment) {
       if (alignment === 'aligned') return 'green'
@@ -1870,6 +2961,34 @@ export default {
       return 'default'
     },
 
+    rankChangeLabelColor (item) {
+      const type = item && item.change_type
+      const delta = Number(item && item.rank_delta)
+      if (type === 'entered') return 'green'
+      if (type === 'exited') return 'red'
+      if (Number.isFinite(delta) && delta > 0) return 'green'
+      if (Number.isFinite(delta) && delta < 0) return 'orange'
+      return 'blue'
+    },
+    rankChangeRankText (item) {
+      if (!item) return '-'
+      const current = item.current_rank == null ? '-' : `#${item.current_rank}`
+      const previous = item.previous_rank == null ? '-' : `#${item.previous_rank}`
+      if (this.rankChangesActiveTab === 'candidates') return `Top50 ${current} / 昨日 ${previous}`
+      return `${previous} → ${current}`
+    },
+    rankChangeDeltaText (item) {
+      if (!item) return '-'
+      if (item.rank_delta == null) {
+        if (item.change_type === 'entered') return `昨日未入 ${this.rankingBucketText}`
+        if (item.change_type === 'exited') return `今日未入 ${this.rankingBucketText}`
+        if (this.rankChangesActiveTab === 'candidates') return '昨日不在 Top50'
+        return '无可比排名'
+      }
+      const delta = Number(item.rank_delta)
+      if (delta === 0) return '持平'
+      return delta > 0 ? `上升 ${delta}` : `下降 ${Math.abs(delta)}`
+    },
     normalizeQlibOpsJob (job) {
       return job && typeof job === 'object' ? job : null
     },
@@ -1982,6 +3101,68 @@ export default {
       this.qlibWatchDraft = next.slice(0, 80)
       this.persistQlibWatchDraft()
     },
+    simDraftContextStorageKey () {
+      return 'tw-stock-sim-draft-context'
+    },
+    prefillSimDraftFromQlib (row) {
+      if (!row || !row.symbol) return
+      const trend = row.trend || {}
+      const context = {
+        symbol: String(row.symbol).trim().toUpperCase(),
+        asof: (this.qlibPayload && this.qlibPayload.asof) || '',
+        run_id: (this.qlibPayload && this.qlibPayload.run_id) || '',
+        qlib_rank: row.rank,
+        qlib_score: row.qlib_score,
+        trend_label: trend.trend_label || '',
+        bucket: this.qlibBucket || 'top30',
+        source_label: '研究排名'
+      }
+      this.writeSimDraftContext({
+        source_type: 'qlib_rank',
+        symbol: context.symbol,
+        side: 'buy',
+        quantity: 1000,
+        source_context: context
+      })
+    },
+    canPrefillSimDraftFromCross (row) {
+      const category = row && row.cross && row.cross.category
+      const alignment = row && row.cross && row.cross.alignment
+      return category === 'focus_watch' || alignment === 'aligned'
+    },
+    prefillSimDraftFromCross (row) {
+      if (!this.canPrefillSimDraftFromCross(row) || !row || !row.symbol) return
+      const qlib = row.qlib || {}
+      const quant = row.quantdinger || {}
+      const cross = row.cross || {}
+      const context = {
+        symbol: String(row.symbol).trim().toUpperCase(),
+        asof: qlib.asof || (this.crossAnalysisQlib && this.crossAnalysisQlib.asof) || '',
+        run_id: qlib.run_id || (this.crossAnalysisQlib && this.crossAnalysisQlib.run_id) || '',
+        qlib_rank: qlib.rank,
+        qlib_score: qlib.score,
+        trend_label: quant.trend_label || '',
+        cross_category: cross.category || '',
+        cross_alignment: cross.alignment || '',
+        bucket: qlib.bucket || this.crossAnalysisBucket || 'top30',
+        source_label: '交叉分析'
+      }
+      this.writeSimDraftContext({
+        source_type: 'cross_analysis',
+        symbol: context.symbol,
+        side: 'buy',
+        quantity: 1000,
+        source_context: context
+      })
+    },
+    writeSimDraftContext (draft) {
+      try {
+        window.localStorage.setItem(this.simDraftContextStorageKey(), JSON.stringify(draft))
+        this.$router.push('/tw-stock-sim-account')
+      } catch (error) {
+        this.degradedNotice = '模拟草稿预填失败，请打开台股模拟账户页面手动填写。'
+      }
+    },
     removeQlibWatchDraft (symbol) {
       const normalized = String(symbol || '').trim().toUpperCase()
       this.qlibWatchDraft = this.qlibWatchDraft.filter(item => item.symbol !== normalized)
@@ -2012,18 +3193,15 @@ export default {
       return !!(row && row.trend && row.trend.ok)
     },
     async openQlibReadonlyBacktest (row) {
-      if (!row || !row.symbol) return
+      if (!row || !row.symbol || this.runningBacktest) return
       await this.selectTrendSymbol(row.symbol)
       this.backtestPanelVisible = true
-      if (!this.backtestTemplates.length) this.loadBacktestTemplates()
-      this.$nextTick(() => {
-        const panel = this.$refs.readonlyBacktestPanel
-        const node = panel && (panel.$el || panel)
-        if (node && typeof node.scrollIntoView === 'function') {
-          node.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }
-        this.drawBacktestEquityChart()
-      })
+      this.backtestResult = null
+      this.backtestError = ''
+      if (!this.backtestTemplates.length) await this.loadBacktestTemplates()
+      await this.$nextTick()
+      this.scrollToBacktestPanel()
+      await this.runReadonlyBacktest()
     },
     qlibCustomRow (record) {
       return {
@@ -2032,6 +3210,66 @@ export default {
         }
       }
     },
+    normalizeTwSymbol (symbol) {
+      let value = String(symbol || '').trim().toUpperCase()
+      if (!value) return ''
+      if (value.includes(':')) value = value.split(':').pop()
+      if (value.startsWith('TW')) value = value.slice(2)
+      if (value.includes('.')) value = value.split('.')[0]
+      return /^\d{4,6}$/.test(value) ? value : ''
+    },
+    filterChartSymbolOption (input, option) {
+      const text = String(option && option.componentOptions && option.componentOptions.children && option.componentOptions.children[0] && option.componentOptions.children[0].text || '').toUpperCase()
+      return text.includes(String(input || '').toUpperCase())
+    },
+    async loadChartSymbolOptions (bucket) {
+      const source = bucket || (this.chartSymbolSource === 'top50' ? 'top50' : 'top30')
+      if (!['top30', 'top50'].includes(source)) return
+      if (this.chartSignalPayloads[source] && Array.isArray(this.chartSignalPayloads[source].signals)) return
+      this.loadingChartSymbols = true
+      try {
+        const data = this.unwrap(await getLatestQlibOptionCSignals({
+          bucket: source,
+          enrichTrend: false,
+          trendLimit: this.config.limit_bars || 120
+        }))
+        this.$set(this.chartSignalPayloads, source, data || {})
+        this.syncChartSymbol()
+      } finally {
+        this.loadingChartSymbols = false
+      }
+    },
+    async handleChartSourceChange () {
+      if (this.chartSymbolSource === 'custom') {
+        this.chartSymbolInput = this.chartSymbol || ''
+        return
+      }
+      await this.loadChartSymbolOptions(this.chartSymbolSource)
+      const symbols = this.chartSymbols
+      if (symbols.length && !symbols.includes(this.chartSymbol)) {
+        this.chartSymbol = symbols[0]
+        await this.handleChartSymbolChange()
+      }
+    },
+    async handleManualChartSymbolSearch (value) {
+      const symbol = this.normalizeTwSymbol(value || this.chartSymbolInput)
+      if (!symbol) {
+        this.$message.warning('请输入有效台股代码，例如 2357 或 TW6290')
+        return
+      }
+      this.chartSymbol = symbol
+      this.chartSymbolInput = symbol
+      await this.handleChartSymbolChange()
+    },
+    scrollToBacktestPanel () {
+      const panel = this.$refs.readonlyBacktestPanel
+      const node = panel && (panel.$el || panel)
+      if (node && typeof node.scrollIntoView === 'function') {
+        node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+      this.drawBacktestEquityChart()
+    },
+
     async loadBacktestTemplates () {
       this.loadingBacktestTemplates = true
       try {
@@ -2050,7 +3288,14 @@ export default {
       this.$nextTick(this.drawBacktestEquityChart)
     },
     async runReadonlyBacktest () {
-      if (!this.chartSymbol) return
+      if (!this.chartSymbol || this.runningBacktest) return
+      if (!this.backtestForm.strategyId && !this.backtestTemplates.length) {
+        await this.loadBacktestTemplates()
+      }
+      if (!this.backtestForm.strategyId) {
+        this.backtestError = '没有可用的台股回测模板。'
+        return
+      }
       this.runningBacktest = true
       this.backtestError = ''
       try {
@@ -2078,7 +3323,7 @@ export default {
       this.loading = true
       try {
         await this.loadConfig()
-        await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs(), this.loadQlibHealth(), this.loadQlibSignals(), this.loadDailyAutoUpdateStatus(), this.loadQlibOpsLatest(), this.loadCrossAnalysis(), this.loadTwStockAgentContext()])
+        await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs(), this.loadQlibHealth(), this.loadQlibSignals(), this.loadRankChanges(), this.loadDailyAutoUpdateStatus(), this.loadQlibOpsLatest(), this.loadCrossAnalysis(), this.loadRankTechPortfolioPanel(), this.loadTwStockAgentContext(), this.loadChartSymbolOptions()])
         this.lastRefreshedAt = new Date().toLocaleTimeString()
         this.syncAutoRefreshTimer()
       } finally {
@@ -2101,6 +3346,7 @@ export default {
           limit: this.config.limit_bars || 120
         }))
         this.trendItems = data.items || []
+        await this.loadChartSymbolOptions()
         this.syncChartSymbol()
         await Promise.all([this.loadKline(), this.loadHistory()])
         this.$nextTick(this.redrawCharts)
@@ -2156,6 +3402,24 @@ export default {
         this.historyItems = data.items || []
       } finally {
         this.loadingHistory = false
+      }
+    },
+    async loadSimTradeMarkers () {
+      this.loadingSimTradeMarkers = true
+      try {
+        const accountsPayload = this.unwrap(await getTwStockSimAccounts())
+        const accounts = Array.isArray(accountsPayload && accountsPayload.items) ? accountsPayload.items : []
+        if (!accounts.length) {
+          this.simTradeMarkers = []
+          return
+        }
+        const tradesPayload = this.unwrap(await getTwStockSimTrades(accounts[0].account_uid, { limit: 300 }))
+        this.simTradeMarkers = Array.isArray(tradesPayload && tradesPayload.items) ? tradesPayload.items : []
+      } catch (error) {
+        this.simTradeMarkers = []
+      } finally {
+        this.loadingSimTradeMarkers = false
+        this.$nextTick(this.drawPriceChart)
       }
     },
     async runScan () {
@@ -2327,6 +3591,13 @@ export default {
       if (num >= 10000) return `${(num / 10000).toFixed(1)}萬`
       return String(Math.round(num))
     },
+    formatSignedNumber (value, digits = 2) {
+      if (value == null || value === '') return '-'
+      const num = Number(value)
+      if (!Number.isFinite(num)) return '-'
+      if (num === 0) return num.toFixed(digits)
+      return `${num > 0 ? '+' : ''}${num.toFixed(digits)}`
+    },
     formatSignedPercentFromNumber (value) {
       if (value == null || value === '') return '-'
       const num = Number(value)
@@ -2375,6 +3646,7 @@ export default {
         downColor: '#0f8a4b',
         hoverIndex: this.chartHover.price && this.chartHover.price.index,
         showVolume: this.showVolume,
+        markers: this.chartSimTradeMarkers,
         movingAverages: this.showMovingAverages
           ? [
               { label: 'MA5', color: '#f59e0b', points: this.movingAveragePoints(5) },
@@ -2549,6 +3821,43 @@ export default {
           ctx.fillRect(x - barW / 2, volumeTop + volumeH - h, barW, h)
         })
       }
+      ;(options.markers || []).forEach(marker => {
+        const index = points.findIndex(point => point.date === marker.date)
+        if (index < 0) return
+        const x = pad.left + (points.length > 1 ? xStep * index : plotW / 2)
+        const py = y(Number(marker.price || 0))
+        const isSell = marker.side === 'sell'
+        const color = isSell ? '#d46b08' : '#2563eb'
+        const label = isSell ? '模拟卖出' : '模拟买入'
+        ctx.save()
+        ctx.fillStyle = color
+        ctx.strokeStyle = '#ffffff'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        if (isSell) {
+          ctx.moveTo(x, py + 9)
+          ctx.lineTo(x - 7, py - 3)
+          ctx.lineTo(x + 7, py - 3)
+        } else {
+          ctx.moveTo(x, py - 9)
+          ctx.lineTo(x - 7, py + 3)
+          ctx.lineTo(x + 7, py + 3)
+        }
+        ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
+        ctx.font = '11px sans-serif'
+        ctx.textAlign = 'center'
+        const textY = isSell ? Math.min(py + 22, pad.top + plotH - 4) : Math.max(py - 14, pad.top + 10)
+        const textW = ctx.measureText(label).width + 8
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)'
+        ctx.fillRect(x - textW / 2, textY - 11, textW, 15)
+        ctx.strokeStyle = color
+        ctx.strokeRect(x - textW / 2, textY - 11, textW, 15)
+        ctx.fillStyle = color
+        ctx.fillText(label, x, textY)
+        ctx.restore()
+      })
       const hoverIndex = Number(options.hoverIndex)
       if (Number.isInteger(hoverIndex) && hoverIndex >= 0 && hoverIndex < points.length) {
         const x = pad.left + (points.length > 1 ? xStep * hoverIndex : plotW / 2)
@@ -2615,6 +3924,17 @@ export default {
 .refresh-status {
   color: #667085;
   font-size: 12px;
+}
+
+.chart-footnote-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.research-boundary-alert {
+  margin-bottom: 16px;
 }
 
 .summary-grid {
@@ -2989,7 +4309,8 @@ export default {
 .agent-suggestions,
 .agent-input-row,
 .agent-citations,
-.agent-warning-list {
+.agent-warning-list,
+.agent-skill-list {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3029,6 +4350,7 @@ export default {
 .agent-disclaimer,
 .agent-citations,
 .agent-warning-list,
+.agent-skill-list,
 .agent-item-list,
 .agent-empty-state {
   margin-top: 10px;
@@ -3094,6 +4416,31 @@ export default {
   font-size: 12px;
 }
 
+
+.symbol-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.symbol-name-cell strong {
+  color: #111827;
+  line-height: 1.25;
+}
+
+.instrument-code,
+.symbol-name-cell .muted {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.price-date-cell {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  white-space: nowrap;
+}
 
 .qlib-row-actions,
 .qlib-watch-draft-actions {
@@ -3191,6 +4538,70 @@ export default {
   margin-top: 10px;
   color: #667085;
   font-size: 12px;
+}
+
+.rank-change-card {
+  margin-top: 16px;
+}
+
+.rank-change-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  color: #667085;
+}
+
+.rank-change-alert {
+  margin-bottom: 12px;
+}
+
+.rank-change-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rank-change-summary-item {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #eef2f7;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.rank-change-summary-item span,
+.rank-change-rank-cell span,
+.rank-change-score-cell span {
+  display: block;
+  color: #667085;
+  font-size: 12px;
+}
+
+.rank-change-summary-item strong,
+.rank-change-rank-cell strong,
+.rank-change-score-cell strong {
+  color: #111827;
+  font-weight: 600;
+}
+
+.rank-change-tabs {
+  margin-bottom: 8px;
+}
+
+.rank-change-table /deep/ .ant-table-row {
+  cursor: default;
+}
+
+.rank-change-delta.positive {
+  color: #138a3d;
+}
+
+.rank-change-delta.negative {
+  color: #b54708;
 }
 
 
@@ -3311,13 +4722,130 @@ export default {
   .summary-grid,
   .selected-symbol-panel,
   .backtest-metrics,
+  .cross-validation-best,
+  .cross-validation-list,
   .backtest-grid,
-  .cross-freshness-dashboard,
-  .cross-detail-grid {
+  .cross-analysis-summary,
+  .cross-detail-grid,
+  .rank-tech-grid,
+  .portfolio-replay-grid {
     grid-template-columns: 1fr;
   }
 }
 
+
+.rank-tech-replay-card {
+  margin-top: 16px;
+}
+
+.rank-tech-toolbar,
+.rank-tech-panel-head,
+.rank-tech-symbol-line,
+.rank-tech-reason-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rank-tech-toolbar {
+  margin-bottom: 10px;
+}
+
+.rank-tech-readonly-note,
+.rank-tech-alert {
+  margin-bottom: 12px;
+}
+
+.rank-tech-grid,
+.portfolio-replay-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.rank-tech-panel,
+.portfolio-replay-section,
+.portfolio-replay-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.rank-tech-panel-head {
+  justify-content: space-between;
+  margin-bottom: 10px;
+  color: #475467;
+}
+
+.rank-tech-panel-head strong {
+  color: #111827;
+}
+
+.rank-tech-priority-list,
+.rank-tech-why-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rank-tech-priority-item,
+.rank-tech-why-item {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #edf2f7;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.rank-tech-symbol-line strong,
+.rank-tech-why-item strong,
+.portfolio-replay-card strong {
+  color: #111827;
+}
+
+.rank-tech-symbol-line span,
+.rank-tech-reason-line,
+.rank-tech-why-item span,
+.rank-tech-why-item small,
+.portfolio-warning-line,
+.rank-tech-empty {
+  color: #667085;
+  font-size: 12px;
+}
+
+.rank-tech-reason-line,
+.rank-tech-why-item {
+  line-height: 1.5;
+}
+
+.portfolio-replay-section {
+  margin-top: 12px;
+}
+
+.portfolio-replay-card {
+  background: #fff;
+}
+
+.portfolio-metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.portfolio-metric-row b {
+  color: #111827;
+}
+
+.portfolio-warning-line {
+  margin-top: 10px;
+}
 
 .tw-cross-analysis-card {
   margin-top: 16px;
@@ -3336,6 +4864,48 @@ export default {
 .cross-analysis-basis {
   color: #475467;
   font-size: 12px;
+}
+
+.cross-analysis-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.cross-summary-item {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.cross-summary-item span {
+  display: block;
+  margin-bottom: 3px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.cross-summary-item strong {
+  color: #111827;
+  font-weight: 650;
+}
+
+.advanced-ops-collapse.compact {
+  margin-bottom: 12px;
+}
+
+.monitor-tools-collapse {
+  margin-top: 16px;
+}
+
+.monitor-tools-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
 }
 
 .cross-freshness-dashboard {
@@ -3381,6 +4951,33 @@ export default {
 
 .cross-analysis-table /deep/ .ant-table-row {
   cursor: pointer;
+}
+
+.cross-trend-cell,
+.cross-summary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #475467;
+  font-size: 12px;
+}
+
+.cross-trend-cell .ant-tag,
+.cross-summary-cell strong {
+  align-self: flex-start;
+}
+
+.cross-trend-cell small {
+  color: #98a2b3;
+}
+
+.cross-summary-cell strong {
+  color: #111827;
+  font-size: 12px;
+}
+
+.cross-summary-cell span {
+  line-height: 1.45;
 }
 
 .cross-basis-cell {
@@ -3445,6 +5042,74 @@ export default {
 
 .cross-review-note {
   margin-top: 8px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.cross-backtest-validation {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.cross-validation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cross-validation-best {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cross-validation-best > div {
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #edf2f7;
+}
+
+.cross-validation-best span,
+.cross-validation-item span {
+  display: block;
+  color: #667085;
+  font-size: 12px;
+}
+
+.cross-validation-best strong,
+.cross-validation-item strong {
+  color: #111827;
+}
+
+.cross-validation-reason {
+  margin-top: 10px;
+  color: #475467;
+  line-height: 1.55;
+}
+
+.cross-validation-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cross-validation-item {
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #edf2f7;
+}
+
+.cross-validation-empty {
   color: #667085;
   font-size: 12px;
 }

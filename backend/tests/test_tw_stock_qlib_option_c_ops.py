@@ -77,11 +77,27 @@ def test_runner_uses_fixed_allowlisted_argv(tmp_path, monkeypatch):
     result = runner.trigger_dry_run({"asof": "2026-06-01"})
 
     assert result["status"] == "dry_run_passed"
-    assert seen["argv"] == ["python", WRAPPER_SCRIPT, "--asof", "2026-06-01", "--dry-run"]
+    assert seen["argv"] == [runner.config.python_executable, WRAPPER_SCRIPT, "--asof", "2026-06-01", "--dry-run"]
     assert "--provider-uri" not in seen["argv"]
     assert "--max-workers" not in seen["argv"]
     assert seen["timeout"] == 3
     assert result["normal_signal_run"] is False
+
+
+def test_runner_allows_configured_python_executable(tmp_path, monkeypatch):
+    runner = make_runner(tmp_path, python_executable="/opt/conda/bin/python")
+    seen = {}
+
+    def fake_execute(argv, *, timeout):
+        seen["argv"] = argv
+        return fake_completed(json.dumps({"status": "dry_run_preflight_pass"}))
+
+    monkeypatch.setattr(runner, "_execute_subprocess", fake_execute)
+
+    result = runner.trigger_dry_run({"asof": "2026-06-01"})
+
+    assert result["status"] == "dry_run_passed"
+    assert seen["argv"][0] == "/opt/conda/bin/python"
 
 
 def test_file_lock_acquire_and_release(tmp_path):
@@ -203,7 +219,7 @@ def test_ops_api_success_status_latest_and_log_tail(client, monkeypatch, tmp_pat
     assert data["trading"]["connects_to_broker"] is False
     assert data["trading"]["research_signal_not_order"] is True
     assert data["latest_signal_updated"] is False
-    assert data["argv"] == ["python", WRAPPER_SCRIPT, "--asof", "2026-06-01", "--dry-run"]
+    assert data["argv"] == [runner.config.python_executable, WRAPPER_SCRIPT, "--asof", "2026-06-01", "--dry-run"]
 
     job_id = data["job_id"]
     status_resp = client.get(f"/api/tw-stock/quant/ops/option-c/jobs/{job_id}")
@@ -855,7 +871,7 @@ def test_normal_publish_enabled_pass_calls_fixed_runner_and_updates_latest(tmp_p
     assert result["ok"] is True
     assert result["status"] == "normal_publish_passed"
     assert result["gate"]["status"] == "preflight_passed"
-    assert seen["argv"] == ["python", "examples/tw/run_option_c_daily_signal_option_c_provider.py", "--asof", "2026-06-01", "--normal"]
+    assert seen["argv"] == [gate.config.python_executable, "examples/tw/run_option_c_daily_signal_option_c_provider.py", "--asof", "2026-06-01", "--normal"]
     assert "--provider-uri" not in seen["argv"]
     assert "--allow-refresh" not in seen["argv"]
     assert seen["timeout"] == 3
@@ -872,6 +888,25 @@ def test_normal_publish_enabled_pass_calls_fixed_runner_and_updates_latest(tmp_p
     assert latest["research_signal_not_order"] is True
     assert Path(result["latest_update"]["prepared"]["backup_path"]).exists()
     assert result["trading"]["orders_enabled"] is False
+
+
+def test_normal_publish_uses_configured_python_executable(tmp_path, monkeypatch):
+    gate = make_normal_gate(tmp_path, enabled=True, python_executable="/opt/conda/bin/python")
+    job_id = "option_c_dry_run_20260601_20260602T000007Z_12345678"
+    write_dry_run_job(gate, job_id)
+    run_dir = accepted_artifact_dir(gate.config.signal_root)
+    seen = {}
+
+    def fake_execute(argv, *, timeout):
+        seen["argv"] = argv
+        return fake_completed(json.dumps({"status": "accepted", "run_dir": f"data_tw/experiments/option_c_daily_signal/{run_dir.name}"}))
+
+    monkeypatch.setattr(gate, "_execute_subprocess", fake_execute)
+
+    result = gate.publish({"asof": "2026-06-01", "confirm_normal_publish": True, "dry_run_job_id": job_id})
+
+    assert result["status"] == "normal_publish_passed"
+    assert seen["argv"][0] == "/opt/conda/bin/python"
 
 
 def test_normal_publish_runner_failure_does_not_update_latest(tmp_path, monkeypatch):

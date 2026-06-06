@@ -16,7 +16,8 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+import traceback
+from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -31,12 +32,70 @@ CALENDAR = QLIB / "data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_
 PENDING_ASOF = OPS_ROOT / "pending_asof.json"
 
 
+def load_local_env() -> None:
+    """Load root/backend .env for cron without overriding explicit env."""
+    for env_path in (ROOT / ".env", BACKEND / ".env"):
+        if not env_path.exists():
+            continue
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if not key or key in os.environ:
+                continue
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+                value = value[1:-1]
+            os.environ[key] = value
+
+
+load_local_env()
+PYTHON = os.getenv("TW_DAILY_AUTO_PYTHON", sys.executable)
+TAIPEI = ZoneInfo("Asia/Taipei")
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
 def taipei_today() -> str:
-    return datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat()
+    return taipei_now().date().isoformat()
+
+
+def taipei_now() -> datetime:
+    return datetime.now(TAIPEI).replace(microsecond=0)
+
+
+def parse_hhmm(raw: str) -> time:
+    try:
+        parsed = datetime.strptime(raw.strip(), "%H:%M")
+    except ValueError as exc:
+        raise ValueError(f"Invalid HH:MM time: {raw!r}") from exc
+    return parsed.time()
+
+
+def should_wait_before_pull(
+    *,
+    asof: str,
+    asof_source: str,
+    now_taipei: datetime,
+    today_earliest_time: time,
+    force: bool,
+) -> tuple[bool, str]:
+    if force:
+        return False, ""
+    if asof_source != "taipei_today":
+        return False, ""
+    today = now_taipei.date()
+    if asof != today.isoformat():
+        return False, ""
+    if today.weekday() >= 5:
+        return True, "weekend_no_pending_wait"
+    if now_taipei.time() < today_earliest_time:
+        return True, "today_data_window_wait"
+    return False, ""
 
 
 def resolve_asof(explicit_asof: str) -> tuple[str, str]:
@@ -143,6 +202,7 @@ def publish_accepted_latest(asof: str) -> dict[str, Any]:
     os.environ.setdefault("TW_QLIB_OPTION_C_LATEST_SIGNAL", str(LATEST))
     os.environ.setdefault("TW_QLIB_OPTION_C_PROVIDER_CALENDAR", str(CALENDAR))
     os.environ.setdefault("TW_QLIB_OPTION_C_EXPECTED_UNIVERSE", str(UNIVERSE))
+    os.environ.setdefault("TW_QLIB_OPTION_C_PYTHON", PYTHON)
 
     from app.services.tw_stock_qlib_option_c_accepted_latest_scheduler import (  # noqa: WPS433
         OptionCAcceptedLatestSchedulerConfig,
@@ -172,7 +232,7 @@ def main() -> int:
     parser.add_argument("--skip-finmind", action="store_true")
     parser.add_argument("--skip-qlib", action="store_true")
     parser.add_argument("--finmind-scope", choices=["full", "daily"], default=os.getenv("TW_DAILY_AUTO_FINMIND_SCOPE", "full"))
-    parser.add_argument("--finmind-lookback-days", type=int, default=int(os.getenv("TW_DAILY_AUTO_FINMIND_LOOKBACK_DAYS", "10")))
+    parser.add_argument("--finmind-lookback-days", type=int, default=int(os.getenv("TW_DAILY_AUTO_FINMIND_LOOKBACK_DAYS", "260")), help="FinMind TaiwanStockPrice archive lookback. Default 260d to keep qlib Top30/50 trend samples above 120 daily bars.")
     parser.add_argument("--skip-finmind-validate", action="store_true", default=os.getenv("TW_DAILY_AUTO_SKIP_FINMIND_VALIDATE", "true").lower() in {"1", "true", "yes", "on"})
     parser.add_argument("--refresh-timeout", type=float, default=float(os.getenv("TW_DAILY_AUTO_YAHOO_TIMEOUT", "30")))
     parser.add_argument("--refresh-retries", type=int, default=int(os.getenv("TW_DAILY_AUTO_YAHOO_RETRIES", "1")))
@@ -180,8 +240,15 @@ def main() -> int:
     parser.add_argument("--max-workers", type=int, default=int(os.getenv("TW_DAILY_AUTO_MAX_WORKERS", "4")))
     parser.add_argument("--proxy", default=os.getenv("TW_DAILY_AUTO_YAHOO_PROXY", ""))
     parser.add_argument("--timeout-seconds", type=int, default=int(os.getenv("TW_DAILY_AUTO_TIMEOUT_SECONDS", "1200")))
+    parser.add_argument(
+        "--today-earliest-time",
+        default=os.getenv("TW_DAILY_AUTO_TODAY_EARLIEST_TIME", "18:00"),
+        help="Earliest Asia/Taipei HH:MM time to pull same-day data when no pending asof exists.",
+    )
     args = parser.parse_args()
 
+    today_earliest_time = parse_hhmm(args.today_earliest_time)
+    now_taipei = taipei_now()
     asof, asof_source = resolve_asof(args.asof)
     job_id = f"daily_tw_stock_auto_update_{asof.replace('-', '')}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     job_dir = OPS_ROOT / job_id
@@ -195,7 +262,12 @@ def main() -> int:
         "research_only": True,
         "trading": {"orders_enabled": False, "connects_to_broker": False, "research_signal_not_order": True},
         "latest_before": latest_asof(),
+        "python_executable": PYTHON,
+        "taipei_now": now_taipei.isoformat(),
+        "today_earliest_time": today_earliest_time.strftime("%H:%M"),
         "finmind_update_triggered": False,
+        "finmind_lookback_days": int(args.finmind_lookback_days),
+        "finmind_history_goal": "cover option_c_accepted_150 with enough daily bars for 120-bar cross-analysis trend samples",
         "yahoo_refresh_triggered": False,
         "provider_publish_triggered": False,
         "latest_signal_updated": False,
@@ -209,11 +281,38 @@ def main() -> int:
         print(json.dumps(job, ensure_ascii=False, indent=2))
         return 0
 
+    should_wait, wait_status = should_wait_before_pull(
+        asof=asof,
+        asof_source=asof_source,
+        now_taipei=now_taipei,
+        today_earliest_time=today_earliest_time,
+        force=args.force,
+    )
+    if should_wait:
+        message = (
+            "No pending asof exists and the resolved target is today; same-day data pulls wait until the configured Asia/Taipei data window."
+            if wait_status == "today_data_window_wait"
+            else "No pending asof exists and the resolved target is a weekend date; no data pull was started."
+        )
+        job.update({
+            "status": wait_status,
+            "message": message,
+            "finished_at": utc_now(),
+            "latest_after": job["latest_before"],
+            "today_data_window_open": False,
+        })
+        write_json(job_dir / "job.json", job)
+        print(json.dumps(job, ensure_ascii=False, indent=2))
+        return 0
+
+    job["today_data_window_open"] = True
+    write_json(job_dir / "job.json", job)
+
     symbols_file = materialize_symbols(job_dir)
     if not args.skip_finmind:
         start = (datetime.strptime(asof, "%Y-%m-%d").date() - timedelta(days=max(1, args.finmind_lookback_days))).isoformat()
         finmind_argv = [
-            "python",
+            PYTHON,
             "backend/scripts/update_tw_stock_daily.py",
             "--symbols-file",
             str(symbols_file),
@@ -236,7 +335,7 @@ def main() -> int:
     if not args.skip_qlib:
         refresh_job_id = f"option_c_yahoo_scrapling_refresh_{asof.replace('-', '')}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_daily_auto"
         refresh_argv = [
-            "python",
+            PYTHON,
             "examples/tw/run_option_c_yahoo_scrapling_refresh.py",
             "--asof",
             asof,
@@ -280,7 +379,7 @@ def main() -> int:
 
         publish_job_id = f"option_c_yahoo_scrapling_publish_{asof.replace('-', '')}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_daily_auto"
         publish_argv = [
-            "python",
+            PYTHON,
             "examples/tw/publish_option_c_yahoo_scrapling_refresh.py",
             "--job-dir",
             f"data_tw/experiments/option_c_ops/{refresh_job_id}",
@@ -310,7 +409,25 @@ def main() -> int:
             print(json.dumps(job, ensure_ascii=False, indent=2))
             return 3
 
-        accepted = publish_accepted_latest(asof)
+        try:
+            accepted = publish_accepted_latest(asof)
+        except Exception as exc:  # Keep the target asof retryable if the final accepted-latest stage crashes.
+            set_pending_asof(asof, reason="accepted_latest_exception", job_id=job_id)
+            job["accepted_latest_exception"] = {
+                "type": type(exc).__name__,
+                "message": str(exc),
+                "traceback_tail": traceback.format_exc()[-4000:],
+            }
+            job.update({
+                "status": "accepted_latest_exception",
+                "message": str(exc),
+                "finished_at": utc_now(),
+                "latest_after": latest_asof(),
+                "pending_asof_set": asof,
+            })
+            write_json(job_dir / "job.json", job)
+            print(json.dumps(job, ensure_ascii=False, indent=2))
+            return 4
         job["accepted_latest"] = accepted
         job["latest_signal_updated"] = bool(accepted.get("latest_signal_updated"))
         if not accepted.get("ok"):

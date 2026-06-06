@@ -1,11 +1,13 @@
 """API tests for qlib Option C TWStock research signals."""
 from __future__ import annotations
 
+import csv
+import json
 from pathlib import Path
 
 import pytest
 
-from tests.test_tw_stock_qlib_option_c_signals import RUN_ID, make_artifact
+from tests.test_tw_stock_qlib_option_c_signals import RECORDER, RUN_ID, make_artifact
 
 
 def test_latest_quant_signals_api_top30_top50_all(client, monkeypatch, tmp_path):
@@ -320,3 +322,135 @@ def test_quant_signal_health_api_missing_latest(client, monkeypatch, tmp_path):
     assert data["freshness"]["stale"] is True
     assert data["freshness"]["stale_reason"] == "missing_latest_signal"
     assert data["trading"]["connects_to_broker"] is False
+
+
+
+def _write_rank_change_csv(path: Path, *, asof: str, symbols: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(
+            fh,
+            fieldnames=["asof", "instrument", "score", "rank", "source_model_recorder", "diagnostic_only", "research_signal_not_order"],
+        )
+        writer.writeheader()
+        for rank, symbol in enumerate(symbols, start=1):
+            writer.writerow({
+                "asof": asof,
+                "instrument": f"TW{symbol}",
+                "score": f"{0.25 - rank / 1000:.12f}",
+                "rank": rank,
+                "source_model_recorder": RECORDER,
+                "diagnostic_only": "True",
+                "research_signal_not_order": "True",
+            })
+
+
+def _write_rank_change_run(root: Path, *, run_id: str, asof: str, top30_symbols: list[str], top50_symbols: list[str], latest: bool = False) -> None:
+    run_dir = root / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    rel = f"data_tw/experiments/option_c_daily_signal/{run_id}"
+    summary = {
+        "status": "accepted",
+        "asof": asof,
+        "prediction_rows": 150,
+        "top30_rows": 30,
+        "top50_rows": 50,
+        "finite_prediction_share": 1.0,
+        "top30_path": f"{rel}/top30_signals.csv",
+        "top50_path": f"{rel}/top50_signals.csv",
+        "diagnostic_only": True,
+        "research_signal_not_order": True,
+        "paper_trading_started": False,
+        "live_trading_started": False,
+        "target_trades_generated": False,
+        "executable_orders_generated": False,
+    }
+    metadata = {
+        "run_id": run_id,
+        "created_at": f"{asof}T12:00:00+00:00",
+        "status": "accepted",
+        "asof": asof,
+        "dry_run": False,
+        "allow_refresh": False,
+        "frozen_recorder": RECORDER,
+        "paper_trading_started": False,
+        "live_trading_started": False,
+        "target_trades_generated": False,
+        "executable_orders_generated": False,
+        "model_retraining_performed": False,
+        "model_tuning_performed": False,
+        "provider_switch_performed": False,
+        "FinMind_fallback_used": False,
+        "mixed_provider_fill_used": False,
+    }
+    (run_dir / "signal_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    (run_dir / "run_metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    _write_rank_change_csv(run_dir / "top30_signals.csv", asof=asof, symbols=top30_symbols)
+    _write_rank_change_csv(run_dir / "top50_signals.csv", asof=asof, symbols=top50_symbols)
+    if latest:
+        latest_doc = {
+            "status": "accepted",
+            "created_at": f"{asof}T12:01:00+00:00",
+            "run_dir": rel,
+            "asof": asof,
+            "top30_signals": f"{rel}/top30_signals.csv",
+            "top50_signals": f"{rel}/top50_signals.csv",
+            "diagnostic_only": True,
+            "research_signal_not_order": True,
+        }
+        (root / "latest_signal.json").write_text(json.dumps(latest_doc), encoding="utf-8")
+
+
+def _symbols(start: int, count: int) -> list[str]:
+    return [str(start + i) for i in range(count)]
+
+
+def test_rank_changes_api_compares_latest_with_previous_accepted_run(client, monkeypatch, tmp_path):
+    root = tmp_path
+    older_top30 = ["2317", "2330"] + _symbols(2400, 28)
+    prev_top30 = ["2454", "2317", "2330"] + _symbols(2500, 27)
+    current_top30 = ["2317", "2330", "3008"] + _symbols(2600, 27)
+    older_top50 = older_top30 + _symbols(3400, 20)
+    prev_top50 = prev_top30 + ["3008"] + _symbols(3500, 19)
+    current_top50 = current_top30 + ["2454"] + _symbols(3600, 19)
+    _write_rank_change_run(root, run_id="option_c_daily_signal_20260531_20260531T120000Z", asof="2026-05-31", top30_symbols=older_top30, top50_symbols=older_top50)
+    _write_rank_change_run(root, run_id="option_c_daily_signal_20260603_20260603T120000Z", asof="2026-06-03", top30_symbols=prev_top30, top50_symbols=prev_top50)
+    _write_rank_change_run(root, run_id="option_c_daily_signal_20260604_20260604T120000Z", asof="2026-06-04", top30_symbols=current_top30, top50_symbols=current_top50, latest=True)
+    monkeypatch.setenv("QLIB_TW_OPTION_C_ROOT", str(root))
+
+    resp = client.get("/api/tw-stock/quant/signals/rank-changes?bucket=top30&lookback=10")
+    payload = resp.get_json()
+
+    assert resp.status_code == 200
+    assert payload["code"] == 1
+    data = payload["data"]
+    assert data["status"] == "ok"
+    assert data["asof"] == "2026-06-04"
+    assert data["previous_asof"] == "2026-06-03"
+    assert data["summary"]["entered_count"] == 28
+    assert data["summary"]["exited_count"] == 28
+    assert data["summary"]["stayed_count"] == 2
+    entered = {item["symbol"]: item for item in data["entered"]}
+    exited = {item["symbol"]: item for item in data["exited"]}
+    stayed = {item["symbol"]: item for item in data["stayed"]}
+    assert entered["3008"]["change_type"] == "entered"
+    assert exited["2454"]["change_type"] == "exited"
+    assert exited["2454"]["current_top50_rank"] == 31
+    assert stayed["2317"]["rank_delta"] == 1
+    assert stayed["2317"]["streak_days"] == 3
+    assert data["watch_candidates"][0]["current_rank"] == 31
+    assert data["trading"]["orders_enabled"] is False
+    assert data["trading"]["research_signal_not_order"] is True
+
+
+def test_rank_changes_api_invalid_bucket_returns_400(client, monkeypatch, tmp_path):
+    root = make_artifact(tmp_path)
+    monkeypatch.setenv("QLIB_TW_OPTION_C_ROOT", str(root))
+
+    resp = client.get("/api/tw-stock/quant/signals/rank-changes?bucket=all")
+    payload = resp.get_json()
+
+    assert resp.status_code == 400
+    assert payload["code"] == 0
+    assert payload["data"]["status"] == "invalid_bucket"
+    assert payload["data"]["trading"]["orders_enabled"] is False

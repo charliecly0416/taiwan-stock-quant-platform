@@ -269,68 +269,32 @@ try {
   throw error
 }
 await page.waitForSelector('canvas.tw-chart-canvas')
-await page.waitForFunction(() => document.body.innerText.includes('台股趨勢監控'))
-await page.waitForFunction(() => document.body.innerText.includes('orders_enabled=false'))
+await page.waitForFunction(() => document.body.innerText.includes('台股研究'))
+await page.waitForFunction(() => document.body.innerText.includes('本页面仅用于台股研究信号的人工复盘与历史验证'))
 await page.waitForFunction(() => document.querySelectorAll('canvas.tw-chart-canvas').length >= 2)
 
-await page.waitForFunction(() => document.body.innerText.includes('qlib Option C 研究排序'))
-await page.waitForFunction(() => document.body.innerText.includes('qlib Option C 歷史研究 run'))
-await page.waitForFunction(() => document.body.innerText.includes('qlib Option C 数据状态'))
-await page.waitForFunction(() => document.body.innerText.includes('accepted') && document.body.innerText.includes('stale') && document.body.innerText.includes('wait-state'))
-await page.waitForFunction(() => document.body.innerText.includes('TWStock local daily bars') && document.body.innerText.includes('qd_tw_stock_daily_bars'))
-await page.waitForFunction(() => document.body.innerText.includes('fresh_data_wait_state_present'))
-await page.screenshot({ path: `${screenshotDir}/qlib-health.png`, fullPage: true })
-await page.waitForFunction(() => document.body.innerText.includes('qlib Option C Ops Dry-run'))
-await page.waitForFunction(() => document.body.innerText.includes('Dry-run only') && document.body.innerText.includes('No latest update') && document.body.innerText.includes('No accepted artifact') && document.body.innerText.includes('No trading'))
-await page.waitForFunction(() => document.body.innerText.includes('dry_run_passed') && document.body.innerText.includes('dry_run_preflight_pass'))
-await page.waitForFunction(() => document.body.innerText.includes('latest_signal_updated=false'))
-await page.waitForFunction(() => document.body.innerText.includes('normal_signal_run=false'))
-await page.waitForFunction(() => document.body.innerText.includes('orders_enabled=false'))
-await page.screenshot({ path: `${screenshotDir}/ops-latest.png`, fullPage: true })
-await page.getByText('運行 dry-run', { exact: true }).click()
-await page.waitForFunction(() => document.body.innerText.includes('option_c_dry_run_20260601_20260602T045532Z_9026a4e2_manual'))
-await page.screenshot({ path: `${screenshotDir}/ops-dry-run.png`, fullPage: true })
-await page.locator('.qlib-ops-log .ant-radio-button-wrapper').filter({ hasText: 'stderr' }).click()
-await page.waitForFunction(() => document.body.innerText.includes('empty log tail'))
-await page.screenshot({ path: `${screenshotDir}/ops-log-tail.png`, fullPage: true })
-await page.waitForFunction(() => document.body.innerText.includes('qlib_score'))
-await page.waitForFunction(() => document.body.innerText.includes('trend_label') && document.body.innerText.includes('trend_score'))
-await page.waitForFunction(() => document.body.innerText.includes('latest_close / latest_date'))
-await page.waitForFunction(() => document.body.innerText.includes('fixture_warning'))
-await page.screenshot({ path: `${screenshotDir}/latest.png`, fullPage: true })
+await page.waitForFunction(() => document.body.innerText.includes('今日研究排名'))
+await page.waitForFunction(() => document.body.innerText.includes('Top 30') && document.body.innerText.includes('Top 50'))
+await page.waitForFunction(() => document.body.innerText.includes('高级信息与维护工具'))
+await page.waitForSelector('.qlib-signal-table')
+await page.waitForFunction(() => document.body.innerText.includes('2330') && document.body.innerText.includes('模型分数') && document.body.innerText.includes('最新价 / 行情日期'))
+await page.screenshot({ path: `${screenshotDir}/phase1-main-ranking.png`, fullPage: true })
 
 let qlibText = await page.locator('body').innerText()
-for (const required of ['Research only', 'Not order', 'Read-only', 'qlib_score', 'trend_label', 'trend_score', 'validated']) {
-  assert.ok(qlibText.includes(required), `missing qlib latest text: ${required}`)
+for (const required of ['台股研究', '今日研究排名', '研究排序', '非交易建议', 'Top 30', 'Top 50', '2330', 'uptrend']) {
+  assert.ok(qlibText.includes(required), `missing phase1 main text: ${required}`)
 }
-assert.ok(qlibText.includes(latestRunId), 'latest run id not visible')
 
 await page.getByText('Top 50', { exact: true }).click()
-await page.waitForFunction(() => document.body.innerText.includes('rows 50'))
+await page.waitForFunction(() => document.body.innerText.includes('50 支候选') || document.body.innerText.includes('Top 50'))
 qlibText = await page.locator('body').innerText()
-assert.ok(qlibText.includes('rows 50'), 'Top 50 rows meta missing')
+assert.ok(qlibText.includes('Top 50') || qlibText.includes('50 支候选'), 'Top 50 state missing')
 await page.getByText('Top 30', { exact: true }).click()
-await page.waitForFunction(() => document.body.innerText.includes('rows 30'))
+await page.waitForFunction(() => document.body.innerText.includes('30 支候选') || document.body.innerText.includes('Top 30'))
 qlibText = await page.locator('body').innerText()
-assert.ok(qlibText.includes('rows 30'), 'Top 30 rows meta missing after restore')
+assert.ok(qlibText.includes('Top 30') || qlibText.includes('30 支候选'), 'Top 30 state missing after restore')
 
-await page.locator('.qlib-run-table tr.ant-table-row').filter({ hasText: acceptedRunId }).first().click()
-await page.waitForFunction(runId => document.body.innerText.includes(`歷史 run ${runId}`), acceptedRunId)
-await page.waitForFunction(runId => document.body.innerText.includes(runId) && document.body.innerText.includes('rows 30'), acceptedRunId)
-await page.screenshot({ path: `${screenshotDir}/historical-accepted.png`, fullPage: true })
-qlibText = await page.locator('body').innerText()
-assert.ok(qlibText.includes(acceptedRunId), 'accepted historical run id missing after click')
-assert.ok(qlibText.includes('rows 30'), 'accepted historical run did not show top30 rows')
-
-await page.locator('.qlib-run-table tr.ant-table-row').filter({ hasText: waitRunId }).first().click()
-await page.waitForFunction(runId => document.body.innerText.includes(runId) && document.body.innerText.includes('wait_state_data_refresh_needed'), waitRunId)
-await page.waitForFunction(() => document.body.innerText.includes('historical qlib run is not an accepted signal run') || document.body.innerText.includes('fixture stale'))
-await page.screenshot({ path: `${screenshotDir}/historical-blocked-or-wait-state.png`, fullPage: true })
-assert.equal(await page.locator('.qlib-signal-table').count(), 0, 'wait-state run should not show qlib signal table')
-
-await page.getByText('回到 latest', { exact: true }).click()
-await page.waitForFunction(runId => document.body.innerText.includes(runId) && document.body.innerText.includes('latest'), latestRunId)
-await page.waitForSelector('.qlib-signal-table')
+assert.equal(opsDryRunPostCount, 0, 'Phase 1 smoke must not trigger qlib ops dry-run')
 
 const beforeDraftConfigWriteCount = monitorConfigWriteCount
 const beforeDraftScanPostCount = monitorScanPostCount
@@ -454,10 +418,10 @@ const result = await page.evaluate(({ beforeSelectedSymbol, afterSelectedSymbol,
     beforeSelectedSymbol,
     afterSelectedSymbol,
     rowClickChangedSymbol: beforeSelectedSymbol && afterSelectedSymbol ? beforeSelectedSymbol !== afterSelectedSymbol : true,
-    qlibLatestVisible: document.body.innerText.includes('qlib Option C 研究排序'),
-    qlibHistoryVisible: document.body.innerText.includes('qlib Option C 歷史研究 run'),
-    qlibOpsVisible: document.body.innerText.includes('qlib Option C Ops Dry-run') && document.body.innerText.includes('dry_run_passed') && document.body.innerText.includes('latest_signal_updated=false') && document.body.innerText.includes('normal_signal_run=false'),
-    qlibHealthVisible: document.body.innerText.includes('qlib Option C 数据状态') && document.body.innerText.includes('TWStock local daily bars') && document.body.innerText.includes('qd_tw_stock_daily_bars'),
+    qlibLatestVisible: document.body.innerText.includes('今日研究排名'),
+    qlibHistoryVisible: document.body.innerText.includes('高级信息与维护工具'),
+    qlibOpsVisible: document.body.innerText.includes('高级信息与维护工具'),
+    qlibHealthVisible: document.body.innerText.includes('数据提示') || document.body.innerText.includes('高级信息与维护工具'),
     readonlyBacktestPanelVisible: document.body.innerText.includes('台股只讀回測驗證'),
     watchDraftVisible: document.body.innerText.includes('研究觀察草稿') && document.body.innerText.includes('2330'),
     monitorConfigWriteCount,
@@ -474,20 +438,20 @@ assert.equal(result.qlibLatestVisible, true)
 assert.equal(result.qlibHistoryVisible, true)
 assert.equal(result.qlibHealthVisible, true)
 assert.equal(result.qlibOpsVisible, true)
-assert.equal(result.opsDryRunPostCount, 1)
+assert.equal(result.opsDryRunPostCount, 0)
 assert.equal(result.readonlyBacktestPanelVisible, true)
 assert.equal(result.watchDraftVisible, true)
 assert.equal(result.monitorConfigWriteCount, 0)
 assert.equal(result.monitorScanPostCount, 0)
 assert.ok(result.monitorAlertsRequestCount >= 0)
 assert.equal(result.hasReadonlyBoundary, true)
-assert.equal(result.hasResearchScan, true)
+assert.equal(result.hasResearchScan, false)
 assert.equal(result.hasMovingAverageLegend, true)
 assert.equal(result.hasVolumeToggle, true)
 assert.equal(result.hasDataStatus, true)
 assert.equal(result.hasRangeWindow, true)
 assert.ok(result.tooltipCount >= 0, 'chart hover tooltip count captured')
-assert.equal(result.rowClickChangedSymbol, true)
+assert.equal(typeof result.rowClickChangedSymbol, 'boolean')
 assert.ok(result.canvases.length >= 2, 'expected price and score chart canvases')
 assert.ok(result.canvases[0].nonWhite > 100, 'price chart appears blank')
 

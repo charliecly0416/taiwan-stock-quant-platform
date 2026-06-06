@@ -28,6 +28,12 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
 
 
 def _bar_date(bar: Dict[str, Any]) -> str:
+    raw = bar.get("date") or bar.get("trade_date") or bar.get("latest_date")
+    if raw:
+        try:
+            return date.fromisoformat(str(raw)[:10]).isoformat()
+        except ValueError:
+            return ""
     ts = int(_safe_float(bar.get("time"), 0.0))
     if ts <= 0:
         return ""
@@ -72,9 +78,13 @@ class TWStockTrendService:
             }
 
         bar_limit = max(20, min(int(limit or 120), 500))
-        bars = self.kline_service.get_kline("TWStock", clean_symbol, "1D", bar_limit) or []
+        fetch_limit = bar_limit if as_of is None else min(max(bar_limit * 3, bar_limit), 500)
+        bars = self.kline_service.get_kline("TWStock", clean_symbol, "1D", fetch_limit) or []
         bars = [bar for bar in bars if isinstance(bar, dict) and _safe_float(bar.get("close"), 0.0) > 0]
+        if as_of is not None:
+            bars = [bar for bar in bars if self._bar_date_value(bar) and self._bar_date_value(bar) <= as_of]
         bars.sort(key=lambda item: int(_safe_float(item.get("time"), 0.0)))
+        bars = bars[-bar_limit:]
         if not bars:
             return {
                 "market": "TWStock",
@@ -197,9 +207,26 @@ class TWStockTrendService:
             "trading": {
                 "signal": "none",
                 "orders_enabled": False,
-                "note": "Read-only trend analysis; not investment advice and not an order instruction.",
+                "note": "Read-only trend analysis; not investment advice and not executable.",
             },
         }
+
+
+    @staticmethod
+    def _bar_date_value(bar: Dict[str, Any]) -> Optional[date]:
+        raw = bar.get("date") or bar.get("trade_date") or bar.get("latest_date")
+        if raw:
+            try:
+                return date.fromisoformat(str(raw)[:10])
+            except ValueError:
+                return None
+        text = _bar_date(bar)
+        if not text:
+            return None
+        try:
+            return date.fromisoformat(text)
+        except ValueError:
+            return None
 
     @staticmethod
     def _summary(label: str, score: float, warnings: Sequence[str]) -> str:

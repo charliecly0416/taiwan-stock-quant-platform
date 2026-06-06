@@ -200,6 +200,230 @@ class FastAnalysisService:
     
     # ==================== Data Collection Layer ====================
     
+    @staticmethod
+    def _is_tw_stock_market(market: str) -> bool:
+        normalized = str(market or "").strip().lower().replace("_", "").replace("-", "")
+        return normalized in {"twstock", "taiwanstock"}
+
+    @staticmethod
+    def _normalize_tw_stock_symbol(symbol: str) -> str:
+        clean = str(symbol or "").strip().upper()
+        if ":" in clean:
+            clean = clean.split(":", 1)[1]
+        if clean.startswith("TW"):
+            clean = clean[2:]
+        if "." in clean:
+            clean = clean.split(".", 1)[0]
+        return clean if clean.isdigit() else str(symbol or "").strip()
+
+    def _get_tw_stock_research_context(self, market: str, symbol: str) -> Optional[Dict[str, Any]]:
+        if not self._is_tw_stock_market(market):
+            return None
+        try:
+            from app.services.tw_stock_cross_analysis import TWStockCrossAnalysisService
+
+            clean_symbol = self._normalize_tw_stock_symbol(symbol)
+            detail = TWStockCrossAnalysisService().symbol_detail(
+                symbol=clean_symbol,
+                limit=120,
+                include_raw_trend=False,
+            )
+            if not isinstance(detail, dict):
+                return None
+            item = detail.get("item") or {}
+            qlib = detail.get("qlib") or {}
+            trend = item.get("quantdinger") or detail.get("trend") or {}
+            cross = item.get("cross") or {}
+            qlib_item = item.get("qlib") or {}
+            display_name = item.get("name") or ""
+            if not display_name:
+                try:
+                    from app.data.market_symbols_seed import get_symbol_name
+
+                    display_name = get_symbol_name("TWStock", clean_symbol) or ""
+                except Exception:
+                    display_name = ""
+            return {
+                "ok": bool(detail.get("ok")),
+                "status": detail.get("status"),
+                "symbol": clean_symbol,
+                "instrument": item.get("instrument") or f"TW{clean_symbol}",
+                "name": display_name,
+                "qlib": {
+                    "asof": qlib.get("asof"),
+                    "run_id": qlib.get("run_id"),
+                    "target_horizon": qlib.get("target_horizon"),
+                    "rank": qlib_item.get("rank"),
+                    "bucket": qlib_item.get("bucket"),
+                    "score": qlib_item.get("score"),
+                    "signal_semantics": qlib.get("signal_semantics"),
+                    "recommendation_semantics": qlib.get("recommendation_semantics"),
+                },
+                "quantdinger": {
+                    "trend_label": trend.get("trend_label"),
+                    "trend_score": trend.get("trend_score"),
+                    "latest_date": trend.get("latest_date"),
+                    "quality_warnings": trend.get("quality_warnings") or [],
+                },
+                "cross": {
+                    "category": cross.get("category"),
+                    "priority": cross.get("priority"),
+                    "alignment": cross.get("alignment"),
+                    "reason": cross.get("reason"),
+                },
+                "trading": detail.get("trading") or {"orders_enabled": False, "research_signal_not_order": True},
+                "disclaimer": (
+                    "qlib_score 是横截面研究排序分数，不是收益率、胜率、上涨概率或买入概率。"
+                    "输出仅供人工研究复盘，不构成交易建议。"
+                ),
+            }
+        except Exception as exc:
+            logger.warning(f"TWStock research context unavailable for {symbol}: {exc}")
+            return {
+                "ok": False,
+                "status": "tw_stock_research_context_unavailable",
+                "symbol": self._normalize_tw_stock_symbol(symbol),
+                "disclaimer": (
+                    "qlib_score 是横截面研究排序分数，不是收益率、胜率、上涨概率或买入概率。"
+                    "输出仅供人工研究复盘，不构成交易建议。"
+                ),
+            }
+
+    @staticmethod
+    def _tw_stock_research_label(context: Optional[Dict[str, Any]]) -> Tuple[str, str]:
+        if not context:
+            return "人工复盘", "research_review"
+        qlib = context.get("qlib") or {}
+        trend = context.get("quantdinger") or {}
+        cross = context.get("cross") or {}
+        rank_raw = qlib.get("rank")
+        try:
+            rank = int(rank_raw) if rank_raw is not None else None
+        except Exception:
+            rank = None
+        trend_label = str(trend.get("trend_label") or "").lower()
+        category = str(cross.get("category") or "")
+        alignment = str(cross.get("alignment") or "")
+        positive_trend = trend_label in {"uptrend", "rebound"}
+        if category == "focus_watch" or (rank and rank <= 30 and positive_trend and alignment == "aligned"):
+            return "高优先观察", "high_priority_watch"
+        if category == "secondary_watch" or (rank and rank <= 50 and positive_trend):
+            return "优先观察", "priority_watch"
+        if category == "data_review_required":
+            return "数据待复核", "data_review_required"
+        if "divergence" in category or alignment == "divergent":
+            return "信号背离复盘", "divergence_review"
+        return "人工复盘", "research_review"
+
+    def _apply_tw_stock_research_adapter(
+        self,
+        analysis: Dict[str, Any],
+        *,
+        context: Optional[Dict[str, Any]],
+        language: str,
+        current_price: float,
+        price_change_pct: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        if context is None:
+            return analysis
+
+        is_zh = str(language or "").lower().startswith("zh")
+        display_label, research_decision = self._tw_stock_research_label(context)
+        qlib = context.get("qlib") or {}
+        trend = context.get("quantdinger") or {}
+        cross = context.get("cross") or {}
+        name = context.get("name") or context.get("symbol") or ""
+        rank = qlib.get("rank")
+        qlib_score = qlib.get("score")
+        trend_label = trend.get("trend_label") or "unknown"
+        trend_score = trend.get("trend_score")
+        asof = qlib.get("asof")
+        latest_date = trend.get("latest_date")
+        category = cross.get("category") or "unknown"
+        alignment = cross.get("alignment") or "unknown"
+        try:
+            change_pct = float(price_change_pct) if price_change_pct is not None else None
+        except Exception:
+            change_pct = None
+        if change_pct is None:
+            short_term_text_zh = "短线涨跌幅暂无可靠快照"
+            short_term_text_en = "short-term price change is unavailable"
+        elif change_pct <= -2:
+            short_term_text_zh = f"短线回落 {change_pct:.2f}%"
+            short_term_text_en = f"short-term pullback {change_pct:.2f}%"
+        elif change_pct >= 2:
+            short_term_text_zh = f"短线上涨 {change_pct:.2f}%"
+            short_term_text_en = f"short-term rise {change_pct:.2f}%"
+        else:
+            short_term_text_zh = f"短线小幅波动 {change_pct:.2f}%"
+            short_term_text_en = f"short-term move {change_pct:.2f}%"
+
+        context["research_decision"] = research_decision
+        context["display_decision"] = display_label
+        context["research_only"] = True
+        context["latest_change_pct"] = change_pct
+        context["short_term_state"] = (
+            "pullback" if change_pct is not None and change_pct <= -2 else
+            "rise" if change_pct is not None and change_pct >= 2 else
+            "flat" if change_pct is not None else
+            "unknown"
+        )
+
+        if is_zh:
+            summary = (
+                f"{name} 的首页 AI 已切换为台股研究口径：{display_label}；{short_term_text_zh}。"
+                f"qlib accepted latest 为 {asof or '--'}，排名 {rank or '--'}，"
+                f"qlib_score {qlib_score if qlib_score is not None else '--'}；"
+                f"QuantDinger 最新日 {latest_date or '--'}，趋势 {trend_label}，"
+                f"趋势分 {trend_score if trend_score is not None else '--'}；"
+                f"cross-analysis 为 {category} / {alignment}。"
+                "短线涨跌和中期趋势可能不同，需分开解读。"
+            )
+            reasons = [
+                "台股首页 AI 使用 qlib accepted latest + QuantDinger raw trend + cross-analysis 的只读研究上下文。",
+                "BUY/SELL 在台股分支不作为交易动作输出，统一转换为人工复盘观察优先级。",
+                context.get("disclaimer", ""),
+            ]
+            risks = [
+                "qlib_score 是横截面排序分数，不代表上涨概率、胜率或收益率。",
+                "若 qlib 日期、QuantDinger 最新日或数据质量警告不一致，需要先复核数据口径。",
+            ]
+            technical = f"{short_term_text_zh}；QuantDinger 趋势：{trend_label}，趋势分：{trend_score if trend_score is not None else '--'}，最新日：{latest_date or '--'}。"
+            fundamental = f"qlib 研究排序：asof={asof or '--'}，rank={rank or '--'}，score={qlib_score if qlib_score is not None else '--'}。"
+            sentiment = f"cross-analysis：{category}，alignment={alignment}。"
+        else:
+            summary = (
+                f"TWStock research mode: {name} is classified as {display_label}; {short_term_text_en}. "
+                f"qlib asof={asof or '--'}, rank={rank or '--'}, score={qlib_score if qlib_score is not None else '--'}; "
+                f"QuantDinger latest={latest_date or '--'}, trend={trend_label}, trend_score={trend_score if trend_score is not None else '--'}; "
+                f"cross={category}/{alignment}. Short-term price change and medium-term trend can diverge and should be read separately."
+            )
+            reasons = [
+                "TWStock fast analysis uses qlib accepted latest, QuantDinger raw trend, and read-only cross-analysis context.",
+                "BUY/SELL are not emitted as trade actions for TWStock; the output is converted to manual research priority.",
+                context.get("disclaimer", ""),
+            ]
+            risks = [
+                "qlib_score is a cross-sectional ranking score, not a return, win rate, or upside probability.",
+                "Review qlib/trend date alignment and quality warnings before relying on the context.",
+            ]
+            technical = f"{short_term_text_en}; QuantDinger trend: {trend_label}, score: {trend_score if trend_score is not None else '--'}, latest: {latest_date or '--'}."
+            fundamental = f"qlib ranking: asof={asof or '--'}, rank={rank or '--'}, score={qlib_score if qlib_score is not None else '--'}."
+            sentiment = f"cross-analysis: {category}, alignment={alignment}."
+
+        analysis["decision"] = "HOLD"
+        analysis["confidence"] = max(int(analysis.get("confidence", 50) or 50), 75 if research_decision in {"high_priority_watch", "priority_watch"} else 60)
+        analysis["summary"] = summary
+        analysis["key_reasons"] = reasons
+        analysis["risks"] = risks
+        analysis["analysis"] = {"technical": technical, "fundamental": fundamental, "sentiment": sentiment}
+        analysis["position_size_pct"] = 0
+        analysis["entry_price"] = current_price
+        analysis["stop_loss"] = None
+        analysis["take_profit"] = None
+        analysis["tw_stock_research_context"] = context
+        return analysis
+
     def _collect_market_data(
         self,
         market: str,
@@ -1162,6 +1386,10 @@ IMPORTANT:
                 result["error"] = "Failed to fetch current price from all sources"
                 logger.error(f"Price fetch failed for {market}:{symbol}, all sources exhausted")
                 return result
+
+            tw_stock_research_context = self._get_tw_stock_research_context(market, symbol)
+            if tw_stock_research_context:
+                data["tw_stock_research_context"] = tw_stock_research_context
             
             # Phase 2: Build prompt
             system_prompt, user_prompt = self._build_analysis_prompt(data, language)
@@ -1272,6 +1500,12 @@ IMPORTANT:
                 },
             }
             trend_outlook_summary = _build_trend_outlook_summary(trend_outlook, language)
+            if self._is_tw_stock_market(market):
+                trend_outlook = {
+                    key: {**value, "trend": "HOLD", "strength": "research"}
+                    for key, value in trend_outlook.items()
+                }
+                trend_outlook_summary = "台股首页 AI 使用只读研究口径：趋势方向以 QuantDinger 和 cross-analysis 为准，不输出多空交易预判。"
 
             # Consensus confidence:
             consensus_conf = int(max(40, min(98, 50 + consensus_abs * 0.35)))
@@ -1354,18 +1588,28 @@ IMPORTANT:
                 has_major_news=has_major_news,
                 has_macro_event=has_macro_event
             )
+            analysis = self._apply_tw_stock_research_adapter(
+                analysis,
+                context=tw_stock_research_context,
+                language=language,
+                current_price=current_price,
+                price_change_pct=(data.get("price") or {}).get("changePercent"),
+            )
 
             # Post-validate: adjust position sizing based on quality + agreement
             try:
-                ps = analysis.get("position_size_pct", 10)
-                ps = int(float(ps or 10))
-                # Lower position size if data is incomplete or multi-timeframe disagreement exists
-                # agreement_ratio in [0..1]
-                agreement_scale = 0.6 + 0.4 * float(agreement_ratio)
-                ps_scaled = ps * float(quality_multiplier) * agreement_scale
-                if str(analysis.get("decision") or "").upper() == "HOLD":
-                    ps_scaled *= 0.25
-                analysis["position_size_pct"] = max(1, min(100, int(round(ps_scaled))))
+                if analysis.get("tw_stock_research_context"):
+                    analysis["position_size_pct"] = 0
+                else:
+                    ps = analysis.get("position_size_pct", 10)
+                    ps = int(float(ps or 10))
+                    # Lower position size if data is incomplete or multi-timeframe disagreement exists
+                    # agreement_ratio in [0..1]
+                    agreement_scale = 0.6 + 0.4 * float(agreement_ratio)
+                    ps_scaled = ps * float(quality_multiplier) * agreement_scale
+                    if str(analysis.get("decision") or "").upper() == "HOLD":
+                        ps_scaled *= 0.25
+                    analysis["position_size_pct"] = max(1, min(100, int(round(ps_scaled))))
             except Exception:
                 # Keep model-provided position_size_pct
                 pass
@@ -1448,6 +1692,8 @@ IMPORTANT:
                 "analysis_time_ms": total_time,
                 "llm_time_ms": llm_time,
                 "data_collection_time_ms": data.get("collection_time_ms", 0),
+                "tw_stock_research_context": analysis.get("tw_stock_research_context"),
+                "research_only": bool(analysis.get("tw_stock_research_context")),
             })
             
             # Store in memory for future retrieval and get memory_id for feedback

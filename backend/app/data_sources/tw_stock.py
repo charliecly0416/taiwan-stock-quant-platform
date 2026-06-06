@@ -267,11 +267,11 @@ class TWStockDataSource(BaseDataSource):
                     SELECT trade_date::text AS trade_date, open, high, low, close, volume
                     FROM qd_tw_stock_daily_bars
                     WHERE symbol = ?
-                      AND source = 'finmind'
+                      AND source IN ('finmind', 'yahoo_adjusted')
                       AND trade_date >= ?
                       AND trade_date <= ?
                       AND (quality_flags IS NULL OR quality_flags = '')
-                    ORDER BY trade_date ASC
+                    ORDER BY trade_date ASC, CASE WHEN source = 'yahoo_adjusted' THEN 1 ELSE 0 END ASC
                     """,
                     (symbol, start_date, end_date),
                 )

@@ -86,7 +86,7 @@
         <div class="decision-main">
           <div class="decision-badge">
             <a-icon :type="decisionIcon" />
-            <span class="decision-text">{{ result.decision }}</span>
+            <span class="decision-text">{{ displayDecision }}</span>
           </div>
           <div class="confidence-ring">
             <a-progress
@@ -104,6 +104,33 @@
         </div>
         <div class="decision-summary">
           {{ result.summary }}
+        </div>
+        <div v-if="isTwStockResearchResult" class="tw-research-context-card">
+          <div class="tw-research-context-title">
+            <a-icon type="profile" />
+            台股研究上下文
+          </div>
+          <div class="tw-research-context-grid">
+            <div class="tw-research-context-item">
+              <span>qlib 日期</span>
+              <strong>{{ twStockQlib.asof || '--' }}</strong>
+            </div>
+            <div class="tw-research-context-item">
+              <span>排名 / 分数</span>
+              <strong>#{{ twStockQlib.rank || '--' }} / {{ formatNumber(twStockQlib.score, 4) }}</strong>
+            </div>
+            <div class="tw-research-context-item">
+              <span>QuantDinger 趋势</span>
+              <strong>{{ twStockTrend.trend_label || '--' }} / {{ formatNumber(twStockTrend.trend_score, 2) }}</strong>
+            </div>
+            <div class="tw-research-context-item">
+              <span>交叉分析</span>
+              <strong>{{ twStockCross.category || '--' }} / {{ twStockCross.alignment || '--' }}</strong>
+            </div>
+          </div>
+          <div class="tw-research-context-note">
+            qlib_score 是横截面研究排序分数，不是收益率、胜率、上涨概率或买入概率。输出仅供人工研究复盘，不构成交易建议。
+          </div>
         </div>
         <div v-if="consensusBlock" class="consensus-strip">
           <div class="consensus-strip-title">
@@ -134,7 +161,7 @@
           <span>{{ $t('fastAnalysis.nextStep') || '下一步' }}</span>
         </div>
         <div class="gp-actions">
-          <a-button type="primary" size="small" @click="$emit('generate-strategy', result)">
+          <a-button v-if="!isTwStockResearchResult" type="primary" size="small" @click="$emit('generate-strategy', result)">
             <a-icon type="robot" />
             {{ $t('fastAnalysis.generateStrategy') || '生成策略' }}
           </a-button>
@@ -584,14 +611,34 @@ export default {
       const secs = this.elapsedSeconds % 60
       return `${mins}m ${secs}s`
     },
+    twStockResearchContext () {
+      const c = this.result?.tw_stock_research_context || this.result?.twStockResearchContext || null
+      return c && typeof c === 'object' ? c : null
+    },
+    isTwStockResearchResult () {
+      return Boolean(this.twStockResearchContext?.research_only || this.result?.research_only)
+    },
+    twStockQlib () {
+      return this.twStockResearchContext?.qlib || {}
+    },
+    twStockTrend () {
+      return this.twStockResearchContext?.quantdinger || {}
+    },
+    twStockCross () {
+      return this.twStockResearchContext?.cross || {}
+    },
+    displayDecision () {
+      return this.twStockResearchContext?.display_decision || this.result?.decision || '--'
+    },
     isHoldDecision () {
-      return this.result && this.result.decision === 'HOLD'
+      return this.isTwStockResearchResult || (this.result && this.result.decision === 'HOLD')
     },
     isCryptoResult () {
       return String(this.result?.market || '').toLowerCase() === 'crypto'
     },
     decisionClass () {
       if (!this.result) return ''
+      if (this.isTwStockResearchResult) return 'decision-hold decision-research'
       const d = this.result.decision
       if (d === 'BUY') return 'decision-buy'
       if (d === 'SELL') return 'decision-sell'
@@ -599,6 +646,7 @@ export default {
     },
     decisionIcon () {
       if (!this.result) return 'question'
+      if (this.isTwStockResearchResult) return 'profile'
       const d = this.result.decision
       if (d === 'BUY') return 'arrow-up'
       if (d === 'SELL') return 'arrow-down'
@@ -632,10 +680,51 @@ export default {
       return this.result?.trend_outlook || this.result?.trendOutlook || null
     },
     trendOutlookSummaryText () {
+      if (this.isTwStockResearchResult) {
+        return '台股首页 AI 使用研究口径：趋势来自 QuantDinger，排序来自 qlib，交叉分析用于判断两者是否一致；这里不是多空交易预测。'
+      }
       const s = this.result?.trend_outlook_summary || this.result?.trendOutlookSummary
       return (s && String(s).trim()) ? String(s).trim() : ''
     },
     trendOutlookBlocks () {
+      if (this.isTwStockResearchResult) {
+        const rank = this.twStockQlib.rank
+        const latestChange = this.twStockResearchContext?.latest_change_pct ?? this.result?.market_data?.change_24h
+        const latestChangeNum = latestChange === undefined || latestChange === null ? null : Number(latestChange)
+        const shortTrend = Number.isNaN(latestChangeNum) || latestChangeNum === null
+          ? 'SHORT_UNKNOWN'
+          : latestChangeNum <= -2 ? 'SHORT_PULLBACK' : latestChangeNum >= 2 ? 'SHORT_RISE' : 'SHORT_FLAT'
+        return [
+          {
+            key: 'tw_short_change',
+            label: '最新涨跌',
+            trend: shortTrend,
+            score: Number.isNaN(latestChangeNum) || latestChangeNum === null ? null : `${latestChangeNum.toFixed(2)}%`,
+            strength: '短线'
+          },
+          {
+            key: 'tw_quantdinger',
+            label: 'QuantDinger 趋势',
+            trend: this.twStockTrend.trend_label || 'unknown',
+            score: this.twStockTrend.trend_score,
+            strength: this.twStockTrend.latest_date || 'raw trend'
+          },
+          {
+            key: 'tw_qlib',
+            label: 'qlib 研究排序',
+            trend: this.twStockResearchContext?.display_decision || '人工复盘',
+            score: rank ? `#${rank}` : null,
+            strength: 'qlib rank'
+          },
+          {
+            key: 'tw_cross',
+            label: '交叉分析',
+            trend: this.twStockCross.alignment || this.twStockCross.category || 'unknown',
+            score: null,
+            strength: this.twStockCross.category || 'cross'
+          }
+        ]
+      }
       const o = this.trendOutlookRaw
       if (!o || typeof o !== 'object') return []
       const keys = [
@@ -879,15 +968,39 @@ export default {
       return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1)
     },
     formatOutlookTrend (trend) {
-      const t = String(trend || 'HOLD').toUpperCase()
+      const raw = String(trend || 'HOLD')
+      const t = raw.toUpperCase()
+      const researchMap = {
+        UPTREND: '上升趋势',
+        REBOUND: '反弹趋势',
+        DOWNTREND: '下降趋势',
+        PULLBACK: '回落趋势',
+        SIDEWAYS: '横盘整理',
+        UNKNOWN: '数据待确认',
+        SHORT_PULLBACK: '短线回落',
+        SHORT_RISE: '短线上涨',
+        SHORT_FLAT: '短线小幅波动',
+        SHORT_UNKNOWN: '短线待确认',
+        ALIGNED: '趋势一致',
+        DIVERGENT: '信号背离',
+        HIGH_PRIORITY_WATCH: '高优先观察',
+        PRIORITY_WATCH: '优先观察',
+        DATA_REVIEW_REQUIRED: '数据待复核',
+        DIVERGENCE_REVIEW: '背离复盘',
+        RESEARCH_REVIEW: '人工复盘'
+      }
+      if (researchMap[t]) return researchMap[t]
+      if (raw === '高优先观察' || raw === '优先观察' || raw === '人工复盘' || raw === '数据待复核' || raw === '信号背离复盘') return raw
       if (t === 'BUY') return this.$t('fastAnalysis.outlookBull')
       if (t === 'SELL') return this.$t('fastAnalysis.outlookBear')
       return this.$t('fastAnalysis.outlookNeutral')
     },
     outlookTrendClass (trend) {
       const t = String(trend || '').toUpperCase()
-      if (t === 'BUY') return 'trend-bull'
-      if (t === 'SELL') return 'trend-bear'
+      if (['BUY', 'UPTREND', 'REBOUND', 'ALIGNED', 'HIGH_PRIORITY_WATCH', 'PRIORITY_WATCH', 'SHORT_RISE'].includes(t)) return 'trend-bull'
+      if (['SELL', 'DOWNTREND', 'PULLBACK', 'DIVERGENT', 'DATA_REVIEW_REQUIRED', 'DIVERGENCE_REVIEW', 'SHORT_PULLBACK'].includes(t)) return 'trend-bear'
+      if (String(trend || '') === '高优先观察' || String(trend || '') === '优先观察') return 'trend-bull'
+      if (String(trend || '') === '数据待复核' || String(trend || '') === '信号背离复盘') return 'trend-bear'
       return 'trend-neutral'
     },
     formatCompactNum (value) {
@@ -1263,6 +1376,17 @@ export default {
         }
       }
       .decision-summary { font-size: 14px; line-height: 1.75; color: @rpt-text2; padding-top: 14px; border-top: 1px solid @rpt-border; }
+      .tw-research-context-card {
+        margin-top: 14px; padding: 14px 16px; border: 1px solid @rpt-border; border-radius: 8px; background: #f8fafc;
+        .tw-research-context-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #1f2937; margin-bottom: 10px; }
+        .tw-research-context-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+        .tw-research-context-item {
+          min-width: 0; padding: 10px 12px; border-radius: 6px; background: #fff; border: 1px solid #e5e7eb;
+          span { display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px; }
+          strong { display: block; font-size: 13px; line-height: 1.35; color: #111827; word-break: break-word; }
+        }
+        .tw-research-context-note { margin-top: 10px; font-size: 12px; line-height: 1.6; color: #6b7280; }
+      }
       .consensus-strip {
         margin-top: 12px; padding: 10px 14px; border-radius: 8px;
         background: color-mix(in srgb, var(--primary-color, #1890ff) 4%, transparent); font-size: 12px; color: @rpt-text2;
@@ -1273,6 +1397,7 @@ export default {
       &.decision-buy  .decision-badge { .anticon { color: @rpt-green; } .decision-text { color: @rpt-green; } }
       &.decision-sell .decision-badge { .anticon { color: @rpt-red; } .decision-text { color: @rpt-red; } }
       &.decision-hold .decision-badge { .anticon { color: @rpt-amber; } .decision-text { color: @rpt-amber; } }
+      &.decision-research .decision-badge { .anticon { color: #2563eb; } .decision-text { color: #1d4ed8; } }
     }
 
     // ─ Price Strip (no separate cards) ─
@@ -1627,6 +1752,12 @@ export default {
       .decision-text { color: @dk-text; }
       .confidence-label { color: @dk-text2; }
       .decision-summary { color: @dk-text2; border-top-color: @dk-border; }
+      .tw-research-context-card {
+        background: @dk-surface2; border-color: @dk-border;
+        .tw-research-context-title { color: @dk-text; }
+        .tw-research-context-item { background: @dk-surface; border-color: @dk-border; span { color: @dk-text3; } strong { color: @dk-text; } }
+        .tw-research-context-note { color: @dk-text3; }
+      }
       ::v-deep .ant-progress-text { color: @dk-text !important; }
       .confidence-value { color: @dk-text !important; }
       .consensus-strip {
@@ -1724,6 +1855,11 @@ export default {
 
   @media (max-width: 992px) {
     .result-container .analysis-details .detail-section.reasons { border-right-color: transparent; border-bottom-color: @dk-border; }
+    .result-container .decision-card .tw-research-context-card .tw-research-context-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  @media (max-width: 560px) {
+    .result-container .decision-card .tw-research-context-card .tw-research-context-grid { grid-template-columns: 1fr; }
   }
 }
 </style>

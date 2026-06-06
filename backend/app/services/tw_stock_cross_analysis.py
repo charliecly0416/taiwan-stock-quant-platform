@@ -140,6 +140,7 @@ class TWStockCrossAnalysisService:
         item = {
             "symbol": symbol,
             "instrument": row.get("instrument"),
+            "name": row.get("name") or row.get("symbol_name") or "",
             "qlib": {"bucket": row.get("bucket"), "rank": row.get("rank"), "score": row.get("qlib_score")},
             "quantdinger": self._trend_summary(trend),
             "data_basis": self._data_basis(qlib_payload=qlib_payload, trend=trend),

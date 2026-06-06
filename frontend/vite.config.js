@@ -39,6 +39,10 @@ function proLayoutLessShim () {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const enableMock = env.VITE_ENABLE_MOCK === 'true'
+  const allowedHosts = (env.VITE_ALLOWED_HOSTS || '')
+    .split(',')
+    .map(host => host.trim())
+    .filter(Boolean)
 
   return {
     base: './',
@@ -94,6 +98,7 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       port: 8000,
+      allowedHosts: allowedHosts.length ? allowedHosts : undefined,
       proxy: {
         '/api': {
           target: env.VITE_DEV_PROXY_TARGET || 'http://localhost:5000',

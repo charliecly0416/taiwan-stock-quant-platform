@@ -96,3 +96,21 @@ data_tw/ops/daily_auto_update/<job_id>/publish_report.md
 - `fresh_data_wait`：Yahoo/Scrapling 暂未拿到完整目标日期数据，下次定时重试。
 - `provider_publish_failed`：provider 发布失败，latest 不更新。
 - `accepted_latest_failed`：信号产物或发布门禁失败，latest 不更新。
+
+
+## FinMind 历史覆盖
+
+默认 `TW_DAILY_AUTO_FINMIND_LOOKBACK_DAYS=260`，用于给 Option C 150 候选池补足约 120 根以上日线，避免交叉分析因本地日线样本不足而降级。可用 `--finmind-lookback-days` 覆盖。
+
+如果 FinMind 历史接口受额度或付费限制影响，可用本地 Yahoo/Scrapling 标准化文件补齐同一张归档表：
+
+```bash
+DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<db> \
+python backend/scripts/import_tw_stock_yahoo_normalized_archive.py \
+  --symbols-file qlib_pipeline/data_tw/experiments/option_c_forward_validation/timed_data_availability_retry_20260601T101323Z/symbols_accepted_prediction_universe.txt \
+  --start 2025-09-18 \
+  --end 2026-06-05 \
+  --apply
+```
+
+该脚本只读取本地 `qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/normalized_nonempty/TWxxxx.csv`，写入 `qd_tw_stock_daily_bars` 的 `source='yahoo_adjusted'`，用于趋势样本补足，不会触发交易、下单或券商操作。

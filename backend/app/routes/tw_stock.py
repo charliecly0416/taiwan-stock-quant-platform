@@ -12,6 +12,7 @@ from app.services.tw_stock_trend import TWStockTrendService
 from app.services.tw_stock_qlib_option_c import (
     QlibOptionCSignalError,
     QlibOptionCSignalReader,
+    QlibOptionCRankChangeReader,
     blocked_payload as qlib_blocked_payload,
     research_only_trading_flags,
 )
@@ -22,7 +23,11 @@ from app.services.tw_stock_qlib_option_c_accepted_latest_scheduler import option
 from app.services.tw_stock_qlib_option_c_eod_pipeline import option_c_eod_pipeline
 from app.services.tw_stock_qlib_option_c_eod_automation import option_c_eod_automation_scheduler
 from app.services.tw_stock_daily_auto_update_status import TWStockDailyAutoUpdateStatusService
+from app.services.tw_stock_sim_account import TWStockSimAccountService
 from app.services.tw_stock_cross_analysis import TWStockCrossAnalysisService
+from app.services.tw_stock_rank_tech_cross import TWStockRankTechCrossService
+from app.services.tw_stock_observation_replay import TWStockObservationReplayService
+from app.services.tw_stock_portfolio_replay import TWStockPortfolioReplayService
 from app.services.tw_stock_cross_analysis_history import TWStockCrossAnalysisHistoryService
 from app.services.tw_stock_agent_context import TWStockAgentContextService
 from app.services.tw_stock_agent_chat import TWStockAgentChatService
@@ -36,10 +41,32 @@ logger = get_logger(__name__)
 tw_stock_bp = Blueprint("tw_stock", __name__)
 trend_service = TWStockTrendService()
 cross_analysis_service = TWStockCrossAnalysisService(trend_service=trend_service)
+rank_tech_cross_service = TWStockRankTechCrossService(trend_service=trend_service)
+observation_replay_service = TWStockObservationReplayService(rank_tech_service=rank_tech_cross_service)
+portfolio_replay_service = TWStockPortfolioReplayService(observation_service=observation_replay_service)
 cross_analysis_history_service = TWStockCrossAnalysisHistoryService(cross_service=cross_analysis_service)
 tw_stock_agent_service = TWStockAgentContextService(cross_service=cross_analysis_service)
 tw_stock_agent_chat_service = TWStockAgentChatService(context_service=tw_stock_agent_service)
 daily_auto_update_status_service = TWStockDailyAutoUpdateStatusService()
+tw_stock_sim_account_service = TWStockSimAccountService()
+
+
+
+def _current_user_id(default: int = 0) -> int:
+    try:
+        return int(getattr(g, "user_id", default) or default)
+    except Exception:
+        return int(default)
+
+
+def _sim_response(payload: dict):
+    status = str((payload or {}).get("status") or "")
+    http_status = 200
+    if status == "not_found":
+        http_status = 404
+    elif status in {"invalid_initial_cash", "invalid_symbol", "invalid_side", "invalid_quantity", "invalid_lot_size", "unsupported_source_type"}:
+        http_status = 400
+    return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else payload.get("message", status), "data": payload}), http_status
 
 
 def _parse_limit() -> int:
@@ -67,6 +94,19 @@ def _parse_quant_trend_limit() -> int:
     except Exception:
         return 120
 
+
+def _parse_technical_strategies() -> list:
+    raw = request.args.get("technicalStrategies") or request.args.get("technical_strategies") or ""
+    if not raw:
+        return ["ma", "rsi", "macd", "bollinger"]
+    valid = {"ma", "rsi", "macd", "bollinger"}
+    out = []
+    for part in str(raw).split(","):
+        item = part.strip().lower()
+        if item in valid and item not in out:
+            out.append(item)
+    return out or ["ma", "rsi", "macd", "bollinger"]
+
 def _parse_as_of():
     raw = (request.args.get("as_of") or request.args.get("asOf") or "").strip()
     if not raw:
@@ -91,6 +131,89 @@ def _require_option_c_ops_permission():
     if _current_user_has_option_c_ops_permission():
         return None
     return jsonify({"code": 403, "msg": "Option C ops admin or tw_stock_qlib_ops permission required", "data": None}), 403
+
+
+
+@tw_stock_bp.route("/sim/accounts", methods=["GET"])
+@login_required
+def list_tw_stock_sim_accounts():
+    """List current user's TWStock simulation accounts."""
+    payload = tw_stock_sim_account_service.list_accounts(user_id=_current_user_id())
+    return _sim_response(payload)
+
+
+@tw_stock_bp.route("/sim/accounts", methods=["POST"])
+@login_required
+def create_tw_stock_sim_account():
+    """Create a TWStock simulation account; no real securities account is touched."""
+    data = _request_json()
+    payload = tw_stock_sim_account_service.create_account(
+        user_id=_current_user_id(),
+        name=data.get("name") or "台股研究模拟账户",
+        initial_cash=data.get("initial_cash") or data.get("initialCash") or 1000000,
+    )
+    return _sim_response(payload)
+
+
+@tw_stock_bp.route("/sim/accounts/<account_uid>", methods=["GET"])
+@login_required
+def get_tw_stock_sim_account(account_uid: str):
+    """Return one TWStock simulation account with cash, value and return."""
+    payload = tw_stock_sim_account_service.get_account(account_uid=account_uid, user_id=_current_user_id())
+    return _sim_response(payload)
+
+
+@tw_stock_bp.route("/sim/accounts/<account_uid>/positions", methods=["GET"])
+@login_required
+def get_tw_stock_sim_positions(account_uid: str):
+    """Return open simulation-only TWStock positions."""
+    payload = tw_stock_sim_account_service.positions(account_uid=account_uid, user_id=_current_user_id())
+    return _sim_response(payload)
+
+
+@tw_stock_bp.route("/sim/accounts/<account_uid>/trades", methods=["GET"])
+@login_required
+def get_tw_stock_sim_trades(account_uid: str):
+    """Return simulation-only TWStock fills."""
+    try:
+        limit = max(1, min(int(request.args.get("limit") or 100), 500))
+    except Exception:
+        limit = 100
+    payload = tw_stock_sim_account_service.trades(account_uid=account_uid, user_id=_current_user_id(), limit=limit)
+    return _sim_response(payload)
+
+
+@tw_stock_bp.route("/sim/orders/draft", methods=["POST"])
+@login_required
+def draft_tw_stock_sim_order():
+    """Create a manual simulation draft using latest archived close as reference."""
+    data = _request_json()
+    payload = tw_stock_sim_account_service.draft(
+        user_id=_current_user_id(),
+        account_uid=data.get("account_uid") or data.get("accountUid") or "",
+        symbol=data.get("symbol") or "",
+        side=data.get("side") or "",
+        quantity=data.get("quantity") or data.get("qty") or 0,
+        source_type=data.get("source_type") or data.get("sourceType") or "manual",
+        source_context=data.get("source_context") or data.get("sourceContext") or {},
+    )
+    return _sim_response(payload)
+
+
+@tw_stock_bp.route("/sim/orders/<sim_order_uid>/confirm", methods=["POST"])
+@login_required
+def confirm_tw_stock_sim_order(sim_order_uid: str):
+    """Confirm a manual simulation draft and write a simulation fill."""
+    payload = tw_stock_sim_account_service.confirm(user_id=_current_user_id(), sim_order_uid=sim_order_uid)
+    return _sim_response(payload)
+
+
+@tw_stock_bp.route("/sim/orders/<sim_order_uid>/cancel", methods=["POST"])
+@login_required
+def cancel_tw_stock_sim_order(sim_order_uid: str):
+    """Cancel a manual simulation draft."""
+    payload = tw_stock_sim_account_service.cancel(user_id=_current_user_id(), sim_order_uid=sim_order_uid)
+    return _sim_response(payload)
 
 
 @tw_stock_bp.route("/trend", methods=["GET"])
@@ -163,6 +286,34 @@ def get_latest_qlib_option_c_signals():
     except Exception as exc:
         logger.error(f"TWStock qlib Option C signal read failed: {exc}", exc_info=True)
         message = f"Failed to read qlib Option C research signals: {exc}"
+        return jsonify({
+            "code": 0,
+            "msg": message,
+            "data": qlib_blocked_payload("read_error", message),
+        }), 500
+
+
+@tw_stock_bp.route("/quant/signals/rank-changes", methods=["GET"])
+def get_qlib_option_c_rank_changes():
+    """Return read-only latest-vs-previous qlib Option C rank changes."""
+    bucket = (request.args.get("bucket") or "top30").strip().lower()
+    try:
+        lookback = max(2, min(int(request.args.get("lookback") or 10), 60))
+    except Exception:
+        lookback = 10
+    try:
+        payload = QlibOptionCRankChangeReader().rank_changes(bucket=bucket, lookback=lookback)
+        return jsonify({"code": 1, "msg": "success", "data": payload})
+    except QlibOptionCSignalError as exc:
+        http_status = 400 if exc.status in ("invalid_bucket", "path_outside_root") else 200
+        return jsonify({
+            "code": 0,
+            "msg": exc.message,
+            "data": qlib_blocked_payload(exc.status, exc.message, warnings=exc.warnings),
+        }), http_status
+    except Exception as exc:
+        logger.error(f"TWStock qlib Option C rank changes read failed: {exc}", exc_info=True)
+        message = f"Failed to read qlib Option C rank changes: {exc}"
         return jsonify({
             "code": 0,
             "msg": message,
@@ -281,6 +432,120 @@ def get_tw_stock_cross_analysis_latest():
             "code": 0,
             "msg": message,
             "data": {"ok": False, "status": "read_error", "message": message, "items": [], "trading": research_only_trading_flags()},
+        }), 500
+
+
+@tw_stock_bp.route("/rank-tech-cross/latest", methods=["GET"])
+def get_tw_stock_rank_tech_cross_latest():
+    """Return read-only qlib ranking x QuantDinger trend classification."""
+    bucket = (request.args.get("bucket") or "top30").strip().lower()
+    try:
+        payload = rank_tech_cross_service.latest(
+            bucket=bucket,
+            limit=_parse_limit(),
+            max_items=_parse_cross_max_items(bucket),
+            include_technical_strategies=_parse_bool_arg("includeTechnicalStrategies", "include_technical_strategies", default=True),
+            technical_strategies=_parse_technical_strategies(),
+        )
+        return jsonify({
+            "code": 1 if payload.get("ok") else 0,
+            "msg": "success" if payload.get("ok") else payload.get("message", payload.get("status")),
+            "data": payload,
+        })
+    except Exception as exc:
+        logger.error(f"TWStock rank-tech cross latest failed: {exc}", exc_info=True)
+        message = f"Failed to read TWStock rank-tech cross classification: {exc}"
+        return jsonify({
+            "code": 0,
+            "msg": message,
+            "data": {
+                "ok": False,
+                "status": "read_error",
+                "message": message,
+                "simulation_only": True,
+                "research_signal_not_order": True,
+                "items": [],
+                "summary": {
+                    "new_watch": 0,
+                    "continue_watch": 0,
+                    "risk_review": 0,
+                    "manual_review": 0,
+                    "observe_only": 0,
+                    "data_insufficient": 0,
+                },
+                "trading": research_only_trading_flags(),
+            },
+        }), 500
+
+
+@tw_stock_bp.route("/rank-tech-cross/observation-replay", methods=["GET"])
+def get_tw_stock_observation_replay():
+    """Return observation-only point-in-time research queue comparison."""
+    bucket = (request.args.get("bucket") or "top30").strip().lower()
+    start_date = (request.args.get("startDate") or request.args.get("start_date") or "").strip()
+    end_date = (request.args.get("endDate") or request.args.get("end_date") or "").strip()
+    try:
+        payload = observation_replay_service.compare(
+            start_date=start_date,
+            end_date=end_date,
+            bucket=bucket,
+            max_items=_parse_cross_max_items(bucket),
+            technical_strategies=_parse_technical_strategies(),
+        )
+        return jsonify({
+            "code": 1 if payload.get("ok") else 0,
+            "msg": "success" if payload.get("ok") else payload.get("message", payload.get("status")),
+            "data": payload,
+        })
+    except Exception as exc:
+        logger.error(f"TWStock observation replay failed: {exc}", exc_info=True)
+        message = f"Failed to read TWStock observation replay: {exc}"
+        return jsonify({
+            "code": 0,
+            "msg": message,
+            "data": {
+                "ok": False,
+                "status": "read_error",
+                "message": message,
+                "simulation_only": True,
+                "research_signal_not_order": True,
+                "replay_type": "observation_only",
+                "performance_metrics_included": False,
+                "daily": [],
+                "comparison": {},
+                "trading": research_only_trading_flags(),
+            },
+        }), 500
+
+
+@tw_stock_bp.route("/rank-tech-cross/portfolio-replay", methods=["POST"])
+def run_tw_stock_portfolio_replay():
+    """Return in-memory portfolio rule historical simulation; never persists."""
+    try:
+        payload = portfolio_replay_service.replay(config=_request_json())
+        return jsonify({
+            "code": 1 if payload.get("ok") else 0,
+            "msg": "success" if payload.get("ok") else payload.get("message", payload.get("status")),
+            "data": payload,
+        })
+    except Exception as exc:
+        logger.error(f"TWStock portfolio replay failed: {exc}", exc_info=True)
+        message = f"Failed to run TWStock portfolio replay: {exc}"
+        return jsonify({
+            "code": 0,
+            "msg": message,
+            "data": {
+                "ok": False,
+                "status": "read_error",
+                "message": message,
+                "simulation_only": True,
+                "research_signal_not_order": True,
+                "replay_type": "portfolio_rule_historical_simulation",
+                "persist": False,
+                "writes_business_db": False,
+                "comparison": {},
+                "trading": research_only_trading_flags(),
+            },
         }), 500
 
 

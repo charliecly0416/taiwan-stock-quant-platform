@@ -91,6 +91,20 @@ export function getLatestQlibOptionCSignals ({ bucket, enrichTrend = true, trend
 
 
 
+export function getQlibOptionCRankChanges ({ bucket = "top30", lookback = 10 } = {}) {
+  const normalizedBucket = bucket === "top50" ? "top50" : "top30"
+  return request({
+    url: `${BASE_URL}/quant/signals/rank-changes`,
+    method: "get",
+    params: {
+      bucket: normalizedBucket,
+      lookback: Math.max(2, Math.min(Number(lookback || 10), 60))
+    }
+  })
+}
+
+
+
 export function getTwStockCrossAnalysisLatest ({ bucket = "top30", limit = 120, maxItems, includeRawTrend = false } = {}) {
   const normalizedBucket = ["top30", "top50", "all"].includes(bucket) ? bucket : "top30"
   const defaultMaxItems = normalizedBucket === "top30" ? 30 : 50
@@ -113,6 +127,41 @@ export function getTwStockCrossAnalysisSymbol (symbol, { limit = 120, includeRaw
     params: {
       limit: Math.max(20, Math.min(Number(limit || 120), 500)),
       includeRawTrend: Boolean(includeRawTrend)
+    }
+  })
+}
+
+export function getTwStockRankTechCrossLatest ({ bucket = 'top30', limit = 120, maxItems, includeTechnicalStrategies = true, technicalStrategies = ['ma', 'rsi', 'macd', 'bollinger'] } = {}) {
+  const normalizedBucket = ['top30', 'top50', 'all'].includes(bucket) ? bucket : 'top30'
+  const defaultMaxItems = normalizedBucket === 'top50' ? 50 : 30
+  return request({
+    url: `${BASE_URL}/rank-tech-cross/latest`,
+    method: 'get',
+    params: {
+      bucket: normalizedBucket,
+      limit: Math.max(20, Math.min(Number(limit || 120), 500)),
+      maxItems: Math.max(1, Math.min(Number(maxItems || defaultMaxItems), 50)),
+      includeTechnicalStrategies: Boolean(includeTechnicalStrategies),
+      technicalStrategies: Array.isArray(technicalStrategies) ? technicalStrategies.join(',') : technicalStrategies
+    }
+  })
+}
+
+export function getTwStockObservationReplay (params = {}) {
+  return request({
+    url: `${BASE_URL}/rank-tech-cross/observation-replay`,
+    method: 'get',
+    params
+  })
+}
+
+export function runTwStockPortfolioReplay (data = {}) {
+  return request({
+    url: `${BASE_URL}/rank-tech-cross/portfolio-replay`,
+    method: 'post',
+    data: {
+      ...data,
+      persist: false
     }
   })
 }
@@ -223,6 +272,79 @@ export function getQlibOptionCLatestJob () {
   return request({
     url: `${BASE_URL}/quant/ops/option-c/latest`,
     method: 'get'
+  })
+}
+
+
+
+export function getTwStockSimAccounts () {
+  return request({
+    url: `${BASE_URL}/sim/accounts`,
+    method: 'get'
+  })
+}
+
+export function createTwStockSimAccount (data) {
+  return request({
+    url: `${BASE_URL}/sim/accounts`,
+    method: 'post',
+    data: {
+      name: data && data.name,
+      initial_cash: data && (data.initial_cash || data.initialCash)
+    }
+  })
+}
+
+export function getTwStockSimAccount (accountUid) {
+  return request({
+    url: `${BASE_URL}/sim/accounts/${encodeURIComponent(accountUid)}`,
+    method: 'get'
+  })
+}
+
+export function getTwStockSimPositions (accountUid) {
+  return request({
+    url: `${BASE_URL}/sim/accounts/${encodeURIComponent(accountUid)}/positions`,
+    method: 'get'
+  })
+}
+
+export function getTwStockSimTrades (accountUid, { limit = 100 } = {}) {
+  return request({
+    url: `${BASE_URL}/sim/accounts/${encodeURIComponent(accountUid)}/trades`,
+    method: 'get',
+    params: {
+      limit: Math.max(1, Math.min(Number(limit || 100), 500))
+    }
+  })
+}
+
+export function draftTwStockSimOrder (data) {
+  return request({
+    url: `${BASE_URL}/sim/orders/draft`,
+    method: 'post',
+    data: {
+      account_uid: data && (data.account_uid || data.accountUid),
+      symbol: data && data.symbol,
+      side: data && data.side,
+      quantity: data && data.quantity,
+      source_type: data && data.source_type ? data.source_type : 'manual',
+      source_context: data && data.source_context ? data.source_context : undefined
+    }
+  })
+}
+
+export function confirmTwStockSimOrder (simOrderUid) {
+  return request({
+    url: `${BASE_URL}/sim/orders/${encodeURIComponent(simOrderUid)}/confirm`,
+    method: 'post'
+  })
+}
+
+export function cancelTwStockSimOrder (simOrderUid) {
+  return request({
+    url: `${BASE_URL}/sim/orders/${encodeURIComponent(simOrderUid)}/cancel`,
+    method: 'post'
   })
 }
 

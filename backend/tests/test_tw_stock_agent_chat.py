@@ -83,7 +83,49 @@ def test_mock_openai_valid_json_response_passes_schema():
     assert "fixture_warning" in payload["warnings"]
     assert adapter.calls[0]["items"]
     assert "blocked_operations" in adapter.calls[0]
+    assert "selected_skills" in adapter.calls[0]
+    assert any(item["name"] == "tw-stock-research-context-analyst" for item in adapter.calls[0]["selected_skills"])
+    assert "tw-stock-research-context-analyst" in adapter.calls[0]["skill_context"]
+    assert payload["invoked_skills"]
+    assert any(item["name"] == "tw-stock-research-context-analyst" for item in payload["invoked_skills"])
     assert "OPENAI_API_KEY" not in str(adapter.calls[0])
+
+
+def test_freshness_question_invokes_data_freshness_skill():
+    service = TWStockAgentChatService(context_service=_context_service(), openai_adapter=MockTWStockAgentOpenAIAdapter("not-json"))
+
+    payload = service.chat(question="Yahoo 和 FinMind 后续会自动重试吗？当前数据新鲜度和 asof 是什么？")
+    skill_names = [item["name"] for item in payload["invoked_skills"]]
+
+    assert payload["intent"] == "freshness_and_data_basis"
+    assert "tw-stock-safety-boundary-review" in skill_names
+    assert "tw-stock-data-freshness-diagnosis" in skill_names
+    freshness_skill = next(item for item in payload["invoked_skills"] if item["name"] == "tw-stock-data-freshness-diagnosis")
+    assert freshness_skill["status"] == "invoked"
+    assert freshness_skill["evidence"]["qlib_asof"] == "2026-06-01"
+
+
+def test_blocked_questions_apply_safety_skill_without_openai_or_executable_skill():
+    adapter = MockTWStockAgentOpenAIAdapter({"unused": True})
+    service = TWStockAgentChatService(context_service=_context_service(), openai_adapter=adapter)
+
+    payload = service.chat(question="帮我下单买 2330")
+    skill_names = [item["name"] for item in payload["invoked_skills"]]
+
+    assert adapter.calls == []
+    assert payload["blocked"] is True
+    assert skill_names == ["tw-stock-safety-boundary-review"]
+    assert payload["invoked_skills"][0]["status"] == "applied"
+
+
+def test_e2e_skill_is_handoff_only_from_frontend_agent():
+    service = TWStockAgentChatService(context_service=_context_service(), openai_adapter=MockTWStockAgentOpenAIAdapter("not-json"))
+
+    payload = service.chat(question="用 Playwright 跑一个全流程验收测试")
+    e2e = next(item for item in payload["invoked_skills"] if item["name"] == "tw-stock-readonly-e2e-acceptance")
+
+    assert e2e["status"] == "not_invoked_from_web_agent"
+    assert e2e["evidence"]["web_agent_execution"] is False
 
 
 def test_mock_openai_invalid_json_falls_back_to_preview():

@@ -3,7 +3,7 @@
     <!-- 全宽主内容区域 -->
     <div class="main-content-full">
       <!-- 顶部指数条 -->
-      <div class="top-index-bar">
+      <div v-if="!embedded" class="top-index-bar">
         <!-- 情绪指标 - 独立加载 -->
         <template v-if="loadingSentiment">
           <div class="indicator-box skeleton-box">
@@ -73,9 +73,9 @@
       </div>
 
       <!-- 主体三栏布局 -->
-      <div class="main-body">
+      <div class="main-body" :class="{ 'embedded-main-body': embedded }">
         <!-- 左侧：热力图 + 财经日历 -->
-        <div class="left-panel">
+        <div v-if="!embedded" class="left-panel">
           <!-- 热力图 - 独立加载 -->
           <div class="heatmap-box">
             <div class="box-header">
@@ -156,7 +156,7 @@
               class="symbol-selector"
             >
               <a-select-option
-                v-for="stock in (watchlist || [])"
+                v-for="stock in visibleWatchlist"
                 :key="`${stock.market}-${stock.symbol}`"
                 :value="`${stock.market}:${stock.symbol}`"
                 :label="watchlistSelectLabel(stock)"
@@ -299,7 +299,7 @@ class="analyze-button">
 
           <div class="watchlist-list">
             <div
-              v-for="stock in (watchlist || [])"
+              v-for="stock in visibleWatchlist"
               :key="`wl-${stock.market}-${stock.symbol}`"
               class="wl-card"
               :class="{ active: selectedSymbol === `${stock.market}:${stock.symbol}` }"
@@ -366,7 +366,7 @@ class="analyze-button">
                 <span class="wl-hover-btn danger" @click.stop="removeFromWatchlist(stock)"><a-icon type="delete" /></span>
               </div>
             </div>
-            <div v-if="!watchlist || watchlist.length === 0" class="watchlist-empty">
+            <div v-if="!visibleWatchlist || visibleWatchlist.length === 0" class="watchlist-empty">
               <div class="we-icon"><a-icon type="star" /></div>
               <p>{{ $t('dashboard.analysis.empty.noWatchlist') }}</p>
               <a-button type="primary" size="small" icon="plus" @click="showAddStockModal = true">
@@ -798,6 +798,9 @@ const MARKET_CACHE = {
   calendar: { key: 'aiAnalysis.market.calendar', ttl: 10 * 60 * 1000 }
 }
 
+const TW_MARKET_VALUES = new Set(['TWStock', 'tws'])
+const TW_MARKET_TYPE = { value: 'TWStock', i18nKey: 'dashboard.analysis.market.TWStock' }
+
 // `window.requestIdleCallback` is unavailable on Safari < 16. Fall back to a
 // short setTimeout so we still get the "yield to first paint, then run" effect.
 function _onIdle (cb, timeout = 800) {
@@ -926,6 +929,10 @@ export default {
     currentHeatmap () {
       return this.marketData.heatmap[this.heatmapType] || []
     },
+    visibleWatchlist () {
+      if (!this.embedded) return this.watchlist || []
+      return (this.watchlist || []).filter(item => TW_MARKET_VALUES.has(item.market))
+    },
     storeUserInfo () {
       return this.userInfo || {}
     },
@@ -942,10 +949,10 @@ export default {
       return Object.values(this.positionSummaryMap).reduce((s, v) => s + (v.monitorCount || 0), 0)
     },
     batchSelectedAll () {
-      return this.watchlist && this.watchlist.length > 0 && this.batchSelectedKeys.length === this.watchlist.length
+      return this.visibleWatchlist && this.visibleWatchlist.length > 0 && this.batchSelectedKeys.length === this.visibleWatchlist.length
     },
     batchIndeterminate () {
-      return this.batchSelectedKeys.length > 0 && this.batchSelectedKeys.length < (this.watchlist || []).length
+      return this.batchSelectedKeys.length > 0 && this.batchSelectedKeys.length < (this.visibleWatchlist || []).length
     },
     // Dynamic placeholder for the "add to watchlist" search box. Showing
     // market-specific examples up front prevents users from typing the wrong
@@ -955,6 +962,8 @@ export default {
       // canonicalises bare bases (BTC -> BTC/USDT) but storing the canonical
       // shape from the start makes UI / dedupe / search far less surprising.
       const examples = {
+        TWStock: '例如 2330、2357、6290',
+        tws: '例如 2330、2357、6290',
         USStock: 'e.g. AAPL, MSFT, NVDA',
         CNStock: 'e.g. 600519, 000001, 300750',
         HKStock: 'e.g. 00700, 09988, 03690',
@@ -1014,7 +1023,9 @@ export default {
     // 1. Render-from-cache pass: hydrate the four market-overview blocks
     //    from sessionStorage so the first paint shows real numbers even
     //    when the upstream APIs are slow. No network round-trips here.
-    this._hydrateMarketCache()
+    if (!this.embedded) {
+      this._hydrateMarketCache()
+    }
 
     // 2. Critical-path requests: user info + market types are tiny and
     //    drive subsequent UI (e.g. the watchlist selector). Watchlist +
@@ -1030,7 +1041,9 @@ export default {
     //    when the cached value is stale. This is what makes the page feel
     //    snappy on a cold open — the user sees the top carousel + the
     //    analysis panel without waiting on four upstream finance APIs.
-    _onIdle(() => this.loadMarketData())
+    if (!this.embedded) {
+      _onIdle(() => this.loadMarketData())
+    }
   },
   mounted () {
     this.startWatchlistPriceRefresh()
@@ -1044,7 +1057,9 @@ export default {
     if (this.watchlist && this.watchlist.length > 0) {
       this.loadWatchlistPrices()
     }
-    _onIdle(() => this.loadMarketData())
+    if (!this.embedded) {
+      _onIdle(() => this.loadMarketData())
+    }
   },
   beforeDestroy () {
     if (this.watchlistPriceTimer) {
@@ -1418,7 +1433,7 @@ export default {
     },
     onBatchSelectAll (e) {
       if (e.target.checked) {
-        this.batchSelectedKeys = (this.watchlist || []).map(s => `${s.market}:${s.symbol}`)
+        this.batchSelectedKeys = (this.visibleWatchlist || []).map(s => `${s.market}:${s.symbol}`)
       } else {
         this.batchSelectedKeys = []
       }
@@ -1792,6 +1807,8 @@ export default {
     },
     getMarketColor (market) {
       const colors = {
+        'TWStock': '#08979c',
+        'tws': '#08979c',
         'USStock': 'green',
         'CNStock': 'blue',
         'HKStock': 'geekblue',
@@ -2078,7 +2095,8 @@ export default {
       try {
         const res = await getWatchlist({ userid: this.userId })
         if (res && res.code === 1 && res.data) {
-          this.watchlist = res.data.map(item => ({
+          const rows = this.embedded ? res.data.filter(item => TW_MARKET_VALUES.has(item.market)) : res.data
+          this.watchlist = rows.map(item => ({
             ...item,
             price: 0,
             change: 0,
@@ -2154,6 +2172,12 @@ export default {
     // string when the pair is implausible, or '' when it looks OK.
     _validateWatchlistPair (market, symbol) {
       if (!market || !symbol) return 'Missing market or symbol'
+      if (this.embedded && !TW_MARKET_VALUES.has(market)) {
+        return 'AI资产分析页面当前仅保留台股标的。'
+      }
+      if (TW_MARKET_VALUES.has(market) && !/^(TW)?\d{4,6}(\.(TW|TWO|TWSE|TPEX))?$/i.test(symbol)) {
+        return '请输入台股代码，例如 2330、2357 或 6290。'
+      }
       // Pure 6-digit codes are CN A-shares and must not go to Crypto / US / etc.
       if (/^\d{6}$/.test(symbol) && market !== 'CNStock') {
         return `"${symbol}" 看起来是 A 股代码，市场应选择 CNStock 而不是 ${market}。 / "${symbol}" looks like a CN A-share; choose CNStock instead of ${market}.`
@@ -2431,41 +2455,44 @@ export default {
       }
     },
     getMarketName (market) {
+      if (TW_MARKET_VALUES.has(market)) return '台股'
       return this.$t(`dashboard.analysis.market.${market}`) || market
     },
     formatNumber (num) {
       if (typeof num === 'string') return num
       return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     },
+    defaultMarketTypes () {
+      const all = [
+        TW_MARKET_TYPE,
+        { value: 'USStock', i18nKey: 'dashboard.analysis.market.USStock' },
+        { value: 'CNStock', i18nKey: 'dashboard.analysis.market.CNStock' },
+        { value: 'HKStock', i18nKey: 'dashboard.analysis.market.HKStock' },
+        { value: 'Crypto', i18nKey: 'dashboard.analysis.market.Crypto' },
+        { value: 'Forex', i18nKey: 'dashboard.analysis.market.Forex' },
+        { value: 'Futures', i18nKey: 'dashboard.analysis.market.Futures' }
+      ]
+      return this.embedded ? [TW_MARKET_TYPE] : all
+    },
     async loadMarketTypes () {
       try {
         const res = await getMarketTypes()
         if (res && res.code === 1 && res.data && Array.isArray(res.data)) {
-          this.marketTypes = res.data.map(item => ({
+          const rows = res.data.map(item => ({
             value: item.value,
             i18nKey: item.i18nKey || `dashboard.analysis.market.${item.value}`
           }))
+          this.marketTypes = this.embedded ? rows.filter(item => TW_MARKET_VALUES.has(item.value)) : rows
         } else {
-          this.marketTypes = [
-            { value: 'USStock', i18nKey: 'dashboard.analysis.market.USStock' },
-            { value: 'CNStock', i18nKey: 'dashboard.analysis.market.CNStock' },
-            { value: 'HKStock', i18nKey: 'dashboard.analysis.market.HKStock' },
-            { value: 'Crypto', i18nKey: 'dashboard.analysis.market.Crypto' },
-            { value: 'Forex', i18nKey: 'dashboard.analysis.market.Forex' },
-            { value: 'Futures', i18nKey: 'dashboard.analysis.market.Futures' }
-          ]
+          this.marketTypes = this.defaultMarketTypes()
         }
       } catch (error) {
-        this.marketTypes = [
-          { value: 'USStock', i18nKey: 'dashboard.analysis.market.USStock' },
-          { value: 'CNStock', i18nKey: 'dashboard.analysis.market.CNStock' },
-          { value: 'HKStock', i18nKey: 'dashboard.analysis.market.HKStock' },
-          { value: 'Crypto', i18nKey: 'dashboard.analysis.market.Crypto' },
-          { value: 'Forex', i18nKey: 'dashboard.analysis.market.Forex' },
-          { value: 'Futures', i18nKey: 'dashboard.analysis.market.Futures' }
-        ]
+        this.marketTypes = this.defaultMarketTypes()
       }
 
+      if (this.embedded && this.marketTypes.length === 0) {
+        this.marketTypes = [TW_MARKET_TYPE]
+      }
       if (this.marketTypes.length > 0 && !this.selectedMarketTab) {
         this.selectedMarketTab = this.marketTypes[0].value
       }
@@ -2541,6 +2568,21 @@ export default {
 
 .ai-analysis-container.embedded .top-index-bar {
   margin-top: 6px;
+}
+
+.ai-analysis-container.embedded .main-body.embedded-main-body {
+  padding-top: 12px;
+}
+
+.ai-analysis-container.embedded .right-panel {
+  min-height: 620px;
+}
+
+.ai-analysis-container.embedded .wl-market {
+  color: #006d75;
+  background: #e6fffb;
+  border: 1px solid #87e8de;
+  font-weight: 700;
 }
 
 // 全宽主内容

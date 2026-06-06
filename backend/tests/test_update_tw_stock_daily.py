@@ -54,10 +54,10 @@ def _validation(symbol: str = "2330", *, match: bool = True, checked: bool = Tru
     )
 
 
-def test_parse_symbols_splits_commas_newlines_and_dedupes():
-    symbols = update_tw_stock_daily.parse_symbols(["2330, 0050", "2330\n0056", "", " 00878 "])
+def test_parse_symbols_splits_commas_newlines_normalizes_and_dedupes():
+    symbols = update_tw_stock_daily.parse_symbols(["TW2330, 0050.TW", "TWSE:2330\nTPEX:6488", "", " 00878 "])
 
-    assert symbols == ["2330", "0050", "0056", "00878"]
+    assert symbols == ["2330", "0050", "6488", "00878"]
 
 
 def test_load_symbols_from_file_skips_blanks_comments_and_dedupes_lines(tmp_path):
@@ -243,6 +243,10 @@ def test_run_workflow_can_skip_corporate_actions(monkeypatch):
         "archive_corporate_action_symbols",
         lambda symbols, start, end: (_ for _ in ()).throw(AssertionError("corporate actions should not run")),
     )
+    monkeypatch.setattr(update_tw_stock_daily, "archive_institutional_symbols", lambda symbols, start, end: [])
+    monkeypatch.setattr(update_tw_stock_daily, "archive_margin_symbols", lambda symbols, start, end: [])
+    monkeypatch.setattr(update_tw_stock_daily, "archive_monthly_revenue_symbols", lambda symbols, start, end: [])
+    monkeypatch.setattr(update_tw_stock_daily, "archive_valuation_symbols", lambda symbols, start, end: [])
 
     report = update_tw_stock_daily.run_workflow(
         symbols=["2330"],
@@ -264,6 +268,9 @@ def test_run_workflow_can_skip_institutional_trades(monkeypatch):
         "archive_institutional_symbols",
         lambda symbols, start, end: (_ for _ in ()).throw(AssertionError("institutional should not run")),
     )
+    monkeypatch.setattr(update_tw_stock_daily, "archive_margin_symbols", lambda symbols, start, end: [])
+    monkeypatch.setattr(update_tw_stock_daily, "archive_monthly_revenue_symbols", lambda symbols, start, end: [])
+    monkeypatch.setattr(update_tw_stock_daily, "archive_valuation_symbols", lambda symbols, start, end: [])
 
     report = update_tw_stock_daily.run_workflow(
         symbols=["2330"],
@@ -286,6 +293,8 @@ def test_run_workflow_can_skip_margin_trading(monkeypatch):
         "archive_margin_symbols",
         lambda symbols, start, end: (_ for _ in ()).throw(AssertionError("margin should not run")),
     )
+    monkeypatch.setattr(update_tw_stock_daily, "archive_monthly_revenue_symbols", lambda symbols, start, end: [])
+    monkeypatch.setattr(update_tw_stock_daily, "archive_valuation_symbols", lambda symbols, start, end: [])
 
     report = update_tw_stock_daily.run_workflow(
         symbols=["2330"],
@@ -309,6 +318,7 @@ def test_run_workflow_can_skip_monthly_revenue(monkeypatch):
         "archive_monthly_revenue_symbols",
         lambda symbols, start, end: (_ for _ in ()).throw(AssertionError("monthly revenue should not run")),
     )
+    monkeypatch.setattr(update_tw_stock_daily, "archive_valuation_symbols", lambda symbols, start, end: [])
 
     report = update_tw_stock_daily.run_workflow(
         symbols=["2330"],

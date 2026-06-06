@@ -66,6 +66,27 @@
 
     <!-- 指标网格（市场模式） -->
     <template v-if="activeTab === 'market'">
+      <div class="tw-baseline-panel">
+        <div class="tw-baseline-head">
+          <div>
+            <div class="tw-baseline-kicker">台股模板</div>
+            <h3>台股日线指标基础模板</h3>
+          </div>
+          <a-button type="primary" @click="goToTwIndicatorIde">
+            <a-icon type="code" />
+            到指标 IDE
+          </a-button>
+        </div>
+        <div class="tw-baseline-grid">
+          <div v-for="item in twBaselineIndicators" :key="item.key" class="tw-baseline-card">
+            <div class="tw-baseline-card-title">{{ item.name }}</div>
+            <div class="tw-baseline-card-desc">{{ item.desc }}</div>
+            <div class="tw-baseline-card-tags">
+              <a-tag v-for="tag in item.tags" :key="tag" color="blue">{{ tag }}</a-tag>
+            </div>
+          </div>
+        </div>
+      </div>
       <a-spin :spinning="loading">
         <div v-if="indicators.length === 0 && !loading" class="empty-state">
           <a-empty :description="$t('community.noIndicators')">
@@ -362,6 +383,30 @@ export default {
       reviewingIndicator: null
     }
   },
+  computed: {
+    twBaselineIndicators () {
+      return [
+        {
+          key: 'ma-cross',
+          name: '均线交叉',
+          desc: '用 20/60 日均线判断中期趋势，适合先做日线只读回测。',
+          tags: ['趋势', '日线', '只读回测']
+        },
+        {
+          key: 'rsi-risk',
+          name: 'RSI 风险温度',
+          desc: '观察过热、过冷和背离，适合作为人工复盘的风险过滤器。',
+          tags: ['风险', '复盘', '辅助判断']
+        },
+        {
+          key: 'volume-breakout',
+          name: '量价突破',
+          desc: '结合成交量放大与区间突破，适合和 Top30/Top50 榜单交叉验证。',
+          tags: ['量价', '突破', '榜单验证']
+        }
+      ]
+    }
+  },
   watch: {
     showMyPurchases (val) {
       if (val) {
@@ -470,6 +515,17 @@ export default {
     goToUse () {
       this.showMyPurchases = false
       this.$router.push('/indicator-ide')
+    },
+
+    goToTwIndicatorIde () {
+      this.$router.push({
+        path: '/indicator-ide',
+        query: {
+          market: 'TWStock',
+          symbol: '2330',
+          template: 'tw-ma-cross'
+        }
+      })
     },
 
     formatDate (dateStr) {
@@ -687,6 +743,68 @@ export default {
     }
   }
 
+  .tw-baseline-panel {
+    margin-bottom: 18px;
+    padding: 18px;
+    background: #ffffff;
+    border: 1px solid #e8edf3;
+    border-radius: 8px;
+  }
+
+  .tw-baseline-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+
+    h3 {
+      margin: 2px 0 0;
+      font-size: 18px;
+      line-height: 1.4;
+      color: rgba(0, 0, 0, 0.85);
+    }
+  }
+
+  .tw-baseline-kicker {
+    font-size: 12px;
+    line-height: 1.4;
+    color: #0f766e;
+    font-weight: 700;
+  }
+
+  .tw-baseline-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .tw-baseline-card {
+    min-height: 118px;
+    padding: 14px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  .tw-baseline-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: rgba(0, 0, 0, 0.86);
+  }
+
+  .tw-baseline-card-desc {
+    margin-top: 8px;
+    min-height: 40px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: rgba(0, 0, 0, 0.58);
+  }
+
+  .tw-baseline-card-tags {
+    margin-top: 10px;
+  }
+
   .indicator-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -894,6 +1012,29 @@ export default {
     }
   }
 
+  .tw-baseline-panel {
+    background: #1f1f1f;
+    border-color: #30363d;
+  }
+
+  .tw-baseline-head h3,
+  .tw-baseline-card-title {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  .tw-baseline-card {
+    background: #14181f;
+    border-color: #30363d;
+  }
+
+  .tw-baseline-card-desc {
+    color: rgba(255, 255, 255, 0.62);
+  }
+
+  .tw-baseline-kicker {
+    color: #5eead4;
+  }
+
   .empty-state,
   .pagination-wrapper {
     background: #1f1f1f;
@@ -1059,6 +1200,15 @@ export default {
         flex-wrap: wrap;
         justify-content: center;
       }
+    }
+
+    .tw-baseline-head {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .tw-baseline-grid {
+      grid-template-columns: 1fr;
     }
 
     .indicator-grid {

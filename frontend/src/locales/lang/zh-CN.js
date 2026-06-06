@@ -42,7 +42,8 @@ const locale = {
   'menu.dashboard.indicatorIde': '指标 IDE',
   'menu.dashboard.tradingBot': '交易机器人',
   'menu.dashboard.brokerAccounts': '实盘券商账户',
-  'menu.dashboard.twStockMonitor': '台股趋势监控',
+  'menu.dashboard.twStockMonitor': '台股研究',
+  'menu.dashboard.twStockSimAccount': '台股模拟账户',
   'menu.dashboard.scriptStrategies': 'Python 脚本策略',
   // ---- 交易机器人页 ----
   'trading-bot.pageTitle': '交易机器人',
@@ -1053,6 +1054,8 @@ const locale = {
   'dashboard.analysis.modal.addStock.willAutoFetchName': '系统将自动获取名称',
   'dashboard.analysis.modal.addStock.addDirectly': '直接添加',
   'dashboard.analysis.modal.addStock.nameWillBeFetched': '名称将在添加时自动获取',
+  'dashboard.analysis.market.TWStock': '台股',
+  'dashboard.analysis.market.tws': '台股',
   'dashboard.analysis.market.USStock': '美股',
   'dashboard.analysis.market.CNStock': 'A股',
   'dashboard.analysis.market.HKStock': 'H股',

@@ -83,6 +83,7 @@ export const asyncRouterMap = [
         path: '/trading-bot',
         name: 'TradingBot',
         component: () => import('@/views/trading-bot'),
+        hidden: true,
         meta: { title: 'menu.dashboard.tradingBot', keepAlive: true, icon: 'robot', permission: ['dashboard'] }
       },
       // 6. 实盘券商账户（Alpaca / IBKR / MT5 统一连接 + 账户/持仓/挂单）
@@ -90,14 +91,24 @@ export const asyncRouterMap = [
         path: '/broker-accounts',
         name: 'BrokerAccounts',
         component: () => import('@/views/broker-accounts'),
+        hidden: true,
         meta: { title: 'menu.dashboard.brokerAccounts', keepAlive: true, icon: 'bank', permission: ['dashboard'] }
       },
+      // 暂时隐藏实盘运维/券商连接类入口，保留路由供深链接和后续复用。
+      // 侧栏保留研究、指标、策略设计和台股模拟验证入口。
       // 台股趋势监控（研究提醒 / 人工复盘，不连接 broker，不下单）
       {
         path: '/tw-stock-monitor',
         name: 'TWStockMonitor',
         component: () => import('@/views/tw-stock-monitor'),
         meta: { title: 'menu.dashboard.twStockMonitor', keepAlive: true, icon: 'line-chart', permission: ['dashboard'] }
+      },
+      // 台股模拟账户（研究信号的历史与模拟验证）
+      {
+        path: '/tw-stock-sim-account',
+        name: 'TWStockSimAccount',
+        component: () => import('@/views/tw-stock-sim-account'),
+        meta: { title: 'menu.dashboard.twStockSimAccount', keepAlive: true, icon: 'wallet', permission: ['dashboard'] }
       },
       // 旧路由兼容：图表与指标 → 指标 IDE
       {

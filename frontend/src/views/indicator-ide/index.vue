@@ -73,6 +73,17 @@
                 {{ $t('indicatorIde.devGuide') }} <a-icon type="arrow-right" />
               </a>
             </div>
+            <div v-if="market === 'TWStock'" class="tw-ide-baseline-panel">
+              <div class="tw-ide-baseline-main">
+                <div class="tw-ide-baseline-kicker">台股日线模板</div>
+                <div class="tw-ide-baseline-title">台股日线研究模板</div>
+                <div class="tw-ide-baseline-desc">当前模板用于指标开发、K 线叠加和只读回测，不连接券商、不提交模拟或实盘订单。</div>
+              </div>
+              <a-button size="small" type="primary" @click="applyTwBaselineTemplate">
+                <a-icon type="file-text" />
+                加载均线模板
+              </a-button>
+            </div>
             <a-alert
               v-if="showPurchasedMarketHint"
               type="info"
@@ -1528,7 +1539,29 @@ const DATE_PRESETS = [
 ]
 
 /** 与指标分析 / AI 资产分析一致的市场列表（含 A 股、H 股、预测市场） */
-const IDE_ADD_MARKET_KEYS = ['Crypto', 'USStock', 'CNStock', 'HKStock', 'Forex', 'Futures']
+const IDE_ADD_MARKET_KEYS = ['TWStock', 'Crypto', 'USStock', 'CNStock', 'HKStock', 'Forex', 'Futures']
+
+const TW_BASELINE_CODE = `my_indicator_name = "TWStock MA Cross Baseline"
+my_indicator_description = "台股日线均线交叉基础模板，仅用于研究和只读回测。"
+# @strategy entryPct 1
+# @strategy tradeDirection long
+
+df = df.copy()
+fast = SMA(close, 20)
+slow = SMA(close, 60)
+buy_raw = CROSSOVER(fast, slow)
+sell_raw = CROSSUNDER(fast, slow)
+df['buy'] = buy_raw.fillna(False).astype(bool)
+df['sell'] = sell_raw.fillna(False).astype(bool)
+output = {
+    'name': my_indicator_name,
+    'plots': [
+        {'name': 'MA20', 'data': fast.fillna(0).tolist(), 'overlay': True},
+        {'name': 'MA60', 'data': slow.fillna(0).tolist(), 'overlay': True},
+    ],
+    'signals': []
+}
+`
 
 function purchasedMarketHintStorageKey (userId) {
   const u = userId != null && userId !== '' ? String(userId) : '0'
@@ -2241,6 +2274,7 @@ export default {
     await this.loadWatchlist()
     this.restoreIdeUiState()
     this.autoSelectFirstIndicator()
+    this.applyRouteBaselineContext()
   },
   mounted () {
     this._fullscreenListener = () => this.onGlobalFullscreenChange()
@@ -2467,6 +2501,37 @@ export default {
     },
     serializeChartIndicators () {
       return this.normalizePersistedChartIndicators(this.activeIndicators)
+    },
+
+    applyRouteBaselineContext () {
+      const q = this.$route && this.$route.query ? this.$route.query : {}
+      if (q.market !== 'TWStock' && q.template !== 'tw-ma-cross') return
+      this.market = 'TWStock'
+      this.symbol = q.symbol ? String(q.symbol) : '2330'
+      this.timeframe = '1D'
+      this.selectedWatchlistKey = `TWStock:${this.symbol}`
+      this.initialCapital = 1000000
+      this.commission = 0.2925
+      this.slippage = 0.1
+      this.tradeDirection = 'long'
+      this.enableMtf = false
+      if (q.template === 'tw-ma-cross' || !this.currentCode) {
+        this.applyTwBaselineTemplate({ silent: true })
+      }
+    },
+
+    applyTwBaselineTemplate (options = {}) {
+      this.currentCode = TW_BASELINE_CODE
+      this.codeDirty = true
+      this.selectedIndicatorId = undefined
+      this.chartVisibleIndicatorIds = []
+      if (this.cmInstance) {
+        this.cmInstance.setValue(this.currentCode)
+      }
+      this.syncTradeUiFromStrategyCode(this.currentCode, { silent: true })
+      if (!options.silent) {
+        this.$message.success('已加载台股均线模板')
+      }
     },
 
     async loadIndicators () {
@@ -4950,7 +5015,7 @@ export default {
       }
     },
     getMarketColor (m) {
-      const colors = { Crypto: 'orange', USStock: 'blue', CNStock: 'magenta', HKStock: 'red', Forex: 'green', Futures: 'purple' }
+      const colors = { TWStock: 'cyan', Crypto: 'orange', USStock: 'blue', CNStock: 'magenta', HKStock: 'red', Forex: 'green', Futures: 'purple' }
       return colors[m] || 'default'
     },
     marketLabel (m) {
@@ -5384,6 +5449,36 @@ export default {
   margin: 0 0 10px 0;
   border-radius: 8px;
 }
+.tw-ide-baseline-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 10px 0 12px;
+  padding: 12px 14px;
+  border: 1px solid #b7ebd7;
+  border-radius: 8px;
+  background: #f6fffb;
+}
+.tw-ide-baseline-kicker {
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: #0f766e;
+}
+.tw-ide-baseline-title {
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.85);
+}
+.tw-ide-baseline-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(0, 0, 0, 0.56);
+}
+
 .ide-watchlist-add-row {
   text-align: center;
   color: @primary-color;
@@ -6210,6 +6305,11 @@ export default {
       }
     }
   }
+  .tw-ide-baseline-panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .chart-panel-watchlist-select {
     width: 100%;
     min-width: 220px;
@@ -7840,6 +7940,7 @@ body.realdark .backtest-panel-toolbar {
   vertical-align: middle;
 }
 /deep/ .wl-mkt-crypto { background: #fa8c16; }
+/deep/ .wl-mkt-twstock { background: #13c2c2; }
 /deep/ .wl-mkt-usstock { background: #1890ff; }
 /deep/ .wl-mkt-cnstock { background: #eb2f96; }
 /deep/ .wl-mkt-hkstock { background: #f5222d; }
@@ -7851,6 +7952,20 @@ body.realdark .backtest-panel-toolbar {
 // ===== Dark Theme =====
 &.theme-dark {
   background: #141414;
+  .tw-ide-baseline-panel {
+    background: #10201c;
+    border-color: #164e45;
+  }
+  .tw-ide-baseline-title {
+    color: rgba(255, 255, 255, 0.88);
+  }
+  .tw-ide-baseline-desc {
+    color: rgba(255, 255, 255, 0.62);
+  }
+  .tw-ide-baseline-kicker {
+    color: #5eead4;
+  }
+
   .ide-code-drawer-handle {
     color: rgba(255, 255, 255, 0.55);
     background: linear-gradient(180deg, #252525 0%, #1c1c1c 100%);

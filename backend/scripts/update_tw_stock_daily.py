@@ -64,15 +64,27 @@ from scripts.validate_tw_stock_daily import (  # noqa: E402
 DEFAULT_SYMBOLS = ("2330", "0050", "0056", "00878")
 
 
+def normalize_symbol(raw: str) -> str:
+    symbol = str(raw or "").strip().upper()
+    if symbol.startswith("TWSE:") or symbol.startswith("TPEX:"):
+        symbol = symbol.split(":", 1)[1]
+    if symbol.startswith("TW") and symbol[2:].isdigit():
+        symbol = symbol[2:]
+    for suffix in (".TWSE", ".TPEX", ".TWO", ".TW"):
+        if symbol.endswith(suffix):
+            symbol = symbol[: -len(suffix)]
+            break
+    return symbol
+
+
 def parse_symbols(raw_symbols: Sequence[str]) -> List[str]:
     out: List[str] = []
     for raw in raw_symbols or []:
         for part in str(raw or "").replace("\n", ",").split(","):
-            symbol = part.strip()
+            symbol = normalize_symbol(part)
             if symbol and symbol not in out:
                 out.append(symbol)
     return out
-
 
 def load_symbols_from_file(path: str) -> List[str]:
     if not path:

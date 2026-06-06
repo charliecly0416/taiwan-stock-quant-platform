@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -60,6 +61,7 @@ class OptionCNormalPublishConfig:
     qlib_cwd: Path = Path(DEFAULT_QLIB_CWD)
     wrapper_script: str = WRAPPER_SCRIPT
     latest_signal: Path = Path(DEFAULT_LATEST_SIGNAL)
+    python_executable: str = os.getenv("TW_QLIB_OPTION_C_PYTHON") or sys.executable
     timeout_seconds: int = TIMEOUT_SECONDS
     lock_stale_seconds: int = TIMEOUT_SECONDS + 120
 
@@ -77,6 +79,7 @@ class OptionCNormalPublishConfig:
             qlib_cwd=Path(os.getenv("TW_QLIB_OPTION_C_CWD") or DEFAULT_QLIB_CWD),
             wrapper_script=os.getenv("TW_QLIB_OPTION_C_WRAPPER_SCRIPT") or WRAPPER_SCRIPT,
             latest_signal=Path(os.getenv("TW_QLIB_OPTION_C_LATEST_SIGNAL") or DEFAULT_LATEST_SIGNAL),
+            python_executable=os.getenv("TW_QLIB_OPTION_C_PYTHON") or sys.executable,
             timeout_seconds=int(os.getenv("TW_QLIB_OPTION_C_NORMAL_TIMEOUT_SECONDS") or TIMEOUT_SECONDS),
         )
 
@@ -257,7 +260,7 @@ class QlibOptionCNormalPublishGate:
 
 
     def fixed_runner_argv(self, asof: str) -> list[str]:
-        return ["python", self.config.wrapper_script, "--asof", asof, "--normal"]
+        return [self.config.python_executable, self.config.wrapper_script, "--asof", asof, "--normal"]
 
     def _run_publish(self, *, asof: str, dry_run_job_id: str, gate: Dict[str, Any]) -> Dict[str, Any]:
         job_id = self._normal_job_id(asof)

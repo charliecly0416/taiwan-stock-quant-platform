@@ -210,6 +210,7 @@ def test_get_kline_prefers_local_archive_when_available(monkeypatch):
     assert [bar["close"] for bar in bars] == [104.0, 107.0]
     sql, params = fake_db.cursor_obj.executed[0]
     assert "FROM qd_tw_stock_daily_bars" in sql
+    assert "source IN ('finmind', 'yahoo_adjusted')" in sql
     assert params[0] == "2330"
 
 

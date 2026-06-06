@@ -38,6 +38,14 @@ const divergenceItems = [agentItem('2303', 3, 0.221, 'downtrend', 'model_trend_d
 const reviewItems = [agentItem('2603', 4, 0.111, null, 'data_review_required', '数据异常，暂不纳入判断', ['stale_daily_bar'])]
 const allItems = focusItems.concat(divergenceItems, reviewItems)
 
+function agentSkills (intent, blocked = false) {
+  const skills = [{ name: 'tw-stock-safety-boundary-review', title: 'Safety Boundary Review', mode: 'guardrail_policy', status: 'applied' }]
+  if (blocked) return skills
+  if (intent === 'freshness_and_data_basis') skills.push({ name: 'tw-stock-data-freshness-diagnosis', title: 'Data Freshness Diagnosis', mode: 'readonly_context', status: 'invoked' })
+  if (intent !== 'freshness_and_data_basis') skills.push({ name: 'tw-stock-research-context-analyst', title: 'Research Context Analyst', mode: 'readonly_context', status: 'invoked' })
+  return skills
+}
+
 function agentContext () {
   return {
     ok: true,
@@ -61,10 +69,10 @@ function chatPayload (question) {
   if (q.includes('API error')) return { error: true }
   if (q.includes('items 为空')) return baseChat('research_summary', '本次用于验证 items 为空状态，回答仍可见。', [], ['mock_warning_non_empty'])
   if (q.includes('下单') || q.includes('下單')) {
-    return { ok: true, mode: 'disabled', intent: 'place_order', blocked: true, answer: '该模块只提供台股研究信息，不支持下单、仓位、自动交易、qlib 运维或收益承诺。', citations: [], items: [], warnings: ['blocked_research_boundary'], research_only_disclaimer: disclaimer, context_digest: { status: 'blocked', intent: 'place_order', qlib_asof: '2026-06-01', qlib_run_id: latestRunId, freshness_status: 'fresh' }, trading: { orders_enabled: false, connects_to_broker: false, research_signal_not_order: true } }
+    return { ok: true, mode: 'disabled', intent: 'place_order', blocked: true, answer: '该模块只提供台股研究信息，不支持下单、仓位、自动交易、qlib 运维或收益承诺。', citations: [], items: [], warnings: ['blocked_research_boundary'], research_only_disclaimer: disclaimer, context_digest: { status: 'blocked', intent: 'place_order', qlib_asof: '2026-06-01', qlib_run_id: latestRunId, freshness_status: 'fresh' }, trading: { orders_enabled: false, connects_to_broker: false, research_signal_not_order: true }, invoked_skills: agentSkills('place_order', true) }
   }
   if (q.includes('仓位') || q.includes('倉位')) {
-    return { ok: true, mode: 'disabled', intent: 'target_position', blocked: true, answer: '该模块只提供台股研究信息，不支持下单、仓位、自动交易、qlib 运维或收益承诺。', citations: [], items: [], warnings: ['blocked_research_boundary'], research_only_disclaimer: disclaimer, context_digest: { status: 'blocked', intent: 'target_position', qlib_asof: '2026-06-01', qlib_run_id: latestRunId, freshness_status: 'fresh' }, trading: { orders_enabled: false, connects_to_broker: false, research_signal_not_order: true } }
+    return { ok: true, mode: 'disabled', intent: 'target_position', blocked: true, answer: '该模块只提供台股研究信息，不支持下单、仓位、自动交易、qlib 运维或收益承诺。', citations: [], items: [], warnings: ['blocked_research_boundary'], research_only_disclaimer: disclaimer, context_digest: { status: 'blocked', intent: 'target_position', qlib_asof: '2026-06-01', qlib_run_id: latestRunId, freshness_status: 'fresh' }, trading: { orders_enabled: false, connects_to_broker: false, research_signal_not_order: true }, invoked_skills: agentSkills('target_position', true) }
   }
   if (q.includes('2330')) {
     return baseChat('single_symbol_metrics', '2330 的 qlib rank=1，trend=uptrend，category=focus_watch；建议关注并人工复盘。', focusItems.slice(0, 1), [])
@@ -93,7 +101,8 @@ function baseChat (intent, answer, items, warnings) {
     warnings,
     research_only_disclaimer: disclaimer,
     context_digest: { status: 'accepted', qlib_asof: '2026-06-01', qlib_run_id: latestRunId, target_horizon: 'next_trading_day_research_ranking', freshness_status: 'fresh', item_count: items.length },
-    trading: { orders_enabled: false, connects_to_broker: false, research_signal_not_order: true }
+    trading: { orders_enabled: false, connects_to_broker: false, research_signal_not_order: true },
+    invoked_skills: agentSkills(intent, false)
   }
 }
 
@@ -163,6 +172,18 @@ page.on('request', request => {
 await page.route('**/api/auth/info**', async route => {
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse({ id: 1, username: 'agent-e2e', nickname: 'Agent E2E', is_demo: false, role: { id: 'default', permissions: ['dashboard'] } })) })
 })
+await page.route('**/api/auth/security-config**', async route => {
+  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse({ turnstile_enabled: false, oauth_google_enabled: false, oauth_github_enabled: false })) })
+})
+await page.route('**/api/strategies/notifications/unread-count**', async route => {
+  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse({ count: 0 })) })
+})
+await page.route('**/api/settings/brand-config**', async route => {
+  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse({ app_name: 'QuantDinger', app_version: 'e2e', copyright: 'QuantDinger E2E' })) })
+})
+await page.route('**/api/policy/broker-market**', async route => {
+  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse({ ok: true, policy: 'disabled_in_e2e' })) })
+})
 await page.route('**/api/tw-stock/agent/context**', async route => {
   agentContextCount += 1
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse(agentContext())) })
@@ -192,8 +213,9 @@ await page.route('**/api/tw-stock/quant/signals/latest**', async route => route.
 await page.route('**/api/tw-stock/quant/signals/runs**', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse({ items: [], count: 0 })) }))
 await page.route('**/api/tw-stock/quant/ops/option-c/scheduler**', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse({ ok: true, enabled: false, mode: 'disabled' })) }))
 await page.route('**/api/tw-stock/quant/ops/option-c/latest**', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse({ ok: true, status: 'ok', job: null })) }))
+await page.route('**/api/tw-stock/quant/ops/daily-auto-update/status**', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiResponse({ ok: true, enabled: false, status: 'disabled', warnings: [] })) }))
 
-await page.addInitScript(() => {
+const seedAgentAuth = () => {
   const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000
   const info = { id: 1, username: 'agent-e2e', nickname: 'Agent E2E', is_demo: false, role: { id: 'default', permissions: ['dashboard'] } }
   const roles = [{ id: 'default', permissionList: ['dashboard'] }]
@@ -204,8 +226,11 @@ await page.addInitScript(() => {
   window.localStorage.setItem('__storejs_expire_mixin_User-Info', String(expiresAt))
   window.localStorage.setItem('__storejs_expire_mixin_User-Roles', String(expiresAt))
   window.localStorage.setItem('lang', 'zh-TW')
-})
+}
 
+await page.addInitScript(seedAgentAuth)
+await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
+await page.evaluate(seedAgentAuth)
 await page.goto(`${baseUrl}/#/tw-stock-monitor`, { waitUntil: 'domcontentloaded' })
 try {
   await page.waitForSelector('.tw-stock-agent-panel')
@@ -223,8 +248,16 @@ try {
   console.error('tw-stock-agent e2e diagnostic:', JSON.stringify(diagnostic, null, 2))
   throw error
 }
-await page.waitForFunction(() => document.body.innerText.includes('台股研究助手'))
-await page.waitForFunction(() => document.body.innerText.includes('qlib asof') && document.body.innerText.includes('2026-06-01'))
+try {
+  await page.waitForFunction(() => document.body.innerText.includes('台股研究助手'))
+  await page.waitForFunction(() => document.body.innerText.includes('qlib asof') && document.body.innerText.includes('2026-06-01'))
+} catch (error) {
+  const text = await page.locator('.tw-stock-agent-panel').innerText().catch(() => '')
+  const storage = await page.evaluate(() => Object.fromEntries(Object.keys(window.localStorage).map(key => [key, window.localStorage.getItem(key)]))).catch(() => ({}))
+  const body = await page.evaluate(() => document.body.innerText.slice(0, 2000)).catch(() => '')
+  console.error('tw-stock-agent initial text diagnostic:', JSON.stringify({ panel: text.slice(0, 1200), storage, requests: allRequests.slice(-80), consoleMessages: consoleMessages.slice(-20), pageErrors, body }, null, 2))
+  throw error
+}
 await page.screenshot({ path: `${screenshotDir}/agent-initial-context.png`, fullPage: true })
 
 captureAgentPhase = true
@@ -265,7 +298,7 @@ await askAndAssert({ question: '请返回 warnings 非空', expect: 'mock_warnin
 await askAndAssert({ question: '请验证 items 为空', expect: '本次回答没有附带项目列表。' })
 
 const normalPanelText = await agent.innerText()
-for (const required of ['台股研究助手', '引用来源', 'warnings', 'qlib asof', 'run_id', 'freshness']) {
+for (const required of ['台股研究助手', '引用来源', 'warnings', 'skills', 'Safety Boundary Review', 'qlib asof', 'run_id', 'freshness']) {
   assert.ok(normalPanelText.includes(required), `agent panel missing ${required}`)
 }
 for (const forbidden of ['交易按钮', '下单按钮', '仓位按钮', '立即买入', '立即卖出', 'OpenAI API Key']) {

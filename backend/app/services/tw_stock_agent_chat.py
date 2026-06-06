@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from app.services.tw_stock_agent_context import TWStockAgentContextService
 from app.services.tw_stock_agent_guardrails import BLOCKED_ANSWER, RESEARCH_ONLY_DISCLAIMER, TWStockAgentGuardrails
 from app.services.tw_stock_agent_openai import TWStockAgentOpenAIAdapter
+from app.services.tw_stock_agent_skills import TWStockAgentSkillRegistry
 from app.services.tw_stock_qlib_option_c import research_only_trading_flags
 
 
@@ -47,26 +48,29 @@ class TWStockAgentChatService:
         context_service: Optional[TWStockAgentContextService] = None,
         openai_adapter: Optional[Any] = None,
         guardrails: Optional[TWStockAgentGuardrails] = None,
+        skill_registry: Optional[TWStockAgentSkillRegistry] = None,
     ) -> None:
         self.context_service = context_service or TWStockAgentContextService()
         self.openai_adapter = openai_adapter or TWStockAgentOpenAIAdapter()
         self.guardrails = guardrails or TWStockAgentGuardrails()
+        self.skill_registry = skill_registry or TWStockAgentSkillRegistry()
 
     def chat(self, *, question: str, symbol: str = "", max_items: int = 10) -> Dict[str, Any]:
         preview = self.context_service.preview(question=question, symbol=symbol, max_items=max_items)
+        invoked_skills = self.skill_registry.select(question=question, preview=preview)
         if preview.get("blocked"):
-            return self._from_preview(preview, mode="disabled")
+            return self._from_preview(preview, mode="disabled", invoked_skills=invoked_skills)
 
         status = self.openai_adapter.status()
         if not status.get("enabled"):
-            fallback = self._from_preview(preview, mode="disabled")
+            fallback = self._from_preview(preview, mode="disabled", invoked_skills=invoked_skills)
             fallback["warnings"] = self._merge_warnings(fallback.get("warnings"), [str(status.get("reason") or "openai_disabled")])
             return fallback
 
-        controlled_context = self._controlled_context(question=question, preview=preview)
+        controlled_context = self._controlled_context(question=question, preview=preview, invoked_skills=invoked_skills)
         result = self.openai_adapter.complete(controlled_context=controlled_context)
         if not result.get("ok"):
-            fallback = self._from_preview(preview, mode=str(result.get("mode") or status.get("mode") or "disabled"))
+            fallback = self._from_preview(preview, mode=str(result.get("mode") or status.get("mode") or "disabled"), invoked_skills=invoked_skills)
             fallback["warnings"] = self._merge_warnings(fallback.get("warnings"), [str(result.get("status") or "openai_error")])
             return fallback
 
@@ -74,15 +78,16 @@ class TWStockAgentChatService:
             content=str(result.get("content") or ""),
             preview=preview,
             mode=str(result.get("mode") or status.get("mode") or "openai"),
+            invoked_skills=invoked_skills,
         )
         if validated is not None:
             return validated
 
-        fallback = self._from_preview(preview, mode=str(result.get("mode") or status.get("mode") or "openai"))
+        fallback = self._from_preview(preview, mode=str(result.get("mode") or status.get("mode") or "openai"), invoked_skills=invoked_skills)
         fallback["warnings"] = self._merge_warnings(fallback.get("warnings"), ["model_output_invalid_fallback_to_preview"])
         return fallback
 
-    def _validate_model_content(self, *, content: str, preview: Dict[str, Any], mode: str) -> Optional[Dict[str, Any]]:
+    def _validate_model_content(self, *, content: str, preview: Dict[str, Any], mode: str, invoked_skills: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         try:
             parsed = json.loads(content)
         except Exception:
@@ -123,6 +128,7 @@ class TWStockAgentChatService:
                 "research_only_disclaimer": RESEARCH_ONLY_DISCLAIMER,
                 "context_digest": preview.get("context_digest") or {},
                 "trading": research_only_trading_flags(),
+                "invoked_skills": invoked_skills,
             }
 
         return {
@@ -137,9 +143,11 @@ class TWStockAgentChatService:
             "research_only_disclaimer": disclaimer,
             "context_digest": preview.get("context_digest") or {},
             "trading": research_only_trading_flags(),
+            "invoked_skills": invoked_skills,
         }
 
-    def _controlled_context(self, *, question: str, preview: Dict[str, Any]) -> Dict[str, Any]:
+    def _controlled_context(self, *, question: str, preview: Dict[str, Any], invoked_skills: List[Dict[str, Any]]) -> Dict[str, Any]:
+        skill_context = self.skill_registry.context_for_model(invoked_skills=invoked_skills)
         return {
             "intent": preview.get("intent"),
             "question": question,
@@ -150,10 +158,11 @@ class TWStockAgentChatService:
             "research_only_disclaimer": preview.get("research_only_disclaimer") or RESEARCH_ONLY_DISCLAIMER,
             "allowed_answer_style": ["建议关注", "建议回避", "人工复盘", "数据复核"],
             "blocked_operations": self.guardrails.blocked_intents,
+            **skill_context,
         }
 
     @staticmethod
-    def _from_preview(preview: Dict[str, Any], *, mode: str) -> Dict[str, Any]:
+    def _from_preview(preview: Dict[str, Any], *, mode: str, invoked_skills: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         return {
             "ok": bool(preview.get("ok")),
             "mode": mode,
@@ -166,6 +175,7 @@ class TWStockAgentChatService:
             "research_only_disclaimer": preview.get("research_only_disclaimer") or RESEARCH_ONLY_DISCLAIMER,
             "context_digest": preview.get("context_digest") or {},
             "trading": research_only_trading_flags(),
+            "invoked_skills": invoked_skills or [],
         }
 
     @classmethod

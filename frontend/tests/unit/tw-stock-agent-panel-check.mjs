@@ -22,8 +22,9 @@ for (const required of [
   'agentSuggestedQuestions',
   '今天 top30 是哪些？',
   '今天模型和趋势都支持的股票有哪些？',
-  '今天建议回避或人工复盘的股票有哪些？',
-  '2330 的指标是多少？',
+  '今天需要数据复核或人工复盘的股票有哪些？',
+  'const firstSymbol = top30.find',
+  "questions.push(String(firstSymbol.symbol) + ' 的指标是多少？')",
   '当前数据新鲜度和口径是什么？',
   'agentQuestion',
   'askTwStockAgent',
@@ -40,6 +41,9 @@ for (const required of [
   '仅供研究观察，不构成交易建议',
   'qlib score 是横截面排序分数',
   'agentWarnings',
+  'agentSkills',
+  'invoked_skills',
+  'skills',
   'agentItems',
   'quality_warnings',
   'cross_category',
@@ -66,16 +70,16 @@ const agentTemplate = agentTemplateMatch[0]
 for (const required of [
   'answer',
   'citations',
-  'warnings',
-  'qlib asof',
-  'run_id',
-  'freshness',
+  '提示',
+  '调用能力',
+  '数据日期',
+  '上下文状态',
+  '回答模式',
   'research-only',
   'deterministic fallback',
   'blocked',
-  'qlib score',
-  'trend',
-  'category'
+  '分数',
+  '排名'
 ]) {
   assert.ok(agentTemplate.includes(required), `agent template missing ${required}`)
 }

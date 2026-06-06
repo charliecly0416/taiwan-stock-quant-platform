@@ -11,6 +11,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -30,6 +31,7 @@ DEFAULT_QLIB_CWD = str(QLIB_PIPELINE_ROOT)
 DEFAULT_LATEST_SIGNAL = str(QLIB_PIPELINE_ROOT / "data_tw/experiments/option_c_daily_signal/latest_signal.json")
 DEFAULT_OPS_ROOT = "data_tw/ops/option_c_jobs"
 WRAPPER_SCRIPT = "examples/tw/run_option_c_daily_signal_option_c_provider.py"
+DEFAULT_PYTHON_EXECUTABLE = os.getenv("TW_QLIB_OPTION_C_PYTHON") or sys.executable
 TIMEOUT_SECONDS = 600
 TAIL_CHARS = 4000
 LOCK_FILENAME = "option_c_ops.lock"
@@ -69,6 +71,7 @@ class OptionCOpsConfig:
     qlib_cwd: Path
     ops_root: Path
     latest_signal: Path
+    python_executable: str = DEFAULT_PYTHON_EXECUTABLE
     timeout_seconds: int = TIMEOUT_SECONDS
     lock_stale_seconds: int = LOCK_STALE_SECONDS
     retention_max_jobs: int = RETENTION_MAX_JOBS
@@ -158,6 +161,7 @@ class QlibOptionCOpsRunner:
                 qlib_cwd=Path(os.getenv("QLIB_TW_OPTION_C_CWD") or DEFAULT_QLIB_CWD),
                 ops_root=ops_root,
                 latest_signal=Path(os.getenv("QLIB_TW_OPTION_C_LATEST_SIGNAL") or DEFAULT_LATEST_SIGNAL),
+                python_executable=os.getenv("TW_QLIB_OPTION_C_PYTHON") or sys.executable,
             )
         self.config = config
 
@@ -228,7 +232,7 @@ class QlibOptionCOpsRunner:
         return f"option_c_dry_run_{asof.replace('-', '')}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{digest}"
 
     def _argv(self, asof: str) -> list[str]:
-        return ["python", WRAPPER_SCRIPT, "--asof", asof, "--dry-run"]
+        return [self.config.python_executable, WRAPPER_SCRIPT, "--asof", asof, "--dry-run"]
 
     def _run_locked(self, asof: str, *, job_id: str) -> Dict[str, Any]:
         job_dir = self.config.ops_root / job_id
