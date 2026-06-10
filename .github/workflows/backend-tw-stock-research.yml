@@ -1,30 +1,6 @@
 name: Backend TWStock Research Stack
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - 'backend/app/routes/tw_stock.py'
-      - 'backend/app/services/tw_stock*.py'
-      - 'backend/app/data_sources/tw_stock.py'
-      - 'backend/scripts/*tw_stock*'
-      - 'backend/tests/test_tw_stock*'
-      - 'backend/tests/test_*tw_stock*'
-      - 'docs/TW_STOCK*'
-      - 'docs/TAIWAN_STOCK*'
-      - '.github/workflows/backend-tw-stock-research.yml'
-  pull_request:
-    branches: [main, master]
-    paths:
-      - 'backend/app/routes/tw_stock.py'
-      - 'backend/app/services/tw_stock*.py'
-      - 'backend/app/data_sources/tw_stock.py'
-      - 'backend/scripts/*tw_stock*'
-      - 'backend/tests/test_tw_stock*'
-      - 'backend/tests/test_*tw_stock*'
-      - 'docs/TW_STOCK*'
-      - 'docs/TAIWAN_STOCK*'
-      - '.github/workflows/backend-tw-stock-research.yml'
   workflow_dispatch:
 
 jobs:

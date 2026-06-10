@@ -1,32 +1,6 @@
 name: Frontend TWStock Monitor
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - 'frontend/src/api/tw-stock.js'
-      - 'frontend/src/views/tw-stock-monitor/**'
-      - 'frontend/src/config/router.config.js'
-      - 'frontend/src/locales/lang/*.js'
-      - 'frontend/tests/unit/tw-stock-*.mjs'
-      - 'frontend/package.json'
-      - 'frontend/pnpm-lock.yaml'
-      - 'frontend/vite.config.js'
-      - 'frontend/docs/TW_STOCK_MONITOR*.md'
-      - '.github/workflows/frontend-tw-stock-monitor.yml'
-  pull_request:
-    branches: [main, master]
-    paths:
-      - 'frontend/src/api/tw-stock.js'
-      - 'frontend/src/views/tw-stock-monitor/**'
-      - 'frontend/src/config/router.config.js'
-      - 'frontend/src/locales/lang/*.js'
-      - 'frontend/tests/unit/tw-stock-*.mjs'
-      - 'frontend/package.json'
-      - 'frontend/pnpm-lock.yaml'
-      - 'frontend/vite.config.js'
-      - 'frontend/docs/TW_STOCK_MONITOR*.md'
-      - '.github/workflows/frontend-tw-stock-monitor.yml'
   workflow_dispatch:
 
 concurrency:
