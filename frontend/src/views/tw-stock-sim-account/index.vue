@@ -176,6 +176,39 @@
             <a-tag color="orange">分歧进入人工复核</a-tag>
             <a-tag color="purple">MA/RSI/MACD/Bollinger 按需验证</a-tag>
           </div>
+          <div class="today-advice-panel">
+            <div class="today-advice-head">
+              <div>
+                <strong>今日模拟操作建议</strong>
+                <span>{{ selectedPolicyProfile.description }}</span>
+              </div>
+              <a-select v-model="strategyPolicyProfile" size="small" style="width: 180px">
+                <a-select-option v-for="item in strategyPolicyOptions" :key="item.key" :value="item.key">{{ item.label }}</a-select-option>
+              </a-select>
+            </div>
+            <a-alert
+              class="state-alert compact-alert"
+              type="info"
+              show-icon
+              :message="todayStrategyAdvice.summary"
+            />
+            <div v-if="todayStrategyAdvice.items.length" class="today-advice-list">
+              <div v-for="item in todayStrategyAdvice.items" :key="`advice-${item.side}-${item.symbol}`" class="today-advice-item">
+                <div class="today-advice-main">
+                  <a-tag :color="item.color">{{ item.sideLabel }}</a-tag>
+                  <strong>{{ item.symbol }}</strong>
+                  <span>{{ adviceQuantityText(item) }}</span>
+                  <span>{{ adviceAmountText(item) }}</span>
+                </div>
+                <div class="today-advice-reason">{{ item.reason }}</div>
+                <div class="strategy-actions">
+                  <a-button v-if="item.side !== 'hold' && item.quantity > 0" size="small" @click="prefillPolicyAdviceDraft(item)">填入模拟草稿</a-button>
+                  <a-button v-if="item.sourceItem && item.sourceItem.canValidate" size="small" :loading="validatingBacktestSymbol === item.symbol" @click="validateStrategyBacktest(item.sourceItem)">只读历史验证</a-button>
+                </div>
+              </div>
+            </div>
+            <div v-else class="empty-note">当前策略没有明确模拟动作，先观察。</div>
+          </div>
           <div class="module-grid">
             <div class="module-box">
               <div class="module-title">
@@ -234,15 +267,12 @@
                     <a-tag :color="item.matchColor">模拟匹配度 {{ item.confidence }}%</a-tag>
                   </div>
                   <div class="signal-tags">
-                    <a-tag color="blue">qlib #{{ item.rank }}</a-tag>
-                    <a-tag :color="item.trendColor">QuantDinger {{ item.trendText }}</a-tag>
-                    <a-tag :color="item.crossColor">交叉 {{ item.crossText }}</a-tag>
-                  </div>
-                  <div class="signal-tags">
-                    <a-tag :color="item.comboColor">组合 {{ item.comboLabel }}</a-tag>
+                    <a-tag :color="item.actionPlanColor">{{ item.actionPlanLabel }}</a-tag>
+                    <a-tag :color="item.positionRiskColor">位置 {{ item.positionRiskLabel }}</a-tag>
                     <a-tag :color="item.backtestColor">{{ item.backtestText }}</a-tag>
                   </div>
-                  <span>{{ item.reason }}</span>
+                  <div class="strategy-evidence-line">{{ item.strategyEvidence }}</div>
+                  <span>{{ item.strategySummary }}</span>
                   <div class="strategy-actions">
                     <a-button size="small" @click="prefillStrategyDraft(item, 'buy')">填入模拟草稿</a-button>
                     <a-button size="small" :loading="validatingBacktestSymbol === item.symbol" @click="validateStrategyBacktest(item)">只读历史验证</a-button>
@@ -252,7 +282,7 @@
               <div v-else class="empty-note">Top30 暂无未持有标的</div>
             </div>
             <div class="strategy-box">
-              <div class="strategy-title"><strong>风险复盘候选</strong><span>当前持仓，按排名掉队和技术转弱程度排序</span></div>
+              <div class="strategy-title"><strong>模拟卖出候选</strong><span>当前持仓，按排名掉队和技术转弱程度排序</span></div>
               <div v-if="strategySellCandidates.length" class="strategy-list">
                 <div v-for="item in strategySellCandidates" :key="`sell-${item.symbol}`" class="strategy-item">
                   <div class="strategy-item-head">
@@ -260,15 +290,12 @@
                     <a-tag :color="item.riskColor">风险复盘 {{ item.confidence }}%</a-tag>
                   </div>
                   <div class="signal-tags">
-                    <a-tag :color="item.rank < 999 ? 'blue' : 'orange'">{{ item.rankText }}</a-tag>
-                    <a-tag :color="item.trendColor">QuantDinger {{ item.trendText }}</a-tag>
-                    <a-tag :color="item.crossColor">交叉 {{ item.crossText }}</a-tag>
-                  </div>
-                  <div class="signal-tags">
-                    <a-tag :color="item.comboColor">组合 {{ item.comboLabel }}</a-tag>
+                    <a-tag :color="item.actionPlanColor">{{ item.actionPlanLabel }}</a-tag>
+                    <a-tag :color="item.positionRiskColor">位置 {{ item.positionRiskLabel }}</a-tag>
                     <a-tag :color="item.backtestColor">{{ item.backtestText }}</a-tag>
                   </div>
-                  <span>{{ item.reason }}</span>
+                  <div class="strategy-evidence-line">{{ item.strategyEvidence }}</div>
+                  <span>{{ item.strategySummary }}</span>
                   <div class="strategy-actions">
                     <a-button size="small" @click="prefillStrategyDraft(item, 'sell')">填入风险复盘草稿</a-button>
                     <a-button size="small" :loading="validatingBacktestSymbol === item.symbol" @click="validateStrategyBacktest(item)">只读历史验证</a-button>
@@ -278,7 +305,7 @@
               <div v-else class="empty-note">当前账户暂无持仓</div>
             </div>
             <div class="strategy-box">
-              <div class="strategy-title"><strong>继续观察/保留</strong><span>排名或技术确认仍可接受的持仓</span></div>
+              <div class="strategy-title"><strong>继续保留观察</strong><span>排名或技术确认仍可接受的持仓</span></div>
               <div v-if="strategyHoldCandidates.length" class="strategy-list">
                 <div v-for="item in strategyHoldCandidates" :key="`hold-${item.symbol}`" class="strategy-item">
                   <div class="strategy-item-head">
@@ -286,15 +313,12 @@
                     <a-tag color="green">风险复盘 {{ item.confidence }}%</a-tag>
                   </div>
                   <div class="signal-tags">
-                    <a-tag :color="item.rank < 999 ? 'blue' : 'orange'">{{ item.rankText }}</a-tag>
-                    <a-tag :color="item.trendColor">QuantDinger {{ item.trendText }}</a-tag>
-                    <a-tag :color="item.crossColor">交叉 {{ item.crossText }}</a-tag>
-                  </div>
-                  <div class="signal-tags">
-                    <a-tag :color="item.comboColor">组合 {{ item.comboLabel }}</a-tag>
+                    <a-tag :color="item.actionPlanColor">{{ item.actionPlanLabel }}</a-tag>
+                    <a-tag :color="item.positionRiskColor">位置 {{ item.positionRiskLabel }}</a-tag>
                     <a-tag :color="item.backtestColor">{{ item.backtestText }}</a-tag>
                   </div>
-                  <span>{{ item.reason }}</span>
+                  <div class="strategy-evidence-line">{{ item.strategyEvidence }}</div>
+                  <span>{{ item.strategySummary }}</span>
                 </div>
               </div>
               <div v-else class="empty-note">暂无保留观察项</div>
@@ -308,15 +332,12 @@
                     <a-tag color="orange">人工复核</a-tag>
                   </div>
                   <div class="signal-tags">
-                    <a-tag color="blue">qlib #{{ item.rank }}</a-tag>
-                    <a-tag :color="item.trendColor">QuantDinger {{ item.trendText }}</a-tag>
-                    <a-tag :color="item.crossColor">交叉 {{ item.crossText }}</a-tag>
-                  </div>
-                  <div class="signal-tags">
-                    <a-tag :color="item.comboColor">组合 {{ item.comboLabel }}</a-tag>
+                    <a-tag :color="item.actionPlanColor">{{ item.actionPlanLabel }}</a-tag>
+                    <a-tag :color="item.positionRiskColor">位置 {{ item.positionRiskLabel }}</a-tag>
                     <a-tag :color="item.backtestColor">{{ item.backtestText }}</a-tag>
                   </div>
-                  <span>{{ item.reason }}</span>
+                  <div class="strategy-evidence-line">{{ item.strategyEvidence }}</div>
+                  <span>{{ item.strategySummary }}</span>
                 </div>
               </div>
               <div v-else class="empty-note">暂无冲突项</div>
@@ -501,6 +522,12 @@ export default {
       pendingSignalDraft: null,
       selectedMarkerSymbol: 'all',
       strategyRuleProfile: 'balanced',
+      strategyPolicyProfile: 'confirmed_exit',
+      strategyPolicyOptions: [
+        { key: 'confirmed_exit', label: '连续转弱才复盘', description: '默认低频策略；10 支上限，连续转弱后才复盘，避免过度交易。' },
+        { key: 'rank_rotate_top50', label: '跌出 Top50 轮动', description: '进阶高收益策略；10 支上限，跌出 Top50 后用 Top10 候选补位。' },
+        { key: 'rank_rotate_top30', label: '跌出 Top30 轮动', description: '中间参考策略；10 支上限，反应更快但交易更频繁。' }
+      ],
       accountForm: {
         name: '台股研究模拟账户',
         initial_cash: 1000000
@@ -616,6 +643,18 @@ export default {
         }
       }
       return configs[this.strategyRuleProfile] || configs.balanced
+    },
+    selectedPolicyProfile () {
+      return this.strategyPolicyOptions.find(item => item.key === this.strategyPolicyProfile) || this.strategyPolicyOptions[1]
+    },
+    todayStrategyAdvice () {
+      const profile = this.selectedPolicyProfile
+      const items = this.buildTodayPolicyAdvice(profile.key)
+      const primary = items[0]
+      const summary = primary
+        ? `${profile.label}：优先${primary.sideLabel} ${primary.symbol}，${primary.quantity > 0 ? `${this.number(primary.quantity)} 股` : '先复核'}。${primary.reason}`
+        : `${profile.label}：今天没有足够一致的模拟买卖动作，先保留观察。`
+      return { profile, summary, items }
     },
     activeRuleSummary () {
       const cfg = this.strategyRuleConfig
@@ -766,6 +805,8 @@ export default {
         const trendScore = Number((cross.quantdinger && cross.quantdinger.trend_score) || (row.trend && row.trend.trend_score) || 0)
         const category = cross.cross && cross.cross.category
         const alignment = cross.cross && cross.cross.alignment
+        const actionPlan = cross.actionPlan || row.actionPlan || {}
+        const positionRisk = cross.positionRisk || (cross.technical && cross.technical.positionRisk) || (row.technical && row.technical.positionRisk) || {}
         const enriched = {
           symbol,
           rank: Number(row.rank || 999),
@@ -774,8 +815,19 @@ export default {
           trendScore: Number.isFinite(trendScore) ? trendScore : 0,
           category,
           alignment,
+          actionPlan,
+          positionRisk,
           crossAsOf: cross.asof || cross.date || '',
-          qlibAsOf: row.asof || ''
+          qlibAsOf: row.asof || '',
+          latestClose: this.firstPositiveNumber(
+            row.latest_close,
+            row.close,
+            row.trend && row.trend.latest_close,
+            cross.latest_close,
+            cross.latestClose,
+            cross.quantdinger && cross.quantdinger.latest_close,
+            cross.quantdinger && cross.quantdinger.latestClose
+          )
         }
         return this.decorateStrategyItem(enriched)
       }).filter(item => item.symbol)
@@ -829,11 +881,13 @@ export default {
     },
     strategyReviewCandidates () {
       return this.strategyItems
-        .filter(item => ['model_trend_divergence', 'data_review_required'].includes(item.category))
+        .filter(item => ['model_trend_divergence', 'data_review_required'].includes(item.category) || this.positionRiskStatus(item) === 'overheated')
         .slice(0, 5)
         .map(item => this.decorateStrategyItem({
           ...item,
-          reason: `${item.crossText}，QuantDinger ${item.trendText}；模型排名和技术状态不完全一致，建议只做人工复核`
+          reason: this.positionRiskStatus(item) === 'overheated'
+            ? `${item.crossText}，QuantDinger ${item.trendText}；${item.positionRiskLabel}，先复核追高风险`
+            : `${item.crossText}，QuantDinger ${item.trendText}；模型排名和技术状态不完全一致，建议只做人工复核`
         }))
     },
     markerSymbols () {
@@ -851,6 +905,126 @@ export default {
     this.refreshAll()
   },
   methods: {
+    firstPositiveNumber (...values) {
+      for (const value of values) {
+        const num = Number(value)
+        if (Number.isFinite(num) && num > 0) return num
+      }
+      return 0
+    },
+    buildTodayPolicyAdvice (policyKey) {
+      const policy = policyKey || 'confirmed_exit'
+      const heldMap = new Map(this.positions.map(item => [String(item.symbol || '').toUpperCase(), item]))
+      const buyPool = this.policyBuyCandidates(policy)
+      const sellPool = this.policySellCandidates(policy)
+      const holdPool = this.policyHoldCandidates(policy)
+      const sellItems = sellPool.slice(0, 1).map(item => this.policyAdviceItem(item, 'sell', heldMap.get(item.symbol), policy))
+      const buyItems = buyPool.slice(0, 1).map(item => this.policyAdviceItem(item, 'buy', null, policy))
+      const holdItems = holdPool.slice(0, 2).map(item => this.policyAdviceItem(item, 'hold', heldMap.get(item.symbol), policy))
+      return [...sellItems, ...buyItems, ...holdItems].filter(item => item.symbol).slice(0, 5)
+    },
+    policyBuyCandidates (policy) {
+      const base = this.strategyBuyCandidates.filter(item => item.rank <= 30)
+      return base.filter(item => Number(item.rank || 999) <= 10 && this.actionPlanCode(item) !== 'chasing_review').sort((a, b) => (a.rank - b.rank) || (b.confidence - a.confidence))
+    },
+    policySellCandidates (policy) {
+      const base = this.strategySellCandidates
+      if (policy === 'rank_rotate_top30') return base.filter(item => Number(item.rank || 999) > 30).sort((a, b) => (b.rank || 999) - (a.rank || 999))
+      if (policy === 'rank_rotate_top50') return base.filter(item => Number(item.rank || 999) > 50).sort((a, b) => (b.rank || 999) - (a.rank || 999))
+      return base.filter(item => item.comboType === 'risk_review' && item.confidence >= 70).sort((a, b) => b.confidence - a.confidence)
+    },
+    policyHoldCandidates (policy) {
+      if (policy === 'rank_rotate_top30') return this.strategySellCandidates.filter(item => Number(item.rank || 999) <= 30).slice(0, 6)
+      if (policy === 'rank_rotate_top50') return this.strategySellCandidates.filter(item => Number(item.rank || 999) <= 50).slice(0, 6)
+      return this.strategySellCandidates.filter(item => item.confidence < 70).slice(0, 6)
+    },
+    policyAdviceItem (item, side, position, policy) {
+      const price = this.adviceReferencePrice(item, position)
+      const quantity = side === 'buy'
+        ? this.suggestBuyQuantity(item, price, policy)
+        : side === 'sell'
+          ? this.suggestSellQuantity(item, position, policy)
+          : 0
+      const estimatedAmount = price > 0 && quantity > 0 ? price * quantity : 0
+      return {
+        symbol: item.symbol,
+        side,
+        sideLabel: side === 'buy' ? '模拟买入' : side === 'sell' ? '模拟卖出' : '建议保留',
+        color: side === 'buy' ? 'green' : side === 'sell' ? 'red' : 'blue',
+        quantity,
+        estimatedAmount,
+        referencePrice: price,
+        reason: this.policyAdviceReason(item, side, quantity, policy, price),
+        sourceItem: { ...item, canValidate: !item.backtest && !item.backtestError }
+      }
+    },
+    adviceReferencePrice (item, position) {
+      return this.firstPositiveNumber(
+        item && item.latestClose,
+        position && position.latest_close,
+        position && position.latestClose,
+        position && position.avg_cost
+      )
+    },
+    suggestBuyQuantity (item, price, policy) {
+      if (!price || price <= 0) return 0
+      const cash = Number(this.account.cash || 0)
+      const maxHoldings = 10
+      const remainingSlots = Math.max(1, maxHoldings - this.positions.length)
+      const policyRatio = policy === 'confirmed_exit' ? 0.14 : 0.1
+      const budgetBySlot = cash / remainingSlots
+      const budget = Math.max(0, Math.min(cash * policyRatio, budgetBySlot))
+      return this.roundLotDown(budget / price)
+    },
+    suggestSellQuantity (item, position, policy) {
+      const heldQty = Number(position && position.quantity || item.quantity || 0)
+      if (!Number.isFinite(heldQty) || heldQty <= 0) return 0
+      if (policy === 'rank_rotate_top30' || policy === 'rank_rotate_top50') return this.roundLotDown(heldQty)
+      return this.roundLotDown(Math.max(this.lotSize(), heldQty * 0.3))
+    },
+    roundLotDown (quantity) {
+      const lot = this.lotSize()
+      const qty = Math.floor(Number(quantity || 0) / lot) * lot
+      return Math.max(0, qty)
+    },
+    lotSize () {
+      return 10
+    },
+    policyAdviceReason (item, side, quantity, policy, price) {
+      const policyLabel = (this.strategyPolicyOptions.find(option => option.key === policy) || {}).label || '组合策略'
+      const basis = `${policyLabel}；${item.rankText}；${item.actionPlanLabel}；位置 ${item.positionRiskLabel}`
+      if (side === 'hold') return `${basis}，当前没有达到模拟卖出门槛，先保留观察。`
+      if (!price || price <= 0) return `${basis}，缺少可用参考价，先补齐价格再生成模拟草稿。`
+      if (!quantity || quantity <= 0) return `${basis}，现金或持仓不足以形成 10 股倍数，先观察。`
+      if (side === 'buy') return `${basis}，按现金和持仓上限估算 ${this.number(quantity)} 股。`
+      return `${basis}，按持仓风险强度估算 ${this.number(quantity)} 股。`
+    },
+    adviceQuantityText (item) {
+      return item && Number(item.quantity) > 0 ? `${this.number(item.quantity)} 股` : '先复核'
+    },
+    adviceAmountText (item) {
+      return item && Number(item.estimatedAmount) > 0 ? `约 ${this.money(item.estimatedAmount)}` : '金额待价格确认'
+    },
+    prefillPolicyAdviceDraft (advice) {
+      if (!advice || !advice.symbol || !advice.side || advice.side === 'hold') return
+      const source = advice.sourceItem || {}
+      this.prefillStrategyDraft({
+        ...source,
+        symbol: advice.symbol,
+        quantity: advice.quantity,
+        comboLabel: this.selectedPolicyProfile.label,
+        comboType: advice.side === 'sell' ? 'policy_risk_review' : 'policy_simulate_watch',
+        comboReason: advice.reason
+      }, advice.side)
+      this.tradeForm.quantity = advice.quantity || this.tradeForm.quantity
+      this.tradeForm.source_context = {
+        ...(this.tradeForm.source_context || {}),
+        combo_label: this.selectedPolicyProfile.label,
+        combo_type: advice.side === 'sell' ? 'policy_risk_review' : 'policy_simulate_watch',
+        combo_reason: advice.reason,
+        source_label: `今日${this.selectedPolicyProfile.label}模拟建议`
+      }
+    },
     decorateStrategyItem (item) {
       const rank = Number(item.rank || 999)
       const trend = item.trend || ''
@@ -871,6 +1045,12 @@ export default {
         crossColor: this.crossColor(category, alignment),
         technicalStatus: this.technicalStatus(item),
         riskHint: this.riskHint(item),
+        positionRiskLabel: this.positionRiskLabel(item),
+        positionRiskColor: this.positionRiskColor(item),
+        positionRiskReason: this.positionRiskReason(item),
+        actionPlanLabel: this.actionPlanLabel(item),
+        actionPlanColor: this.actionPlanColor(item),
+        actionPlanReason: this.actionPlanReason(item),
         backtest,
         backtestError,
         backtestText: this.backtestText(backtest, backtestError),
@@ -878,7 +1058,9 @@ export default {
         comboType: combo.type,
         comboLabel: combo.label,
         comboColor: combo.color,
-        comboReason: combo.reason
+        comboReason: combo.reason,
+        strategySummary: this.strategySummary({ ...item, rank, trend, category, alignment }, combo),
+        strategyEvidence: this.strategyEvidence({ ...item, rank, trend, category, alignment }, combo, backtest, backtestError)
       }
     },
     buyConfidence (item) {
@@ -891,19 +1073,25 @@ export default {
       if (['sideways', 'neutral', 'range_bound'].includes(item.trend)) score -= 4
       if (['downtrend', 'pullback', 'weak_downtrend'].includes(item.trend)) score -= 24
       if (['model_trend_divergence', 'data_review_required'].includes(item.category)) score -= 18
+      if (this.positionRiskStatus(item) === 'overheated') score -= 28
+      else if (this.positionRiskStatus(item) === 'elevated') score -= 14
+      else if (this.positionRiskStatus(item) === 'reasonable') score += 4
       return Math.max(0, Math.min(95, score))
     },
     sellConfidence (item) {
       const rank = Number(item.rank || 999)
       let score = 20
-      if (rank > 50) score += 45
-      else if (rank > 30) score += 25
-      else score += Math.max(0, Math.round((rank / 30) * 12))
+      if (rank > 50) score += 22
+      else if (rank > 30) score += 12
+      else score += Math.max(0, Math.round((rank / 30) * 8))
       if (['model_trend_divergence', 'data_review_required'].includes(item.category)) score += 24
-      if (['downtrend', 'pullback', 'weak_downtrend'].includes(item.trend)) score += 25
-      if (['sideways', 'neutral', 'range_bound'].includes(item.trend)) score += 6
-      if (item.category === 'focus_watch' || item.alignment === 'aligned') score -= 15
-      if (['uptrend', 'breakout', 'strong_uptrend'].includes(item.trend)) score -= 12
+      if (['downtrend', 'pullback', 'weak_downtrend'].includes(item.trend)) score += 28
+      if (['sideways', 'neutral', 'range_bound'].includes(item.trend)) score += 4
+      if (item.category === 'focus_watch' || item.alignment === 'aligned') score -= 18
+      if (['uptrend', 'breakout', 'strong_uptrend'].includes(item.trend)) score -= 18
+      if (this.positionRiskStatus(item) === 'overheated') score += 8
+      if (this.actionPlanCode(item) === 'risk_review') score += 14
+      if (this.actionPlanCode(item) === 'simulate_watch' || this.actionPlanCode(item) === 'continue_observe') score -= 10
       return Math.max(5, Math.min(95, score))
     },
     buyReason (item, confidence) {
@@ -911,6 +1099,9 @@ export default {
       const parts = [`${item.rankText} / ${tier}`]
       parts.push(`QuantDinger ${item.trendText}`)
       parts.push(`交叉分析：${item.crossText}`)
+      parts.push(`位置：${item.positionRiskLabel}`)
+      if (this.positionRiskStatus(item) === 'overheated') parts.push('位置偏热，先人工复核追高风险')
+      else if (this.positionRiskStatus(item) === 'elevated') parts.push('趋势强但位置偏高，等待回调更稳妥')
       if (confidence >= 75) parts.push('模型和技术面较一致，可优先做模拟验证')
       else if (confidence >= 55) parts.push('具备候选价值，但仍需复核资料日期和价格')
       else parts.push('匹配度偏低，适合观察而非直接生成大量模拟成交')
@@ -920,10 +1111,28 @@ export default {
       const parts = [item.rankText, item.rank > this.strategyRuleConfig.buyPool ? `跌出 Top${this.strategyRuleConfig.buyPool}` : '仍在观察池']
       parts.push(`QuantDinger ${item.trendText}`)
       parts.push(`交叉分析：${item.crossText}`)
+      parts.push(`位置：${item.positionRiskLabel}`)
+      if (this.positionRiskStatus(item) === 'overheated') parts.push('位置偏热，只作为风险复盘提示')
       if (confidence >= 70) parts.push('风险复盘强度高，适合先生成小额模拟草稿验证')
       else if (confidence >= 45) parts.push('有转弱或分歧迹象，建议人工复核')
       else parts.push('风险复盘强度较低，偏继续观察')
       return parts.join('；')
+    },
+    strategySummary (item, combo) {
+      const risk = this.positionRiskLabel(item)
+      if (combo && combo.type === 'manual_review') return `先复核：${combo.reason || '信号存在分歧。'} 位置：${risk}`
+      if (combo && combo.type === 'risk_review') return `先复盘风险：${combo.reason || '持仓信号转弱。'} 位置：${risk}`
+      if (combo && combo.type === 'simulate_watch') return `可放入模拟观察：信号较一致，位置：${risk}`
+      if (combo && combo.type === 'keep_watch') return `继续观察：持仓仍在研究池，位置：${risk}`
+      return `先观察：信号还不够一致，位置：${risk}`
+    },
+    strategyEvidence (item, combo, backtest, backtestError) {
+      const rank = item && item.rank < 999 ? `排名 #${item.rank}` : '未进入 Top50'
+      const trend = this.trendText(item && item.trend)
+      const cross = this.crossText(item && item.category, item && item.alignment)
+      const history = this.backtestText(backtest, backtestError)
+      const action = this.actionPlanLabel(item)
+      return `依据：${rank}，趋势${trend}，交叉${cross}，研究动作${action}，${history}`
     },
     trendText (trend) {
       const labels = {
@@ -972,6 +1181,56 @@ export default {
     riskColor (value) {
       return value >= 70 ? 'red' : value >= 45 ? 'orange' : 'green'
     },
+    actionPlanCode (item) {
+      return String((item && item.actionPlan && item.actionPlan.code) || '')
+    },
+    actionPlanLabel (item) {
+      const action = (item && item.actionPlan) || {}
+      const labels = {
+        simulate_watch: '可模拟观察',
+        wait_pullback: '等回调',
+        chasing_review: '追高复核',
+        continue_observe: '继续观察',
+        risk_review: '风险复盘',
+        data_review: '资料复核'
+      }
+      return action.label || labels[action.code] || '继续观察'
+    },
+    actionPlanColor (item) {
+      const code = this.actionPlanCode(item)
+      if (code === 'simulate_watch') return 'green'
+      if (code === 'risk_review') return 'red'
+      if (code === 'chasing_review' || code === 'wait_pullback') return 'orange'
+      if (code === 'data_review') return 'default'
+      return 'blue'
+    },
+    actionPlanReason (item) {
+      return (item && item.actionPlan && item.actionPlan.reason) || ''
+    },
+    positionRiskStatus (item) {
+      return String((item && item.positionRisk && item.positionRisk.status) || '')
+    },
+    positionRiskLabel (item) {
+      const risk = (item && item.positionRisk) || {}
+      const labels = {
+        reasonable: '位置合理',
+        elevated: '强势但偏高',
+        overheated: '过热谨慎',
+        pullback_watch: '回调观察',
+        data_insufficient: '数据不足'
+      }
+      return risk.label || labels[risk.status] || '位置待确认'
+    },
+    positionRiskColor (item) {
+      const status = this.positionRiskStatus(item)
+      if (status === 'reasonable') return 'green'
+      if (status === 'elevated' || status === 'pullback_watch') return 'gold'
+      if (status === 'overheated') return 'orange'
+      return 'default'
+    },
+    positionRiskReason (item) {
+      return (item && item.positionRisk && item.positionRisk.reason) || '暂未计算价格位置'
+    },
     technicalStatus (item) {
       if (['model_trend_divergence', 'data_review_required'].includes(item.category)) return 'review'
       if (item.category === 'focus_watch' || item.alignment === 'aligned') return 'confirmed'
@@ -980,6 +1239,7 @@ export default {
     },
     riskHint (item) {
       const status = this.technicalStatus(item)
+      if (this.positionRiskStatus(item) === 'overheated') return '位置偏热需复核'
       if (status === 'confirmed') return '技术确认较好'
       if (status === 'weak') return '技术面转弱'
       if (status === 'review') return '需人工复核'
@@ -1067,8 +1327,9 @@ export default {
       if (metrics && Number.isFinite(totalReturn) && Number.isFinite(maxDrawdown) && maxDrawdown >= Math.max(20, Math.abs(totalReturn) * 1.2)) {
         return { type: 'manual_review', label: '回撤偏大', color: 'orange', reason: '历史验证回撤相对收益偏大。' }
       }
-      if (held && (rank > 30 || weakTrend)) return { type: 'risk_review', label: '风险复盘', color: weakTrend ? 'red' : 'orange', reason: '持仓排名掉队或技术面转弱。' }
-      if (held && rank <= 30 && (aligned || strongTrend)) return { type: 'keep_watch', label: '继续观察', color: 'green', reason: '持仓仍在研究池且技术确认尚可。' }
+      if (held && (weakTrend || divergent || (rank > 50 && !strongTrend))) return { type: 'risk_review', label: '风险复盘', color: weakTrend ? 'red' : 'orange', reason: '持仓排名掉队且趋势、资料或技术面出现确认信号。' }
+      if (held && rank <= 50 && !weakTrend) return { type: 'keep_watch', label: '继续观察', color: 'green', reason: '持仓仍在研究池，未出现明确转弱确认。' }
+      if (!held && rank <= 30 && strongTrend && this.positionRiskStatus(item) === 'overheated') return { type: 'manual_review', label: '追高复核', color: 'orange', reason: '趋势偏强但位置偏热，先复核追高风险。' }
       if (!held && rank <= 30 && aligned && strongTrend) return { type: 'simulate_watch', label: '新增观察', color: 'green', reason: 'qlib、QuantDinger 和交叉分析相对一致。' }
       if (!held && rank <= 30 && (aligned || strongTrend)) return { type: 'watch_only', label: '观察', color: 'blue', reason: '进入研究池，但仍缺少完整一致信号。' }
       return { type: 'watch_only', label: '观察', color: 'default', reason: '信号强度不足，先观察。' }
@@ -1312,6 +1573,8 @@ export default {
         cross_alignment: item.alignment,
         technical_status: item.technicalStatus,
         risk_hint: item.riskHint,
+        action_plan: item.actionPlanLabel,
+        position_risk: item.positionRiskLabel,
         combo_label: item.comboLabel,
         combo_type: item.comboType,
         combo_reason: item.comboReason,
@@ -1536,6 +1799,75 @@ export default {
   margin-top: 10px;
 }
 
+.today-advice-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #d8e5f5;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.today-advice-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.today-advice-head > div {
+  min-width: 0;
+}
+
+.today-advice-head strong,
+.today-advice-head span {
+  display: block;
+}
+
+.today-advice-head span,
+.today-advice-reason {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.compact-alert {
+  margin-bottom: 8px;
+}
+
+.today-advice-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
+}
+
+.today-advice-item {
+  min-width: 0;
+  padding: 10px 0 0;
+  border-top: 1px solid #eef2f7;
+}
+
+.today-advice-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.today-advice-main strong {
+  color: #111827;
+}
+
+.today-advice-main span {
+  color: #475467;
+  font-size: 12px;
+}
+
 .module-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1647,6 +1979,12 @@ export default {
   flex-wrap: wrap;
 }
 
+.strategy-evidence-line {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .strategy-list {
   display: grid;
   gap: 10px;
@@ -1692,6 +2030,10 @@ export default {
 
   .strategy-list {
     max-height: 260px;
+  }
+
+  .today-advice-head {
+    flex-direction: column;
   }
 }
 </style>

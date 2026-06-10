@@ -20,8 +20,6 @@ from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
-import requests
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 os.environ.setdefault("SECRET_KEY", "archive-tw-stock-daily")
@@ -139,9 +137,10 @@ def fetch_finmind_rows(symbol: str, start: str, end: str, *, base_url: str = FIN
     token = os.getenv("FINMIND_TOKEN") or os.getenv("FINMIND_API_TOKEN")
     if token:
         params["token"] = token.strip()
-    response = requests.get(base_url, params=params, timeout=timeout)
-    response.raise_for_status()
-    payload = response.json()
+    source = TWStockDataSource(base_url=base_url)
+    payload = source._http_get(params)
+    if not payload:
+        raise ValueError(f"FinMind request failed for {symbol}")
     if payload.get("status") not in (None, 200, "200", True):
         raise ValueError(f"FinMind returned non-ok status for {symbol}: {payload.get('status')}")
     data = payload.get("data") or []

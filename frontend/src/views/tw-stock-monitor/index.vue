@@ -81,11 +81,12 @@
           <a-radio-button value="half_year">近半年</a-radio-button>
           <a-radio-button value="one_year">近一年</a-radio-button>
         </a-radio-group>
-        <a-select v-model="rankTechVariant" size="small" style="width: 210px" @change="handlePortfolioReplayControlChange">
-          <a-select-option value="all">全部规则</a-select-option>
-          <a-select-option value="qlib_only">qlib-only</a-select-option>
-          <a-select-option value="qlib_plus_trend">qlib + trend</a-select-option>
-          <a-select-option value="qlib_plus_trend_indicators">qlib + trend + indicators</a-select-option>
+        <a-select v-model="rankTechVariant" size="small" style="width: 240px" @change="handlePortfolioReplayControlChange">
+          <a-select-option value="all">全部对照</a-select-option>
+          <a-select-option value="qlib_only">只看模型排名</a-select-option>
+          <a-select-option value="qlib_plus_trend">加入趋势确认</a-select-option>
+          <a-select-option value="qlib_plus_trend_indicators">加入技术指标确认</a-select-option>
+          <a-select-option value="qlib_plus_trend_position_risk">加入追高风险过滤</a-select-option>
         </a-select>
         <a-button size="small" :loading="loadingRankTechCross || runningPortfolioReplay" @click="loadRankTechPortfolioPanel">
           <a-icon type="reload" /> 刷新复盘
@@ -116,12 +117,13 @@
               <div class="rank-tech-symbol-line">
                 <strong>{{ item.symbol }}</strong>
                 <span>{{ item.name || displayStockName(item) }}</span>
-                <a-tag :color="rankTechDecisionColor(item)">{{ rankTechDecisionLabel(item) }}</a-tag>
+                <a-tag :color="rankTechActionColor(item)">{{ rankTechActionLabel(item) }}</a-tag>
+                <a-tag :color="positionRiskColor(item)">{{ positionRiskLabel(item) }}</a-tag>
               </div>
               <div class="rank-tech-reason-line">
-                <span>{{ rankTechTierLabel(item.rankTier || (item.qlib && item.qlib.rank)) }}</span>
-                <span>{{ rankTechTechnicalLabel(item.technical && item.technical.status) }}</span>
-                <span>{{ rankTechReasonText(item) }}</span>
+                <span>{{ rankTechUserConclusion(item) }}</span>
+                <span>{{ rankTechUserReason(item) }}</span>
+                <span class="muted">{{ rankTechUserEvidence(item) }}</span>
               </div>
             </div>
           </div>
@@ -135,9 +137,10 @@
           <div v-if="rankTechPriorityItems.length" class="rank-tech-why-list">
             <div v-for="item in rankTechPriorityItems.slice(0, 4)" :key="`rank-tech-why-${item.symbol}`" class="rank-tech-why-item">
               <strong>{{ item.symbol }} {{ item.name || '' }}</strong>
-              <span>qlib {{ rankTechTierLabel(item.rankTier || (item.qlib && item.qlib.rank)) }}</span>
-              <span>QuantDinger {{ rankTechTrendLabel(item.trend && item.trend.label) }}</span>
-              <span>{{ rankTechIndicatorSummary(item) }}</span>
+              <span>{{ rankTechUserConclusion(item) }}</span>
+              <span>{{ rankTechUserReason(item) }}</span>
+              <span>{{ rankTechUserEvidence(item) }}</span>
+              <span>位置 {{ positionRiskLabel(item) }}：{{ positionRiskReason(item) }}</span>
               <small>{{ rankTechQualityBrief(item) }}</small>
             </div>
           </div>
@@ -149,6 +152,7 @@
           <strong>过去表现</strong>
           <span>{{ portfolioReplayRangeText }}</span>
         </div>
+        <div v-if="portfolioReplayExecutionText" class="portfolio-warning-line">{{ portfolioReplayExecutionText }}</div>
         <a-alert
           v-if="portfolioReplayError"
           class="rank-tech-alert"
@@ -176,10 +180,36 @@
               <span>费用税费估算</span>
               <b>{{ formatCompactNumber(item.metrics.feeAndTax) }}</b>
             </div>
+            <div class="portfolio-warning-line"><span>位置过滤：</span>{{ portfolioPositionRiskText(item) }}</div>
             <div class="portfolio-warning-line">{{ portfolioReplayWarningText(item) }}</div>
           </div>
         </div>
         <div v-else class="rank-tech-empty">暂无历史模拟表现。</div>
+        <div v-if="portfolioReplayStrategyItems.length" class="portfolio-policy-section">
+          <div class="rank-tech-panel-head compact-head">
+            <strong>策略规则回放</strong>
+            <span>历史模拟，不代表未来收益</span>
+          </div>
+          <div class="portfolio-replay-grid">
+            <div v-for="item in portfolioReplayStrategyItems" :key="item.profile.key" class="portfolio-replay-card">
+              <strong>{{ item.profile.label }}</strong>
+              <small>{{ item.profile.description }}</small>
+              <div class="portfolio-metric-row">
+                <span>历史收益</span>
+                <b>{{ formatReplayPercent(item.metrics.totalReturn) }}</b>
+              </div>
+              <div class="portfolio-metric-row">
+                <span>最大回撤</span>
+                <b>{{ formatReplayPercent(item.metrics.maxDrawdown) }}</b>
+              </div>
+              <div class="portfolio-metric-row">
+                <span>动作次数</span>
+                <b>{{ item.metrics.actionCount == null ? '-' : item.metrics.actionCount }}</b>
+              </div>
+              <div class="portfolio-warning-line">{{ portfolioStrategyBrief(item) }}</div>
+            </div>
+          </div>
+        </div>
       </div>
     </a-card>
 
@@ -887,6 +917,7 @@
           <div class="cross-trend-cell">
             <a-tag :color="crossTrendColor(row)">{{ crossTrendDisplayLabel(row) }}</a-tag>
             <span>分数 {{ row.quantdinger && row.quantdinger.trend_score == null ? '-' : formatNumber(row.quantdinger && row.quantdinger.trend_score, 2) }}</span>
+            <span v-if="row.positionRisk || (row.technical && row.technical.positionRisk)">位置 {{ positionRiskLabel(row) }}</span>
             <small>{{ row.quantdinger && row.quantdinger.latest_date ? row.quantdinger.latest_date : '-' }}</small>
           </div>
         </template>
@@ -1339,6 +1370,8 @@ export default {
       loadingDailyAutoUpdateStatus: false,
       loadingCrossAnalysis: false,
       loadingCrossAnalysisDetail: false,
+      loadingRankTechCross: false,
+      runningPortfolioReplay: false,
       loadingAgentContext: false,
       sendingAgentQuestion: false,
       savingCrossReview: false,
@@ -1966,14 +1999,31 @@ export default {
     },
     portfolioReplayComparisonItems () {
       const comparison = (this.portfolioReplayPayload && this.portfolioReplayPayload.comparison) || {}
-      return ['qlib_only', 'qlib_plus_trend', 'qlib_plus_trend_indicators']
+      return ['qlib_only', 'qlib_plus_trend', 'qlib_plus_trend_indicators', 'qlib_plus_trend_position_risk']
         .filter(variant => this.rankTechVariant === 'all' || this.rankTechVariant === variant)
         .map(variant => ({ variant, payload: comparison[variant] || {}, metrics: (comparison[variant] && comparison[variant].metrics) || {} }))
+        .filter(item => item.payload && Object.keys(item.payload).length)
+    },
+    portfolioReplayStrategyItems () {
+      const comparison = (this.portfolioReplayPayload && this.portfolioReplayPayload.strategyComparison) || {}
+      const profiles = {
+        rank_rotate_top30: { key: 'rank_rotate_top30', label: '跌出 Top30 轮动', description: '10 支上限；持仓跌出 Top30 时卖出排名最低的一支，再从 Top10 最高排名补一支。' },
+        rank_rotate_top50: { key: 'rank_rotate_top50', label: '跌出 Top50 轮动', description: '10 支上限；持仓跌出 Top50 时才卖出排名最低的一支，再从 Top10 最高排名补一支。' },
+        rank_rotate_top50_adaptive_score: { key: 'rank_rotate_top50_adaptive_score', label: 'Top50 自适应 score', description: '继承 Top50 轮动；正常市况不干预，谨慎/下跌市况只从 qlib score 0.04-0.08 的 Top10 候选补仓。' },
+        rank_rotate_top50_adaptive_score_risk_control: { key: 'rank_rotate_top50_adaptive_score_risk_control', label: 'Top50 自适应 score + 风控', description: '继承 Top50 自适应 score；市场谨慎/下跌且组合回撤扩大时暂停补仓。' },
+        confirmed_exit: { key: 'confirmed_exit', label: '连续转弱才复盘', description: '10 支上限；不因单日排名波动退出，连续转弱后才做风险复盘。' }
+      }
+      return ['confirmed_exit', 'rank_rotate_top50_adaptive_score', 'rank_rotate_top50_adaptive_score_risk_control', 'rank_rotate_top50', 'rank_rotate_top30']
+        .map(key => ({ key, payload: comparison[key] || {}, profile: (comparison[key] && comparison[key].profile) || profiles[key] || { key, label: key, description: '' }, metrics: (comparison[key] && comparison[key].metrics) || {} }))
         .filter(item => item.payload && Object.keys(item.payload).length)
     },
     portfolioReplayRangeText () {
       const range = this.portfolioReplayDateRange()
       return `${range.startDate || '-'} 至 ${range.endDate || '-'}`
+    },
+    portfolioReplayExecutionText () {
+      const execution = (this.portfolioReplayPayload && this.portfolioReplayPayload.execution) || {}
+      return execution.label ? `成交口径：${execution.label}` : ''
     },
     crossAnalysisAccepted () {
       return !!(this.crossAnalysisPayload && this.crossAnalysisPayload.ok && this.crossAnalysisPayload.status === 'accepted')
@@ -2502,6 +2552,7 @@ export default {
           maxAddPerDay: 1,
           maxRiskActionPerDay: 1,
           technicalStrategies: ['ma', 'rsi', 'macd', 'bollinger'],
+          executionMode: 'next_trading_day_close',
           persist: false
         }))
         this.portfolioReplayPayload = data || null
@@ -2547,6 +2598,30 @@ export default {
       if (code === 'data_insufficient') return 'red'
       return 'blue'
     },
+    rankTechActionPayload (item) {
+      return (item && item.actionPlan) || {}
+    },
+    rankTechActionLabel (item) {
+      const action = this.rankTechActionPayload(item)
+      const labels = {
+        simulate_watch: '可模拟观察',
+        wait_pullback: '等回调',
+        chasing_review: '追高复核',
+        continue_observe: '继续观察',
+        risk_review: '风险复盘',
+        data_review: '资料复核'
+      }
+      return action.label || labels[action.code] || this.rankTechDecisionLabel(item)
+    },
+    rankTechActionColor (item) {
+      const code = this.rankTechActionPayload(item).code
+      if (code === 'simulate_watch') return 'green'
+      if (code === 'wait_pullback' || code === 'continue_observe') return 'blue'
+      if (code === 'chasing_review') return 'orange'
+      if (code === 'risk_review') return 'red'
+      if (code === 'data_review') return 'default'
+      return this.rankTechDecisionColor(item)
+    },
     rankTechTierLabel (value) {
       const rank = Number(value)
       const key = String(value || '').toLowerCase()
@@ -2571,6 +2646,31 @@ export default {
       if (value === 'sideways' || value === 'unknown') return '中性'
       return '数据不足'
     },
+    positionRiskPayload (item) {
+      return (item && item.positionRisk) || (item && item.technical && item.technical.positionRisk) || {}
+    },
+    positionRiskLabel (item) {
+      const risk = this.positionRiskPayload(item)
+      const labels = {
+        reasonable: '位置合理',
+        elevated: '强势但偏高',
+        overheated: '过热谨慎',
+        pullback_watch: '回调观察',
+        data_insufficient: '数据不足'
+      }
+      return risk.label || labels[risk.status] || '位置待确认'
+    },
+    positionRiskColor (item) {
+      const status = this.positionRiskPayload(item).status
+      if (status === 'reasonable') return 'green'
+      if (status === 'elevated' || status === 'pullback_watch') return 'gold'
+      if (status === 'overheated') return 'orange'
+      return 'default'
+    },
+    positionRiskReason (item) {
+      const risk = this.positionRiskPayload(item)
+      return risk.reason || '暂未计算价格位置。'
+    },
     rankTechIndicatorSummary (item) {
       const summary = item && item.technical && item.technical.summary
       if (!summary) return '指标：数据不足'
@@ -2594,11 +2694,33 @@ export default {
       const decisionReason = item && item.decision && item.decision.reason
       return decisionReason || this.rankTechQualityBrief(item)
     },
+    rankTechUserConclusion (item) {
+      return `结论：${this.rankTechActionLabel(item)}`
+    },
+    rankTechUserReason (item) {
+      const action = this.rankTechActionPayload(item)
+      if (action.reason) return `原因：${action.reason}`
+      const risk = this.positionRiskPayload(item)
+      const riskStatus = risk && risk.status
+      if (riskStatus === 'overheated') return '原因：趋势或排名不错，但当前价格位置偏热。'
+      if (riskStatus === 'elevated') return '原因：仍值得看，但追高风险比位置合理的标的更高。'
+      if (riskStatus === 'reasonable') return '原因：排名、趋势和价格位置相对更容易复盘。'
+      if (riskStatus === 'pullback_watch') return '原因：正在回调，适合先确认趋势有没有破坏。'
+      const decisionReason = item && item.decision && item.decision.reason
+      return `原因：${decisionReason || '资料还不完整，先不要提高优先级。'}`
+    },
+    rankTechUserEvidence (item) {
+      const rank = this.rankTechTierLabel(item && (item.rankTier || (item.qlib && item.qlib.rank)))
+      const trend = this.rankTechTrendLabel(item && item.trend && item.trend.label)
+      const technical = this.rankTechTechnicalLabel(item && item.technical && item.technical.status)
+      return `依据：${rank}，趋势${trend}，${technical}`
+    },
     portfolioVariantLabel (variant) {
       const labels = {
-        qlib_only: 'qlib-only',
-        qlib_plus_trend: 'qlib + trend',
-        qlib_plus_trend_indicators: 'qlib + trend + indicators'
+        qlib_only: '只看模型排名',
+        qlib_plus_trend: '加入趋势确认',
+        qlib_plus_trend_indicators: '加入技术指标确认',
+        qlib_plus_trend_position_risk: '加入追高风险过滤'
       }
       return labels[variant] || variant || '-'
     },
@@ -2609,10 +2731,38 @@ export default {
       const percent = Math.abs(num) <= 1 ? num * 100 : num
       return `${percent >= 0 ? '+' : ''}${percent.toFixed(2)}%`
     },
+    portfolioPositionRiskText (item) {
+      const summary = item && item.payload && item.payload.positionRiskSummary
+      if (!summary) return '未启用'
+      const blocked = Number(summary.blocked_overheated_adds || 0)
+      const lowered = Number(summary.deprioritized_elevated_adds || 0)
+      const review = Number(summary.risk_review_events || 0)
+      if (!blocked && !lowered && !review) return '无明显追高降级'
+      return "避开 " + blocked + " 次过热新增，" + lowered + " 次候选降级，" + review + " 次风险复盘提示"
+    },
     portfolioReplayWarningText (item) {
       const warnings = (item && item.payload && item.payload.dataQuality && item.payload.dataQuality.warnings) || []
       const normalized = Array.isArray(warnings) ? warnings.slice(0, 2) : []
       return normalized.length ? `数据提示：${normalized.join(' / ')}` : '数据提示：无集中提示'
+    },
+    portfolioStrategyBrief (item) {
+      const metrics = (item && item.metrics) || {}
+      const actions = Number(metrics.actionCount || 0)
+      const drawdown = metrics.maxDrawdown == null ? '-' : this.formatReplayPercent(metrics.maxDrawdown)
+      if (item && item.profile && item.profile.key === 'confirmed_exit') return `默认低频策略：动作 ${actions} 次，回撤 ${drawdown}，重点减少过度交易。`
+      if (item && item.profile && item.profile.key === 'rank_rotate_top50_adaptive_score') {
+        const summary = (item.payload && item.payload.adaptiveScoreSummary) || {}
+        const blocked = Number(summary.blocked_adds || 0)
+        return `继承 Top50：动作 ${actions} 次，回撤 ${drawdown}，谨慎市况过滤 ${blocked} 次补仓候选。`
+      }
+      if (item && item.profile && item.profile.key === 'rank_rotate_top50_adaptive_score_risk_control') {
+        const summary = (item.payload && item.payload.portfolioRiskSummary) || {}
+        const blocked = Number(summary.blocked_adds || 0)
+        return `高级风控对照：动作 ${actions} 次，回撤 ${drawdown}，暂停补仓 ${blocked} 次。`
+      }
+      if (item && item.profile && item.profile.key === 'rank_rotate_top50') return `进阶高收益策略：动作 ${actions} 次，回撤 ${drawdown}，换手更高。`
+      if (item && item.profile && item.profile.key === 'rank_rotate_top30') return `中间参考策略：动作 ${actions} 次，回撤 ${drawdown}，反应更快但交易更频繁。`
+      return `10 支上限策略：动作 ${actions} 次，回撤 ${drawdown}。`
     },
     async loadCrossAnalysis () {
       this.loadingCrossAnalysis = true

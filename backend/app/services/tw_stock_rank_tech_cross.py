@@ -27,6 +27,15 @@ DECISION_LABELS = {
     "data_insufficient": "数据不足",
 }
 
+ACTION_PLAN_LABELS = {
+    "simulate_watch": "可模拟观察",
+    "wait_pullback": "等回调",
+    "chasing_review": "追高复核",
+    "continue_observe": "继续观察",
+    "risk_review": "风险复盘",
+    "data_review": "资料复核",
+}
+
 SUMMARY_TEMPLATE = {
     "new_watch": 0,
     "continue_watch": 0,
@@ -142,7 +151,15 @@ class TWStockRankTechCrossService:
                 limit=trend_limit,
                 strategies=technical_strategies,
             )
-        decision = self.decision_for(rank_tier=rank_tier, technical_status=technical["status"])
+        position_risk = self._position_risk_from_technical(technical)
+        decision = self.decision_for(rank_tier=rank_tier, technical_status=technical["status"], position_risk=position_risk)
+        action_plan = self.action_plan_for(
+            rank_tier=rank_tier,
+            technical_status=technical["status"],
+            trend_label=trend.get("trend_label"),
+            position_risk=position_risk,
+            decision=decision,
+        )
         return {
             "symbol": symbol,
             "instrument": row.get("instrument"),
@@ -163,7 +180,9 @@ class TWStockRankTechCrossService:
                 "warnings": trend.get("quality_warnings") or [],
             },
             "technical": technical,
+            "positionRisk": position_risk,
             "decision": decision,
+            "actionPlan": action_plan,
         }
 
     @staticmethod
@@ -252,19 +271,34 @@ class TWStockRankTechCrossService:
             "basis": "quantdinger_trend_plus_daily_indicators",
             "summary": indicators.get("summary") or {},
             "strategies": list(indicators.get("strategies") or []),
+            "positionRisk": indicators.get("positionRisk") or {},
             "warnings": warnings,
             "reason": reason,
         }
 
     @staticmethod
-    def decision_for(*, rank_tier: str, technical_status: str) -> Dict[str, Any]:
+    def _position_risk_from_technical(technical: Dict[str, Any]) -> Dict[str, Any]:
+        risk = technical.get("positionRisk") if isinstance(technical, dict) else None
+        if isinstance(risk, dict) and risk.get("status"):
+            return risk
+        return {"status": "data_insufficient", "label": "数据不足", "score": None, "reason": "暂未计算价格位置。", "metrics": {}, "warnings": ["position_risk_missing"]}
+
+    @staticmethod
+    def decision_for(*, rank_tier: str, technical_status: str, position_risk: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        risk_status = str((position_risk or {}).get("status") or "")
         if technical_status == "technical_data_insufficient":
             code, priority = "data_insufficient", "blocked"
+        elif rank_tier in {"top10", "top30"} and technical_status == "technical_strong" and risk_status == "overheated":
+            code, priority = "manual_review", "medium"
+        elif rank_tier in {"top10", "top30"} and technical_status == "technical_strong" and risk_status == "elevated":
+            code, priority = "continue_watch", "medium"
         elif rank_tier in {"top10", "top30"} and technical_status == "technical_strong":
             code, priority = "new_watch", "high"
         elif rank_tier in {"top10", "top30"} and technical_status == "technical_neutral":
             code, priority = "continue_watch", "medium"
         elif rank_tier in {"top10", "top30"} and technical_status == "technical_weak":
+            code, priority = "manual_review", "medium"
+        elif rank_tier == "top50" and risk_status == "overheated":
             code, priority = "manual_review", "medium"
         elif rank_tier == "top50":
             code, priority = "observe_only", "low"
@@ -282,11 +316,18 @@ class TWStockRankTechCrossService:
                 code=code,
                 rank_tier=rank_tier,
                 technical_status=technical_status,
+                position_risk=position_risk,
             ),
         }
 
     @staticmethod
-    def _decision_reason(*, code: str, rank_tier: str, technical_status: str) -> str:
+    def _decision_reason(*, code: str, rank_tier: str, technical_status: str, position_risk: Optional[Dict[str, Any]] = None) -> str:
+        risk_status = str((position_risk or {}).get("status") or "")
+        risk_label = str((position_risk or {}).get("label") or "")
+        if risk_status == "overheated":
+            return f"qlib {rank_tier} 且趋势偏强，但位置为{risk_label or '过热谨慎'}，先交由人工复核。"
+        if risk_status == "elevated" and code == "continue_watch":
+            return f"qlib {rank_tier} 且趋势偏强，但位置为{risk_label or '强势但偏高'}，先继续观察追高风险。"
         if code == "new_watch":
             return f"qlib {rank_tier} 且 QuantDinger 趋势偏强，进入优先复盘队列。"
         if code == "continue_watch":
@@ -298,6 +339,71 @@ class TWStockRankTechCrossService:
         if code == "data_insufficient":
             return "趋势数据不足或质量提示较重，暂不做强弱判断。"
         return "位于扩展观察范围，当前只做低优先级观察。"
+
+
+    @staticmethod
+    def action_plan_for(
+        *,
+        rank_tier: str,
+        technical_status: str,
+        trend_label: Optional[str] = None,
+        position_risk: Optional[Dict[str, Any]] = None,
+        decision: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Translate model signals into user-facing research steps.
+
+        This is deliberately not an order instruction. It separates selection
+        quality from current price position so a high rank does not become a
+        blind chase and a short-term rank drop does not become an automatic exit.
+        """
+        risk_status = str((position_risk or {}).get("status") or "")
+        risk_label = str((position_risk or {}).get("label") or "")
+        trend = str(trend_label or "").strip().lower()
+        top_pool = rank_tier in {"top10", "top30"}
+        strong_or_rebound = trend in STRONG_TRENDS or technical_status == "technical_strong"
+        weak_confirmed = trend in WEAK_TRENDS and technical_status == "technical_weak"
+        if technical_status == "technical_data_insufficient":
+            code, priority = "data_review", "blocked"
+            reason = "资料还不完整，先不要提高优先级。"
+            next_check = "补齐日线和指标后再复盘。"
+        elif top_pool and strong_or_rebound and risk_status == "reasonable":
+            code, priority = "simulate_watch", "high"
+            reason = "排名和趋势有支持，价格位置未显示明显偏高。"
+            next_check = "只适合放入模拟观察，继续看后续回放表现。"
+        elif top_pool and strong_or_rebound and risk_status == "elevated":
+            code, priority = "wait_pullback", "medium"
+            reason = "标的值得看，但当前位置偏高，直接追容易买在短线高点。"
+            next_check = "等价格靠近关键均线或热度降温后再复盘。"
+        elif top_pool and strong_or_rebound and risk_status == "overheated":
+            code, priority = "chasing_review", "medium"
+            reason = "趋势强不等于适合现在介入，当前位置已经偏热。"
+            next_check = "先做人工复核或等待回调，不把它放入高优先模拟新增。"
+        elif top_pool and risk_status == "pullback_watch":
+            code, priority = "continue_observe", "medium"
+            reason = "正在回调，关键是确认趋势有没有被破坏。"
+            next_check = "观察是否守住均线、MACD/RSI 是否继续恶化。"
+        elif weak_confirmed or (rank_tier == "outside_top50" and technical_status == "technical_weak"):
+            code, priority = "risk_review", "medium"
+            reason = "排名或趋势转弱已经有技术确认，适合做风险复盘。"
+            next_check = "优先检查是否连续转弱，而不是只看单日排名波动。"
+        elif (decision or {}).get("code") == "manual_review":
+            code, priority = "chasing_review" if risk_status == "overheated" else "continue_observe", "medium"
+            reason = "模型、趋势、指标或位置没有形成一致结论。"
+            next_check = "只做复核，不直接扩大模拟暴露。"
+        else:
+            code, priority = "continue_observe", "low"
+            reason = "当前更像观察信号，还缺少明确入场或退出确认。"
+            next_check = "继续观察排名持续性、趋势和位置变化。"
+        return {
+            "code": code,
+            "label": ACTION_PLAN_LABELS[code],
+            "priority": priority,
+            "reason": reason,
+            "nextCheck": next_check,
+            "positionLabel": risk_label,
+            "research_only": True,
+            "simulation_only": True,
+        }
 
     def _safe_trend_snapshot(self, symbol: str, *, trend_limit: int, as_of: Optional[date] = None) -> Dict[str, Any]:
         try:
@@ -416,5 +522,7 @@ class TWStockRankTechCrossService:
             "qlib_source": "Yahoo adjusted model signal",
             "quantdinger_source": "raw TWStock daily KlineService data",
             "technical_basis": technical_basis,
+            "position_risk_basis": "daily_price_position" if include_technical_strategies else "not_used",
+            "action_plan_basis": "rank_trend_indicator_position_research_step",
             "note": note,
         }

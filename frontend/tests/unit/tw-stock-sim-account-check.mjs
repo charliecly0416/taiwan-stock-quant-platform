@@ -71,6 +71,7 @@ const expectedHelpers = [
   'getTwStockSimTrades',
   'getLatestQlibOptionCSignals',
   'getTwStockCrossAnalysisLatest',
+  'runTwStockReadonlyBacktest',
   'draftTwStockSimOrder',
   'confirmTwStockSimOrder',
   'cancelTwStockSimOrder'
@@ -128,6 +129,29 @@ assert(page.includes('模拟卖出候选'), 'strategy panel must include simulat
 assert(page.includes('继续保留观察'), 'strategy panel must include hold/watch candidates')
 assert(page.includes('人工复核'), 'strategy panel must include manual review candidates')
 assert(page.includes('低换手规则'), 'strategy panel must explain low-turnover rule')
+assert(page.includes('今日模拟操作建议'), 'strategy panel must include today policy advice')
+assert(page.includes('strategyPolicyProfile'), 'today advice must use strategy policy selector state')
+assert(page.includes('strategyPolicyOptions'), 'today advice must define strategy policy options')
+assert(page.includes('todayStrategyAdvice'), 'today advice must compute selected policy advice')
+assert(page.includes('直接跟排名'), 'today advice must expose direct rank policy')
+assert(page.includes('加入追高过滤'), 'today advice must expose position filter policy')
+assert(page.includes('等回调再观察'), 'today advice must expose pullback entry policy')
+assert(page.includes('连续转弱才复盘'), 'today advice must expose confirmed exit policy')
+assert(page.includes('prefillPolicyAdviceDraft'), 'today advice must only prefill simulated draft')
+assert(page.includes('suggestBuyQuantity'), 'today advice must compute simulated buy quantity')
+assert(page.includes('suggestSellQuantity'), 'today advice must compute simulated sell quantity')
+assert(page.includes('lotSize () {'), 'today advice must use explicit lot size helper')
+assert(page.includes('return 10'), 'today advice lot size must be 10 shares')
+assert(page.includes('max-height: 260px'), 'today advice list must have fixed-height scrolling')
+assert(page.includes('positionRiskLabel'), 'strategy panel must include position risk label')
+assert(page.includes('positionRiskColor'), 'strategy panel must include position risk color')
+assert(page.includes('positionRiskStatus'), 'strategy panel must include position risk status helper')
+assert(page.includes('actionPlanLabel'), 'strategy panel must include action plan label')
+assert(page.includes('actionPlanColor'), 'strategy panel must include action plan color')
+assert(page.includes('研究动作'), 'strategy evidence must explain research action')
+assert(page.includes('位置 {{ item.positionRiskLabel }}'), 'strategy panel must render concise position tag')
+assert(page.includes('position_risk'), 'strategy prefill context must preserve position risk')
+assert(page.includes('追高复核'), 'strategy combo decision must surface chasing-high review')
 assert(page.includes('prefillStrategyDraft'), 'strategy panel must only prefill simulated draft')
 assert(page.includes('getLatestQlibOptionCSignals'), 'strategy panel must read qlib signals')
 assert(page.includes('getTwStockCrossAnalysisLatest'), 'strategy panel must read cross-analysis')

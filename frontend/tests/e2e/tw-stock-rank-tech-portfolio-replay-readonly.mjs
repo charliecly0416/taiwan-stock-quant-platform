@@ -13,22 +13,28 @@ function rankTechItems () {
       symbol: '2330', name: '台积电', rank: 1, rankTier: 'top10',
       qlib: { rank: 1, score: 0.31, asof: '2026-06-04' },
       trend: { label: 'uptrend', score: 76, latest_date: '2026-06-04', ok: true, warnings: [] },
-      technical: { status: 'technical_strong', summary: { supportive_count: 3, neutral_count: 1, caution_count: 0, data_insufficient_count: 0 }, warnings: [], reason: '趋势和轻量指标状态一致偏支持。' },
-      decision: { code: 'new_watch', label: '新增观察', reason: 'Top10 且技术状态偏强。' }
+      positionRisk: { status: 'reasonable', label: '位置合理', score: 32, reason: '价格位置未显示明显偏高信号。', metrics: {}, warnings: [] },
+      technical: { status: 'technical_strong', summary: { supportive_count: 3, neutral_count: 1, caution_count: 0, data_insufficient_count: 0 }, warnings: [], reason: '趋势和轻量指标状态一致偏支持。', positionRisk: { status: 'reasonable', label: '位置合理', score: 32, reason: '价格位置未显示明显偏高信号。', metrics: {}, warnings: [] } },
+      decision: { code: 'new_watch', label: '新增观察', reason: 'Top10 且技术状态偏强。' },
+      actionPlan: { code: 'simulate_watch', label: '可模拟观察', priority: 'high', reason: '排名和趋势有支持，价格位置未显示明显偏高。', nextCheck: '只适合放入模拟观察。' }
     },
     {
       symbol: '2357', name: '华硕', rank: 8, rankTier: 'top10',
       qlib: { rank: 8, score: 0.24, asof: '2026-06-04' },
       trend: { label: 'sideways', score: 55, latest_date: '2026-06-04', ok: true, warnings: [] },
-      technical: { status: 'technical_neutral', summary: { supportive_count: 1, neutral_count: 2, caution_count: 1, data_insufficient_count: 0 }, warnings: [], reason: '趋势和轻量指标未形成一致强确认。' },
-      decision: { code: 'manual_review', label: '人工复核', reason: '模型靠前但趋势未确认。' }
+      positionRisk: { status: 'elevated', label: '强势但偏高', score: 68, reason: '趋势仍在，但价格靠近近 120 日高位。', metrics: {}, warnings: [] },
+      technical: { status: 'technical_neutral', summary: { supportive_count: 1, neutral_count: 2, caution_count: 1, data_insufficient_count: 0 }, warnings: [], reason: '趋势和轻量指标未形成一致强确认。', positionRisk: { status: 'elevated', label: '强势但偏高', score: 68, reason: '趋势仍在，但价格靠近近 120 日高位。', metrics: {}, warnings: [] } },
+      decision: { code: 'manual_review', label: '人工复核', reason: '模型靠前但趋势未确认。' },
+      actionPlan: { code: 'wait_pullback', label: '等回调', priority: 'medium', reason: '标的值得看，但当前位置偏高。', nextCheck: '等热度降温。' }
     },
     {
       symbol: '2603', name: '长荣', rank: 22, rankTier: 'top30',
       qlib: { rank: 22, score: 0.12, asof: '2026-06-04' },
       trend: { label: 'pullback', score: 38, latest_date: '2026-06-04', ok: true, warnings: ['short_history_below_60_bars'] },
-      technical: { status: 'technical_weak', summary: { supportive_count: 0, neutral_count: 1, caution_count: 2, data_insufficient_count: 1 }, warnings: ['short_history_below_60_bars'], reason: '趋势或指标出现谨慎状态，降低技术确认强度。' },
-      decision: { code: 'risk_review', label: '风险复盘', reason: '技术状态偏弱。' }
+      positionRisk: { status: 'overheated', label: '过热谨慎', score: 86, reason: 'RSI 偏热且距离 20 日均线较远。', metrics: {}, warnings: [] },
+      technical: { status: 'technical_weak', summary: { supportive_count: 0, neutral_count: 1, caution_count: 2, data_insufficient_count: 1 }, warnings: ['short_history_below_60_bars'], reason: '趋势或指标出现谨慎状态，降低技术确认强度。', positionRisk: { status: 'overheated', label: '过热谨慎', score: 86, reason: 'RSI 偏热且距离 20 日均线较远。', metrics: {}, warnings: [] } },
+      decision: { code: 'risk_review', label: '风险复盘', reason: '技术状态偏弱。' },
+      actionPlan: { code: 'chasing_review', label: '追高复核', priority: 'medium', reason: '趋势强不等于适合现在介入。', nextCheck: '先复核。' }
     }
   ]
 }
@@ -71,7 +77,15 @@ function portfolioPayload () {
     comparison: {
       qlib_only: { ...base, metrics: { totalReturn: 0.045, maxDrawdown: -0.021, actionCount: 8, feeAndTax: 1234.5 } },
       qlib_plus_trend: { ...base, metrics: { totalReturn: 0.052, maxDrawdown: -0.018, actionCount: 6, feeAndTax: 980.25 } },
-      qlib_plus_trend_indicators: { ...base, metrics: { totalReturn: 0.061, maxDrawdown: -0.015, actionCount: 5, feeAndTax: 876.4 }, dataQuality: { warnings: ['missing_close:fixture'] } }
+      qlib_plus_trend_indicators: { ...base, metrics: { totalReturn: 0.061, maxDrawdown: -0.015, actionCount: 5, feeAndTax: 876.4 }, dataQuality: { warnings: ['missing_close:fixture'] } },
+      qlib_plus_trend_position_risk: { ...base, metrics: { totalReturn: 0.058, maxDrawdown: -0.012, actionCount: 4, feeAndTax: 720.1 }, positionRiskSummary: { blocked_overheated_adds: 2, deprioritized_elevated_adds: 1, risk_review_events: 1 } }
+    },
+    strategyComparison: {
+      confirmed_exit: { ...base, profile: { key: 'confirmed_exit', label: '连续转弱才复盘', description: '不因单日排名波动退出，连续转弱后才做风险复盘。' }, metrics: { totalReturn: 0.055, maxDrawdown: -0.017, actionCount: 3, feeAndTax: 610 } },
+      rank_rotate_top50_adaptive_score: { ...base, profile: { key: 'rank_rotate_top50_adaptive_score', label: 'Top50 自适应 score', description: '继承 Top50 轮动；正常市况不干预，谨慎/下跌市况只从 qlib score 0.04-0.08 的 Top10 候选补仓。' }, metrics: { totalReturn: 0.052, maxDrawdown: -0.019, actionCount: 10, feeAndTax: 1450 }, adaptiveScoreSummary: { enabled: true, blocked_adds: 2 } },
+      rank_rotate_top50_adaptive_score_risk_control: { ...base, profile: { key: 'rank_rotate_top50_adaptive_score_risk_control', label: 'Top50 自适应 score + 风控', description: '继承 Top50 自适应 score；市场谨慎/下跌且组合回撤扩大时暂停补仓。' }, metrics: { totalReturn: 0.039, maxDrawdown: -0.014, actionCount: 8, feeAndTax: 1200 }, adaptiveScoreSummary: { enabled: true, blocked_adds: 2 }, portfolioRiskSummary: { enabled: true, blocked_adds: 1 } },
+      rank_rotate_top50: { ...base, profile: { key: 'rank_rotate_top50', label: '跌出 Top50 轮动', description: '持仓跌出 Top50 时才卖出排名最低的一支，再从 Top10 最高排名补一支。' }, metrics: { totalReturn: 0.044, maxDrawdown: -0.026, actionCount: 12, feeAndTax: 1800 } },
+      rank_rotate_top30: { ...base, profile: { key: 'rank_rotate_top30', label: '跌出 Top30 轮动', description: '持仓跌出 Top30 时卖出排名最低的一支，再从 Top10 最高排名补一支。' }, metrics: { totalReturn: 0.036, maxDrawdown: -0.021, actionCount: 16, feeAndTax: 2200 } }
     },
     dataQuality: { point_in_time: true, warnings: ['missing_close:fixture'] },
     trading: { orders_enabled: false, connects_to_broker: false, writes_orders: false, writes_positions: false, research_signal_not_order: true }
@@ -198,8 +212,9 @@ await page.goto(`${baseUrl}/#/tw-stock-monitor`, { waitUntil: 'domcontentloaded'
 await page.waitForSelector('[data-testid="rank-tech-portfolio-replay-readonly"]')
 await page.waitForFunction(() => document.body.innerText.includes('今日复盘与历史模拟'))
 try {
-  await page.waitForFunction(() => document.body.innerText.includes('新增观察') && document.body.innerText.includes('过去表现'), null, { timeout: 15000 })
-  await page.waitForFunction(() => document.body.innerText.includes('qlib + trend + indicators'), null, { timeout: 15000 })
+  await page.waitForFunction(() => document.body.innerText.includes('可模拟观察') && document.body.innerText.includes('过去表现'), null, { timeout: 15000 })
+  await page.waitForFunction(() => document.body.innerText.includes('加入技术指标确认'), null, { timeout: 15000 })
+  await page.waitForFunction(() => document.body.innerText.includes('加入追高风险过滤') && document.body.innerText.includes('位置过滤'), null, { timeout: 15000 })
   await page.waitForFunction(() => document.body.innerText.includes('总收益') && document.body.innerText.includes('最大回撤') && document.body.innerText.includes('费用税费估算'), null, { timeout: 15000 })
 } catch (error) {
   const diagnostic = await page.evaluate(() => ({
@@ -228,10 +243,10 @@ try {
 }
 
 const text = await page.locator('[data-testid="rank-tech-portfolio-replay-readonly"]').innerText()
-for (const required of ['只读历史模拟', '不是投资建议', '不连接券商', '不生成订单', '今天先看什么', '为什么', '总收益', '最大回撤', '费用税费估算']) {
+for (const required of ['只读历史模拟', '不是投资建议', '不连接券商', '不生成订单', '今天先看什么', '为什么', '可模拟观察', '等回调', '追高复核', '策略规则回放', '连续转弱才复盘', 'Top50 自适应 score', 'Top50 自适应 score + 风控', '跌出 Top50 轮动', '跌出 Top30 轮动', '位置合理', '强势但偏高', '过热谨慎', '位置过滤', '总收益', '最大回撤', '费用税费估算']) {
   assert.ok(text.includes(required), `missing rendered text: ${required}`)
 }
-for (const forbidden of ['立即买入', '立即卖出', '自动买入', '自动卖出', '下单', '提交订单', '目标仓位', '上涨概率', '收益承诺']) {
+for (const forbidden of ['立即买入', '立即卖出', '自动买入', '自动卖出', '下单', '提交订单', '目标仓位', '上涨概率', '收益承诺', '直接跟排名', '加入追高过滤', '等回调再观察']) {
   assert.ok(!text.includes(forbidden), `forbidden rendered text: ${forbidden}`)
 }
 
@@ -240,7 +255,7 @@ await page.waitForTimeout(300)
 await page.getByTestId('rank-tech-replay-controls').getByText('近一年', { exact: true }).click()
 await page.waitForTimeout(300)
 await page.locator('[data-testid="rank-tech-replay-controls"] .ant-select').click()
-await page.getByText('qlib + trend', { exact: true }).click()
+await page.getByRole('option', { name: '加入趋势确认' }).click()
 await page.waitForTimeout(300)
 
 const summary = {

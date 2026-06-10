@@ -18,9 +18,10 @@ Yahoo/Scrapling 复权行情补数
 -> Alpha158 + LightGBM frozen model
 -> Option C 150 股票每日研究排序
 -> accepted latest 信号产物
--> QuantDinger backend 读取信号、趋势、交叉分析、Agent context
--> QuantDinger-Vue 前端展示
--> 人工观察与复盘
+-> QuantDinger backend 读取信号、趋势、技术状态、位置风险、交叉分析、Agent context
+-> 只读组合策略回放和模拟账户研究闭环
+-> QuantDinger-Vue 前端以用户第一视角展示
+-> 人工观察、模拟复盘与后续 Decision Model 研究
 ```
 
 这个闭环分为两条数据口径：
@@ -48,12 +49,13 @@ Yahoo/Scrapling 复权行情补数
 
 `frontend/` 来自 QuantDinger-Vue，主要承担：
 
-- 台股趋势监控页面
+- 台股研究页面，首屏优先展示当前 Top30/Top50 和今日复盘重点
 - qlib Top30/Top50 研究排序展示
-- accepted latest 健康状态展示
-- 交叉分析展示
+- qlib、QuantDinger 趋势、MA/RSI/MACD/Bollinger 技术状态和价格位置风险的交叉分析
+- 5 个用户可理解的只读组合策略回放
+- 模拟账户研究闭环、K 线交易 marker 和持仓复盘
 - Agent 问答面板
-- 观察草稿、只读回测入口和人工复盘入口
+- 内部数据状态、历史 run、dry-run 等诊断信息不再作为普通用户主流程展示
 
 ### qlib_pipeline
 
@@ -80,6 +82,43 @@ Yahoo/Scrapling 复权行情补数
 - `verify_full_production_loop.py`：验证最大生产闭环。
 - `verify_self_contained_closed_loop.py`：生成轻量 demo 闭环。
 - `run_daily_tw_stock_auto_update.py`：每日无人值守自动更新入口。
+
+## 当前用户第一页面原则
+
+当前前端不再把开发/运维诊断面板作为主流程。普通用户进入台股研究页后，应该优先得到三个答案：
+
+1. 今天 Top30/Top50 里哪些最值得先看。
+2. 为什么：模型排名、趋势、技术状态、价格位置风险是否一致。
+3. 过去表现如何：只读组合规则历史回放，不写模拟账户，不连接券商。
+
+因此，数据状态、历史研究 run、dry-run 等内容只作为维护或历史测试资产，不作为当前页面的一键验收标准。
+
+## 当前收敛后的组合策略框架
+
+当前项目只保留 5 个用户可理解的主策略作为前端策略回放口径：
+
+| 策略 key | 用户名称 | 作用 |
+| --- | --- | --- |
+| `rank_rotate_top30` | 跌出 Top30 轮动 | 反应更快，交易更频繁，用作中间参考。 |
+| `rank_rotate_top50` | 跌出 Top50 轮动 | 更稳，持仓跌出 Top50 才做风险减少。 |
+| `rank_rotate_top50_adaptive_score` | Top50 自适应 score | 正常市况继承 Top50，谨慎/下跌市况只允许校准 score 区间候选补仓。 |
+| `rank_rotate_top50_adaptive_score_risk_control` | Top50 自适应 score + 风控 | 高级对照，市场差且组合回撤扩大时暂停补仓。 |
+| `confirmed_exit` | 连续转弱才复盘 | 不因单日波动退出，连续转弱后才风险复盘，降低过度交易。 |
+
+`direct_rank`、`position_filter`、`pullback_entry`、`rank_rotate_top30_adaptive_score` 等研究对照项不再作为普通用户前端主策略展示。
+
+## 下一阶段：Decision Model
+
+当前规则策略阶段已经形成 baseline。下一阶段建议尝试二阶段 Decision Model，但不直接做自动交易模型：
+
+```text
+qlib baseline rank/score + 大盘状态 + 技术状态 + 价格位置风险 + FinMind 补充特征 + 持仓状态
+-> Candidate Generator 扩大候选池
+-> Entry Model / Exit Risk Model
+-> 只读组合回放对比当前 5 个 baseline 策略
+```
+
+Decision Model 的输出应是 `entry_score`、`exit_risk_score` 和 `confidence`，用于研究排序和风险复盘，不直接生成真实买卖指令。
 
 ## Option C 150 股票研究排序
 

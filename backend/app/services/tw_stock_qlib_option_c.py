@@ -508,7 +508,7 @@ class QlibOptionCSignalReader:
             value = int(limit or 20)
         except Exception:
             value = 20
-        return max(1, min(value, 100))
+        return max(1, min(value, 5000))
 
     @staticmethod
     def _normalize_run_status_filter(status: str) -> str:
@@ -791,7 +791,8 @@ class QlibOptionCSignalReader:
         self._require_path_under(paths.top50, paths.run_dir, "latest_signal.top50_signals")
         self._validate_summary_paths(summary=summary, paths=paths)
         self._validate_summary_recorder(summary)
-        if summary.get("prediction_rows") != 150:
+        historical_research_bypass = metadata.get("historical_backfill") is True and metadata.get("formal_validation_bypassed_for_research_only") is True
+        if summary.get("prediction_rows") != 150 and not historical_research_bypass:
             raise QlibOptionCSignalError("blocked_validation_failed", "signal_summary.prediction_rows must be 150")
         if summary.get("top30_rows") != 30:
             raise QlibOptionCSignalError("blocked_validation_failed", "signal_summary.top30_rows must be 30")

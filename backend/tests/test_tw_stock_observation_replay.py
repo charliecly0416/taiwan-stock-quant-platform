@@ -80,6 +80,7 @@ class FakeTechnicalService:
                 "data_insufficient_count": 0 if status == "technical_strong" else 4,
             },
             "strategies": [{"id": item, "state": state, "warnings": []} for item in ["ma", "rsi", "macd", "bollinger"]],
+            "positionRisk": {"status": "reasonable", "label": "位置合理", "score": 35, "reason": "fixture", "metrics": {}, "warnings": []},
             "warnings": [] if status == "technical_strong" else ["fixture_data_insufficient"],
         }
 
@@ -97,7 +98,7 @@ def test_technical_and_trend_point_in_time_do_not_use_future_bars():
     assert trend["latest"]["date"] == "2026-06-01"
 
 
-def test_observation_replay_returns_three_observation_variants_without_metrics():
+def test_observation_replay_returns_four_observation_variants_without_metrics():
     rank_service = TWStockRankTechCrossService(
         qlib_reader=FakeQlibReader(),
         trend_service=FakeTrendService(),
@@ -113,10 +114,11 @@ def test_observation_replay_returns_three_observation_variants_without_metrics()
     assert payload["performance_metrics_included"] is False
     assert payload["range"]["runCount"] == 1
     variants = payload["daily"][0]["variants"]
-    assert set(variants) == {"qlib_only", "qlib_plus_trend", "qlib_plus_trend_indicators"}
+    assert set(variants) == {"qlib_only", "qlib_plus_trend", "qlib_plus_trend_indicators", "qlib_plus_trend_position_risk"}
     assert variants["qlib_only"]["summary"]["new_watch"] == 1
     assert variants["qlib_plus_trend"]["summary"]["manual_review"] == 1
     assert variants["qlib_plus_trend_indicators"]["summary"]["item_count"] == 2
+    assert variants["qlib_plus_trend_position_risk"]["summary"]["item_count"] == 2
     assert "fixture_data_insufficient" in payload["dataQuality"]["warnings"]
     assert payload["comparison"]["qlib_only"]["item_count"] == 2
     text = repr(payload)

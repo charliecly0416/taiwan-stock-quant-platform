@@ -26,10 +26,12 @@ The project is designed for research and human review. It does not place broker 
 - Executable FinMind/TWSE Taiwan stock archive and validation scripts.
 - qlib Option C normalized data export, accepted latest artifact consumption, ops integration, EOD automation wrappers, and scheduler support.
 - Built-in Yahoo/Scrapling crawler handoff scripts, FinMind/TWSE archive/export scripts, and qlib Option C production pipeline scripts.
-- QuantDinger cross-analysis between qlib research signals and monitor/trend data.
-- Read-only backtest templates and historical simulation.
-- OpenAI Agent module for questions such as top ranked stocks, trend metrics, and buy/sell research suggestions.
-- Frontend dashboard with qlib rankings, trend charts, cross-analysis, dry-run operations, Agent panel, and safety labels.
+- QuantDinger cross-analysis between qlib research signals, trend data, technical state, and entry-position risk.
+- Read-only strategy replay with the current five user-facing portfolio rules: Top30 rotation, Top50 rotation, Top50 adaptive score, Top50 adaptive score plus risk control, and confirmed-weakness review.
+- Taiwan stock simulation account workflow for research-only observation, manual review, K-line markers, and performance review.
+- OpenAI Agent module for questions such as top ranked stocks, trend metrics, freshness, and research-only review context.
+- Frontend dashboard focused on current Top30/Top50 ranking, today's review priorities, cross-analysis, K-line charts, strategy replay, Agent panel, and safety labels. Internal data-status, dry-run, and historical-run diagnostics are no longer part of the normal user-first page flow.
+- Decision Model design documentation for the next phase: a second-stage model over qlib rank/score, market regime, technical state, FinMind supplemental features, and holding state.
 
 ## Safety Boundary
 
@@ -109,8 +111,12 @@ node tests/unit/tw-stock-agent-panel-check.mjs
 node tests/unit/tw-stock-monitor-workflow-check.mjs
 node tests/unit/tw-stock-monitor-qlib-ops-check.mjs
 node tests/unit/tw-stock-cross-analysis-check.mjs
+node tests/unit/tw-stock-rank-tech-portfolio-replay-check.mjs
+TW_STOCK_MONITOR_BASE_URL=http://127.0.0.1:8000 node tests/e2e/tw-stock-rank-tech-portfolio-replay-readonly.mjs
 corepack pnpm build
 ```
+
+The historical `tw-stock-full-scenario-readonly.mjs` script is kept as an old fixture for the previous diagnostic-heavy page. It is not the current one-click acceptance standard for the simplified user-first Taiwan stock page.
 
 ## Data Policy
 

@@ -22,6 +22,7 @@ class FakeObservationReplayService:
                 "qlib_only": {"new_watch_count": 1, "manual_review_count": 0, "data_insufficient_count": 0, "item_count": 2},
                 "qlib_plus_trend": {"new_watch_count": 1, "manual_review_count": 1, "data_insufficient_count": 0, "item_count": 2},
                 "qlib_plus_trend_indicators": {"new_watch_count": 1, "manual_review_count": 0, "data_insufficient_count": 1, "item_count": 2},
+                "qlib_plus_trend_position_risk": {"new_watch_count": 0, "manual_review_count": 1, "data_insufficient_count": 1, "item_count": 2},
             },
             "daily": [
                 {
@@ -31,6 +32,7 @@ class FakeObservationReplayService:
                         "qlib_only": {"summary": {"new_watch": 1, "item_count": 2}, "items": []},
                         "qlib_plus_trend": {"summary": {"manual_review": 1, "item_count": 2}, "items": []},
                         "qlib_plus_trend_indicators": {"summary": {"data_insufficient": 1, "item_count": 2}, "items": []},
+                        "qlib_plus_trend_position_risk": {"summary": {"manual_review": 1, "item_count": 2}, "items": []},
                     },
                 }
             ],
@@ -64,7 +66,7 @@ def test_observation_replay_api_contract_and_params(client, monkeypatch):
     assert data["simulation_only"] is True
     assert data["research_signal_not_order"] is True
     assert data["performance_metrics_included"] is False
-    assert set(data["comparison"]) == {"qlib_only", "qlib_plus_trend", "qlib_plus_trend_indicators"}
+    assert set(data["comparison"]) == {"qlib_only", "qlib_plus_trend", "qlib_plus_trend_indicators", "qlib_plus_trend_position_risk"}
     assert data["dataQuality"]["point_in_time"] is True
     assert data["trading"]["orders_enabled"] is False
     assert data["trading"]["connects_to_broker"] is False

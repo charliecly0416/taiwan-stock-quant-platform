@@ -9,11 +9,11 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Dict, List, Optional
 
-from app.services.tw_stock_qlib_option_c import QlibOptionCSignalReader, research_only_trading_flags
+from app.services.tw_stock_qlib_option_c import DEFAULT_SIGNAL_ROOT, QlibOptionCSignalReader, research_only_trading_flags
 from app.services.tw_stock_rank_tech_cross import SUMMARY_TEMPLATE, TWStockRankTechCrossService
 
 
-VARIANTS = ["qlib_only", "qlib_plus_trend", "qlib_plus_trend_indicators"]
+VARIANTS = ["qlib_only", "qlib_plus_trend", "qlib_plus_trend_indicators", "qlib_plus_trend_position_risk"]
 ZERO_COMPARISON = {
     "new_watch_count": 0,
     "continue_watch_count": 0,
@@ -45,6 +45,7 @@ class TWStockObservationReplayService:
         bucket: str = "top30",
         max_items: int = 30,
         technical_strategies: Optional[List[str]] = None,
+        signal_root: Optional[str] = None,
     ) -> Dict[str, Any]:
         start = self._parse_date(start_date, fallback=date.today())
         end = self._parse_date(end_date, fallback=start)
@@ -53,8 +54,20 @@ class TWStockObservationReplayService:
         normalized_bucket = self._normalize_bucket(bucket)
         normalized_max = self._normalize_max_items(max_items, normalized_bucket)
         strategies = self._normalize_technical_strategies(technical_strategies)
-        runs = self._accepted_runs_in_range(start=start, end=end)
-        daily = [self._daily_compare(run, bucket=normalized_bucket, max_items=normalized_max, strategies=strategies) for run in runs]
+        reader = self._reader_for_signal_root(signal_root)
+        rank_tech_service = self._rank_tech_for_reader(reader)
+        runs = self._accepted_runs_in_range(start=start, end=end, reader=reader)
+        daily = [
+            self._daily_compare(
+                run,
+                bucket=normalized_bucket,
+                max_items=normalized_max,
+                strategies=strategies,
+                reader=reader,
+                rank_tech_service=rank_tech_service,
+            )
+            for run in runs
+        ]
         return {
             "ok": True,
             "status": "accepted",
@@ -66,6 +79,11 @@ class TWStockObservationReplayService:
             "bucket": normalized_bucket,
             "maxItems": normalized_max,
             "technicalStrategies": strategies,
+            "source": {
+                "signalRoot": str(getattr(reader, "root", "injected_reader")),
+                "defaultSignalRoot": str(QlibOptionCSignalReader(DEFAULT_SIGNAL_ROOT).root),
+                "historicalBackfill": bool(signal_root),
+            },
             "comparison": self._comparison_summary(daily),
             "daily": daily,
             "dataQuality": {
@@ -77,10 +95,10 @@ class TWStockObservationReplayService:
             "trading": research_only_trading_flags(),
         }
 
-    def _daily_compare(self, run: Dict[str, Any], *, bucket: str, max_items: int, strategies: List[str]) -> Dict[str, Any]:
+    def _daily_compare(self, run: Dict[str, Any], *, bucket: str, max_items: int, strategies: List[str], reader: Any, rank_tech_service: Any) -> Dict[str, Any]:
         run_id = str(run.get("run_id") or "")
         asof = self._parse_date(str(run.get("asof") or ""), fallback=date.today())
-        detail = self.qlib_reader.run_detail(run_id, bucket=bucket, enrich_trend=False)
+        detail = reader.run_detail(run_id, bucket=bucket, enrich_trend=False)
         warnings: List[str] = []
         if not detail.get("ok"):
             warnings.append("run_detail_blocked")
@@ -88,36 +106,52 @@ class TWStockObservationReplayService:
         if not rows:
             warnings.append("empty_run_signals")
         variants = {
-            "qlib_only": self._variant_from_rows(rows, asof=asof, mode="qlib_only", strategies=strategies),
-            "qlib_plus_trend": self._variant_from_rows(rows, asof=asof, mode="qlib_plus_trend", strategies=strategies),
-            "qlib_plus_trend_indicators": self._variant_from_rows(rows, asof=asof, mode="qlib_plus_trend_indicators", strategies=strategies),
+            "qlib_only": self._variant_from_rows(rows, asof=asof, mode="qlib_only", strategies=strategies, rank_tech_service=rank_tech_service),
+            "qlib_plus_trend": self._variant_from_rows(rows, asof=asof, mode="qlib_plus_trend", strategies=strategies, rank_tech_service=rank_tech_service),
+            "qlib_plus_trend_indicators": self._variant_from_rows(rows, asof=asof, mode="qlib_plus_trend_indicators", strategies=strategies, rank_tech_service=rank_tech_service),
+            "qlib_plus_trend_position_risk": self._variant_from_rows(rows, asof=asof, mode="qlib_plus_trend_position_risk", strategies=strategies, rank_tech_service=rank_tech_service),
         }
         return {"asof": asof.isoformat(), "run_id": run_id, "variants": variants, "warnings": warnings}
 
-    def _variant_from_rows(self, rows: List[Dict[str, Any]], *, asof: date, mode: str, strategies: List[str]) -> Dict[str, Any]:
+    def _variant_from_rows(self, rows: List[Dict[str, Any]], *, asof: date, mode: str, strategies: List[str], rank_tech_service: Any) -> Dict[str, Any]:
         items = []
         for row in rows:
             if mode == "qlib_only":
                 item = self._qlib_only_item(row)
             else:
-                trend = self.rank_tech_service._safe_trend_snapshot(str(row.get("symbol") or ""), trend_limit=120, as_of=asof)
-                technical = self.rank_tech_service.technical_status_from_trend(trend)
-                if mode == "qlib_plus_trend_indicators":
-                    technical = self.rank_tech_service.technical_status_from_trend_and_indicators(
+                trend = rank_tech_service._safe_trend_snapshot(str(row.get("symbol") or ""), trend_limit=120, as_of=asof)
+                technical = rank_tech_service.technical_status_from_trend(trend)
+                if mode in {"qlib_plus_trend_indicators", "qlib_plus_trend_position_risk"}:
+                    technical = rank_tech_service.technical_status_from_trend_and_indicators(
                         symbol=str(row.get("symbol") or ""),
                         trend=trend,
                         limit=120,
                         strategies=strategies,
                         as_of=asof,
                     )
-                rank_tier = self.rank_tech_service.rank_tier(row.get("rank"))
-                decision = self.rank_tech_service.decision_for(rank_tier=rank_tier, technical_status=str(technical.get("status") or "technical_data_insufficient"))
+                rank_tier = rank_tech_service.rank_tier(row.get("rank"))
+                position_risk = rank_tech_service._position_risk_from_technical(technical) if mode == "qlib_plus_trend_position_risk" else None
+                technical_status = str(technical.get("status") or "technical_data_insufficient")
+                decision = rank_tech_service.decision_for(
+                    rank_tier=rank_tier,
+                    technical_status=technical_status,
+                    position_risk=position_risk,
+                )
+                action_plan = rank_tech_service.action_plan_for(
+                    rank_tier=rank_tier,
+                    technical_status=technical_status,
+                    trend_label=trend.get("trend_label"),
+                    position_risk=position_risk,
+                    decision=decision,
+                )
                 item = {
                     "symbol": str(row.get("symbol") or ""),
                     "rank": row.get("rank"),
                     "rankTier": rank_tier,
                     "decision": decision,
+                    "actionPlan": action_plan,
                     "technical": technical,
+                    "positionRisk": position_risk or {},
                     "trend": {
                         "label": trend.get("trend_label"),
                         "score": trend.get("trend_score"),
@@ -140,13 +174,19 @@ class TWStockObservationReplayService:
             "symbol": str(row.get("symbol") or ""),
             "rank": row.get("rank"),
             "rankTier": rank_tier,
+            "score": row.get("qlib_score", row.get("score")),
+            "qlib": {
+                "rank": row.get("rank"),
+                "score": row.get("qlib_score", row.get("score")),
+                "bucket": row.get("bucket"),
+            },
             "decision": decision,
             "technical": {"status": "not_used", "basis": "qlib_only", "strategies": [], "warnings": []},
             "trend": {"label": None, "score": None, "latest_date": None, "warnings": []},
         }
 
-    def _accepted_runs_in_range(self, *, start: date, end: date) -> List[Dict[str, Any]]:
-        payload = self.qlib_reader.list_runs(limit=100, status="accepted")
+    def _accepted_runs_in_range(self, *, start: date, end: date, reader: Any) -> List[Dict[str, Any]]:
+        payload = reader.list_runs(limit=5000, status="accepted")
         runs = []
         for item in payload.get("items") or []:
             asof = self._parse_date(str(item.get("asof") or ""), fallback=None)
@@ -154,6 +194,17 @@ class TWStockObservationReplayService:
                 runs.append(item)
         runs.sort(key=lambda item: str(item.get("asof") or ""))
         return runs
+
+
+    def _reader_for_signal_root(self, signal_root: Optional[str]) -> Any:
+        if not signal_root:
+            return self.qlib_reader
+        return QlibOptionCSignalReader(root=str(signal_root))
+
+    def _rank_tech_for_reader(self, reader: Any) -> Any:
+        if reader is self.qlib_reader:
+            return self.rank_tech_service
+        return TWStockRankTechCrossService(qlib_reader=reader)
 
     @staticmethod
     def _rows_for_bucket(payload: Dict[str, Any], bucket: str) -> List[Dict[str, Any]]:

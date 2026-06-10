@@ -353,3 +353,33 @@ def test_run_workflow_can_skip_valuation(monkeypatch):
 
     assert report["valuation"]["count"] == 0
     assert report["valuation_archived_count"] == 0
+
+
+def test_archive_daily_fetch_uses_tw_stock_data_source_http_get(monkeypatch):
+    from scripts import archive_tw_stock_daily
+
+    calls = []
+    original_normalize_symbol = archive_tw_stock_daily.TWStockDataSource.normalize_symbol
+
+    class FakeSource:
+        def __init__(self, base_url):
+            calls.append(("init", base_url))
+
+        @staticmethod
+        def normalize_symbol(symbol):
+            return original_normalize_symbol(symbol)
+
+        def _http_get(self, params):
+            calls.append(("http", params))
+            return {"status": 200, "data": [{"date": "2026-05-22", "stock_id": "2330", "open": 1, "max": 2, "min": 1, "close": 2, "Trading_Volume": 10}]}
+
+    monkeypatch.setattr(archive_tw_stock_daily, "TWStockDataSource", FakeSource)
+    monkeypatch.setenv("FINMIND_TOKEN", "test_token")
+
+    rows = archive_tw_stock_daily.fetch_finmind_rows("2330", "2026-05-20", "2026-05-22", base_url="https://example.test")
+
+    assert rows[0]["stock_id"] == "2330"
+    assert calls[0] == ("init", "https://example.test")
+    assert calls[1][0] == "http"
+    assert calls[1][1]["data_id"] == "2330"
+    assert calls[1][1]["token"] == "test_token"

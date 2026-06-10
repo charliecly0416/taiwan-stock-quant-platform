@@ -307,3 +307,50 @@ def test_get_kline_applies_adjustment_only_when_env_requests_it(monkeypatch):
     assert bars[0]["close"] == round(1845.0 * action.adjustment_factor, 4)
     assert bars[0]["corporateActionMode"] == "forward_adjusted"
     assert bars[1]["close"] == 1855.0
+
+
+
+def test_http_get_defaults_to_scrapling_first_with_token(monkeypatch):
+    src = TWStockDataSource()
+    monkeypatch.setenv("FINMIND_API_TOKEN", "token_from_env")
+    monkeypatch.delenv("TW_STOCK_FINMIND_CLIENT", raising=False)
+
+    def fail_requests(*args, **kwargs):
+        raise AssertionError("requests should not be called before scrapling by default")
+
+    seen = []
+    monkeypatch.setattr(src._session, "get", fail_requests)
+    monkeypatch.setattr(src, "_scrapling_get", lambda params: seen.append(dict(params)) or _payload(_rows()))
+
+    bars = src._fetch_finmind_daily("2330", "2025-01-01", "2025-01-10")
+
+    assert len(bars) == 3
+    assert seen[0]["token"] == "token_from_env"
+
+def test_http_get_uses_scrapling_fallback_for_permission_status(monkeypatch):
+    src = TWStockDataSource()
+
+    class Resp:
+        status_code = 403
+        text = "forbidden"
+
+    monkeypatch.setattr(src._session, "get", lambda *args, **kwargs: Resp())
+    monkeypatch.setattr(src, "_scrapling_get", lambda params: _payload(_rows()))
+
+    payload = src._http_get({"dataset": "TaiwanStockPrice", "data_id": "2330"})
+
+    assert payload == _payload(_rows())
+
+
+def test_http_get_uses_scrapling_fallback_on_request_exception(monkeypatch):
+    src = TWStockDataSource()
+
+    def raise_error(*args, **kwargs):
+        raise RuntimeError("network blocked")
+
+    monkeypatch.setattr(src._session, "get", raise_error)
+    monkeypatch.setattr(src, "_scrapling_get", lambda params: _payload(_rows()))
+
+    payload = src._http_get({"dataset": "TaiwanStockPrice", "data_id": "2330"})
+
+    assert payload == _payload(_rows())

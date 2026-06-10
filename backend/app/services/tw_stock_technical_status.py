@@ -44,6 +44,27 @@ def _mean(values: Sequence[float]) -> Optional[float]:
     return sum(clean) / len(clean)
 
 
+def _percent(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    return round(float(value) * 100.0, 2)
+
+
+def _percentile_rank(values: Sequence[float], value: float) -> Optional[float]:
+    clean = [float(item) for item in values if item is not None]
+    if len(clean) < 2:
+        return None
+    below = len([item for item in clean if item < value])
+    equal = len([item for item in clean if item == value])
+    return ((below + equal * 0.5) / len(clean)) * 100.0
+
+
+def _ratio_pct(numerator: float, denominator: Optional[float]) -> Optional[float]:
+    if denominator is None or denominator == 0:
+        return None
+    return (float(numerator) / float(denominator) - 1.0) * 100.0
+
+
 def _ema(values: Sequence[float], period: int) -> List[float]:
     if not values:
         return []
@@ -89,6 +110,7 @@ class TWStockTechnicalStatusService:
             "strategies": items,
             "summary": summary,
             "status": self._overall_status(summary),
+            "positionRisk": self._position_risk(closes),
             "warnings": self._warnings(items),
         }
 
@@ -244,6 +266,136 @@ class TWStockTechnicalStatusService:
                 "lower": _round_optional(lower),
             },
             "reason": reason,
+            "warnings": [],
+        }
+
+    @staticmethod
+    def _rsi_value(closes: Sequence[float], period: int = 14) -> Optional[float]:
+        if len(closes) <= period:
+            return None
+        changes = [closes[i] - closes[i - 1] for i in range(len(closes) - period, len(closes))]
+        gains = [max(change, 0.0) for change in changes]
+        losses = [abs(min(change, 0.0)) for change in changes]
+        avg_gain = _mean(gains) or 0.0
+        avg_loss = _mean(losses) or 0.0
+        if avg_loss == 0:
+            return 100.0 if avg_gain > 0 else 50.0
+        rs = avg_gain / avg_loss
+        return 100.0 - (100.0 / (1.0 + rs))
+
+    @staticmethod
+    def _position_risk(closes: Sequence[float]) -> Dict[str, Any]:
+        if len(closes) < 60:
+            return {
+                "status": "data_insufficient",
+                "label": "数据不足",
+                "score": None,
+                "reason": "日线样本少于 60 根，暂不判断当前位置。",
+                "metrics": {},
+                "warnings": ["position_risk_data_insufficient"],
+            }
+
+        close = float(closes[-1])
+        ma20 = _mean(closes[-20:])
+        ma60 = _mean(closes[-60:])
+        window120 = list(closes[-120:]) if len(closes) >= 120 else list(closes)
+        price_percentile = _percentile_rank(window120, close)
+        rsi14 = TWStockTechnicalStatusService._rsi_value(closes)
+        distance_ma20 = _ratio_pct(close, ma20)
+        distance_ma60 = _ratio_pct(close, ma60)
+        return_5d = _ratio_pct(close, closes[-6]) if len(closes) >= 6 else None
+        return_20d = _ratio_pct(close, closes[-21]) if len(closes) >= 21 else None
+
+        bollinger_position = None
+        if len(closes) >= 20:
+            boll_window = list(closes[-20:])
+            middle = _mean(boll_window) or 0.0
+            width = pstdev(boll_window) * 2.0 if len(boll_window) >= 2 else 0.0
+            lower = middle - width
+            upper = middle + width
+            if upper > lower:
+                bollinger_position = (close - lower) / (upper - lower)
+
+        risk_points = 0
+        reasons: List[str] = []
+        if price_percentile is not None:
+            if price_percentile >= 92:
+                risk_points += 32
+                reasons.append("接近近 120 日高位")
+            elif price_percentile >= 85:
+                risk_points += 22
+                reasons.append("处于近 120 日偏高区间")
+            elif price_percentile <= 35:
+                risk_points -= 8
+                reasons.append("不在区间高位")
+        if rsi14 is not None:
+            if rsi14 >= 72:
+                risk_points += 28
+                reasons.append("RSI 偏热")
+            elif rsi14 >= 68:
+                risk_points += 18
+                reasons.append("RSI 略偏热")
+        if distance_ma20 is not None:
+            if distance_ma20 >= 12:
+                risk_points += 32
+                reasons.append("距离 20 日均线较远")
+            elif distance_ma20 >= 8:
+                risk_points += 20
+                reasons.append("距离 20 日均线偏远")
+            elif -4 <= distance_ma20 <= 6:
+                risk_points -= 8
+                reasons.append("接近 20 日均线")
+        if bollinger_position is not None:
+            if bollinger_position >= 1.02:
+                risk_points += 22
+                reasons.append("越过布林上沿")
+            elif bollinger_position >= 0.88:
+                risk_points += 12
+                reasons.append("靠近布林上沿")
+        if return_5d is not None and return_5d >= 8:
+            risk_points += 10
+            reasons.append("近 5 日涨幅较快")
+        if return_20d is not None and return_20d >= 18:
+            risk_points += 10
+            reasons.append("近 20 日涨幅较大")
+
+        score = max(0, min(100, 35 + risk_points))
+        overheated = (price_percentile is not None and price_percentile >= 92 and rsi14 is not None and rsi14 >= 72) or (distance_ma20 is not None and distance_ma20 >= 12)
+        elevated = (price_percentile is not None and price_percentile >= 85) or (rsi14 is not None and rsi14 >= 68) or (distance_ma20 is not None and distance_ma20 >= 8)
+        pullback_watch = (distance_ma20 is not None and -4 <= distance_ma20 <= 3 and price_percentile is not None and 45 <= price_percentile <= 82)
+        if overheated:
+            status = "overheated"
+            label = "过热谨慎"
+        elif elevated:
+            status = "elevated"
+            label = "强势但偏高"
+        elif pullback_watch:
+            status = "pullback_watch"
+            label = "回调观察"
+        else:
+            status = "reasonable"
+            label = "位置合理"
+
+        reason = "，".join(dict.fromkeys(reasons[:3])) if reasons else "价格位置未显示明显偏高信号。"
+        if status == "reasonable" and reasons:
+            reason = "位置相对可观察；" + reason
+        return {
+            "status": status,
+            "label": label,
+            "score": int(round(score)),
+            "reason": reason,
+            "metrics": {
+                "close": _round_optional(close, 4),
+                "ma20": _round_optional(ma20, 4),
+                "ma60": _round_optional(ma60, 4),
+                "distance_ma20_pct": _round_optional(distance_ma20, 2),
+                "distance_ma60_pct": _round_optional(distance_ma60, 2),
+                "rsi14": _round_optional(rsi14, 2),
+                "price_percentile_120d": _round_optional(price_percentile, 2),
+                "bollinger_position": _round_optional(bollinger_position, 4),
+                "return_5d_pct": _round_optional(return_5d, 2),
+                "return_20d_pct": _round_optional(return_20d, 2),
+            },
             "warnings": [],
         }
 

@@ -25,6 +25,7 @@ HTTP_TIMEOUT = 20
 TAIPEI_TZ = timezone(timedelta(hours=8))
 ARCHIVE_LOOKUP_ENV = "TW_STOCK_ARCHIVE_LOOKUP"
 CORPORATE_ACTION_MODE_ENV = "TW_STOCK_CORPORATE_ACTION_MODE"
+FINMIND_CLIENT_ENV = "TW_STOCK_FINMIND_CLIENT"
 _TW_STOCK_RE = re.compile(r"^[0-9A-Z]{2,12}$")
 
 
@@ -93,7 +94,12 @@ class TWStockDataSource(BaseDataSource):
 
     @staticmethod
     def _finmind_token() -> str:
-        return (os.getenv("FINMIND_TOKEN") or os.getenv("FINMIND_API_TOKEN") or "").strip()
+        return (os.getenv("FINMIND_TOKEN") or os.getenv("FINMIND_API_TOKEN") or os.getenv("FINMIND_API_KEY") or "").strip()
+
+    @staticmethod
+    def _finmind_client_mode() -> str:
+        mode = (os.getenv(FINMIND_CLIENT_ENV) or "scrapling_first").strip().lower()
+        return mode if mode in {"scrapling_first", "requests_first", "requests_only"} else "scrapling_first"
 
     @staticmethod
     def _date_range(timeframe: str, limit: int, before_time: Optional[int], after_time: Optional[int]) -> tuple[str, str]:
@@ -110,16 +116,61 @@ class TWStockDataSource(BaseDataSource):
         return start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d")
 
     def _http_get(self, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        mode = self._finmind_client_mode()
+        if mode == "scrapling_first":
+            payload = self._scrapling_get(params)
+            if self._payload_ok(payload):
+                return payload
+            logger.warning("FinMind scrapling-first request did not return ok payload; falling back to requests")
+
         try:
             resp = self._session.get(self.base_url, params=params, timeout=HTTP_TIMEOUT)
             if resp.status_code != 200:
                 logger.warning("FinMind HTTP %s for Taiwan stock data", resp.status_code)
+                if mode != "requests_only" and resp.status_code in (402, 403, 429):
+                    fallback = self._scrapling_get(params)
+                    if fallback is not None:
+                        return fallback
                 return {"status": resp.status_code, "msg": resp.text[:500], "data": []}
             return resp.json()
         except Exception as e:
             logger.warning("FinMind request failed for Taiwan stock data: %s", e)
-            return None
+            return None if mode == "requests_only" else self._scrapling_get(params)
 
+    @staticmethod
+    def _payload_ok(payload: Optional[Dict[str, Any]]) -> bool:
+        if not isinstance(payload, dict):
+            return False
+        return payload.get("status") in (None, 200, "200", True)
+
+    def _scrapling_get(self, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        try:
+            from scrapling.fetchers import Fetcher  # noqa: WPS433
+
+            headers = {"User-Agent": "Mozilla/5.0 QuantDinger/TWStock-FinMind-Scrapling"}
+            token = str((params or {}).get("token") or "").strip()
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+            page = Fetcher.get(
+                self.base_url,
+                params=params,
+                headers=headers,
+                timeout=HTTP_TIMEOUT,
+                retries=1,
+                impersonate="chrome",
+            )
+            status_code = int(getattr(page, "status", 0) or getattr(page, "status_code", 0) or 0)
+            if status_code and status_code != 200:
+                logger.warning("FinMind scrapling HTTP %s for Taiwan stock data", status_code)
+                return {"status": status_code, "msg": str(getattr(page, "text", ""))[:500], "data": []}
+            payload = page.json()
+            return payload if isinstance(payload, dict) else None
+        except ImportError:
+            logger.warning("FinMind scrapling fallback unavailable: scrapling is not installed")
+            return None
+        except Exception as e:
+            logger.warning("FinMind scrapling fallback failed for Taiwan stock data: %s", e)
+            return None
 
     @staticmethod
     def _archive_lookup_enabled() -> bool:

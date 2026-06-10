@@ -89,9 +89,19 @@ class FakeTechnicalService:
                 "data_insufficient_count": states.count("data_insufficient"),
             },
             "strategies": [{"id": item, "label": item.upper(), "state": state, "metrics": {}, "reason": "fixture"} for item, state in zip(ids, states)],
+            "positionRisk": {"status": "reasonable", "label": "位置合理", "score": 35, "reason": "fixture", "metrics": {}, "warnings": []},
             "warnings": warnings,
         }
 
+
+
+
+class HotTechnicalService(FakeTechnicalService):
+    def analyze_symbol(self, *, symbol: str, limit: int = 120, strategies=None, as_of=None):
+        payload = super().analyze_symbol(symbol=symbol, limit=limit, strategies=strategies, as_of=as_of)
+        if symbol == "2330":
+            payload["positionRisk"] = {"status": "overheated", "label": "过热谨慎", "score": 88, "reason": "fixture", "metrics": {}, "warnings": []}
+        return payload
 
 class WeakTechnicalService(FakeTechnicalService):
     STATUS = {
@@ -115,6 +125,7 @@ def test_rank_tech_cross_latest_classification_matrix():
     assert by_symbol["2330"]["rankTier"] == "top10"
     assert by_symbol["2330"]["technical"]["status"] == "technical_strong"
     assert by_symbol["2330"]["decision"]["code"] == "new_watch"
+    assert by_symbol["2330"]["actionPlan"]["code"] == "continue_observe"
     assert by_symbol["6290"]["decision"]["code"] == "continue_watch"
     assert by_symbol["2357"]["decision"]["code"] == "manual_review"
     assert by_symbol["2303"]["rankTier"] == "top50"
@@ -166,6 +177,61 @@ def test_rank_tech_cross_strong_trend_with_weak_indicators_is_not_new_watch():
     assert item["trend"]["label"] == "uptrend"
     assert item["technical"]["status"] == "technical_neutral"
     assert item["decision"]["code"] != "new_watch"
+
+
+
+def test_rank_tech_cross_top_rank_strong_but_overheated_is_manual_review():
+    service = TWStockRankTechCrossService(
+        qlib_reader=FakeQlibReader(),
+        trend_service=FakeTrendService(),
+        technical_service=HotTechnicalService(),
+    )
+    payload = service.latest(bucket="top50", max_items=1)
+    item = payload["items"][0]
+
+    assert item["symbol"] == "2330"
+    assert item["technical"]["status"] == "technical_strong"
+    assert item["positionRisk"]["status"] == "overheated"
+    assert item["decision"]["code"] == "manual_review"
+    assert item["actionPlan"]["code"] == "chasing_review"
+    assert "过热谨慎" in item["decision"]["reason"]
+
+
+def test_rank_tech_cross_action_plan_separates_selection_from_timing():
+    reasonable = TWStockRankTechCrossService.action_plan_for(
+        rank_tier="top10",
+        technical_status="technical_strong",
+        trend_label="uptrend",
+        position_risk={"status": "reasonable", "label": "位置合理"},
+        decision={"code": "new_watch"},
+    )
+    elevated = TWStockRankTechCrossService.action_plan_for(
+        rank_tier="top10",
+        technical_status="technical_strong",
+        trend_label="uptrend",
+        position_risk={"status": "elevated", "label": "强势但偏高"},
+        decision={"code": "continue_watch"},
+    )
+    overheated = TWStockRankTechCrossService.action_plan_for(
+        rank_tier="top10",
+        technical_status="technical_strong",
+        trend_label="uptrend",
+        position_risk={"status": "overheated", "label": "过热谨慎"},
+        decision={"code": "manual_review"},
+    )
+    weak = TWStockRankTechCrossService.action_plan_for(
+        rank_tier="outside_top50",
+        technical_status="technical_weak",
+        trend_label="downtrend",
+        position_risk={"status": "pullback_watch", "label": "回调观察"},
+        decision={"code": "risk_review"},
+    )
+
+    assert reasonable["code"] == "simulate_watch"
+    assert elevated["code"] == "wait_pullback"
+    assert overheated["code"] == "chasing_review"
+    assert weak["code"] == "risk_review"
+    assert all(item["research_only"] and item["simulation_only"] for item in [reasonable, elevated, overheated, weak])
 
 
 def test_rank_tech_cross_outside_top50_contract_decisions():

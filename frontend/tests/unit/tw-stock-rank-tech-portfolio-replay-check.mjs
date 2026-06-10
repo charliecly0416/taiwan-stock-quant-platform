@@ -47,9 +47,14 @@ for (const required of [
   '为什么',
   '过去表现',
   '只读历史模拟，不是投资建议，不连接券商，不生成订单。',
-  'qlib-only',
-  'qlib + trend',
-  'qlib + trend + indicators',
+  '只看模型排名',
+  '加入趋势确认',
+  '加入技术指标确认',
+  '加入追高风险过滤',
+  '位置过滤',
+  '策略规则回放',
+  'portfolioReplayStrategyItems',
+  'portfolioStrategyBrief',
   '总收益',
   '最大回撤',
   '动作次数',
@@ -59,7 +64,7 @@ for (const required of [
 }
 
 
-for (const required of ['新增观察', '继续观察', '风险复盘', '人工复核', '仅观察', '数据不足', '数据提示']) {
+for (const required of ['新增观察', '继续观察', '风险复盘', '人工复核', '仅观察', '数据不足', '数据提示', '可模拟观察', '等回调', '追高复核', '跌出 Top30 轮动', '跌出 Top50 轮动', '连续转弱才复盘', '10 支上限', '默认低频策略', '进阶高收益策略', 'rankTechActionLabel', 'rankTechActionColor']) {
   assert.ok(page.includes(required), `page missing decision label ${required}`)
 }
 
@@ -85,6 +90,10 @@ for (const required of [
   'rankTechPriorityItems',
   'portfolioReplayComparisonItems',
   'portfolioReplayDateRange',
+  'positionRiskLabel',
+  'positionRiskColor',
+  'portfolioPositionRiskText',
+  'qlib_plus_trend_position_risk',
   'initialCash: 1000000',
   'maxHoldings: 10',
   'lotSize: 10',

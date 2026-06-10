@@ -114,7 +114,7 @@ PYTHONPATH=backend python backend/scripts/smoke_tw_stock_agent_phase6b.py
 ```bash
 git status --short --ignored backend/.env
 git check-ignore -v backend/.env
-rg -n "OPENAI_API_KEY=.*[A-Za-z0-9_]{8}|ChuLiYang|pqPEC" docs backend/app frontend/src backend/tests frontend/tests .env.example
+rg -n "OPENAI_API_KEY=.*[A-Za-z0-9_]{8}|REAL_SECRET_FRAGMENT" docs backend/app frontend/src backend/tests frontend/tests .env.example
 ```
 
 结果：

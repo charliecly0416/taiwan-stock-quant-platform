@@ -91,6 +91,26 @@ def test_technical_summary_rules():
     assert insufficient["status"] == "technical_data_insufficient"
 
 
+
+def test_position_risk_flags_high_location_and_short_history():
+    overheated = _service(list(range(80, 221))).analyze_symbol(symbol="2330")
+    short = _service([100] * 20).analyze_symbol(symbol="2330")
+
+    assert overheated["positionRisk"]["status"] in {"elevated", "overheated"}
+    assert overheated["positionRisk"]["label"] in {"强势但偏高", "过热谨慎"}
+    assert overheated["positionRisk"]["score"] >= 60
+    assert overheated["positionRisk"]["metrics"]["rsi14"] is not None
+    assert overheated["positionRisk"]["metrics"]["price_percentile_120d"] >= 85
+    assert short["positionRisk"]["status"] == "data_insufficient"
+
+
+def test_position_risk_reasonable_or_pullback_for_non_extended_price():
+    closes = [100 + (index % 8) * 0.2 for index in range(90)]
+    payload = _service(closes).analyze_symbol(symbol="2330")
+
+    assert payload["positionRisk"]["status"] in {"reasonable", "pullback_watch"}
+    assert payload["positionRisk"]["score"] <= 50
+
 def test_technical_status_source_has_no_backtest_or_action_terms():
     source = Path("backend/app/services/tw_stock_technical_status.py").read_text()
     forbidden = [

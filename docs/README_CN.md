@@ -578,6 +578,9 @@ QuantDinger/
 
 ## 文档导航
 
+| [台股当前项目介绍与原理](PROJECT_INTRO_CN.md) | 当前台股研究页、五个收敛组合策略、安全边界和 Decision Model 下一阶段路线 |
+| [台股当前使用文档](USER_GUIDE_CN.md) | 当前 Top30/Top50、今日复盘、交叉分析、K 线、模拟账户和只读策略回放的用户操作说明 |
+| [Decision Model 设计方案](TW_STOCK_DECISION_META_MODEL_DESIGN_CN.md) | 下一阶段二阶段决策模型：扩大候选池、大盘自适应、Entry/Exit Risk 模型和验收标准 |
 | 文档 | 说明 |
 |------|------|
 | [英文总览](../README.md) | 仓库根目录英文 README（与本文结构同步） |
