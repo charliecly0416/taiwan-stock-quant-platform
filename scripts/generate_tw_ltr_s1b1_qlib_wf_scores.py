@@ -20,13 +20,36 @@ from qlib.data.dataset import DatasetH
 
 ROOT = Path(__file__).resolve().parents[1]
 QLIB_ROOT = ROOT / "qlib_pipeline"
-PROVIDER = Path("/home/chuliyang/qlib/data_tw/experiments/yahoo_adjusted_primary/qlib_bin")
-NORMALIZED = QLIB_ROOT / "data_tw/experiments/yahoo_adjusted_primary/normalized_nonempty"
+PROVIDER = Path(os.environ.get("S1B1_PROVIDER_URI", "/home/chuliyang/qlib/data_tw/experiments/yahoo_adjusted_primary/qlib_bin"))
+NORMALIZED = Path(
+    os.environ.get(
+        "S1B1_NORMALIZED_DIR",
+        str(QLIB_ROOT / "data_tw/experiments/yahoo_adjusted_primary/normalized_nonempty"),
+    )
+)
 CONFIG_PATH = QLIB_ROOT / "configs/tw_yahoo_primary_alpha158.yaml"
-FROZEN_RECORDER = QLIB_ROOT / "mlruns/607910013167647574/950741cfd5f14ee5a05464fec3e12e0a"
+FROZEN_RECORDER = Path(
+    os.environ.get(
+        "S1B1_FROZEN_RECORDER_DIR",
+        str(QLIB_ROOT / "mlruns/607910013167647574/950741cfd5f14ee5a05464fec3e12e0a"),
+    )
+)
 FROZEN_PRED = FROZEN_RECORDER / "artifacts/pred.pkl"
-REPAIRED_DAILY = ROOT / "data_tw/experiments/ltr_qlib_split_aligned_retrain/phase_s1b0r_calendar_price_repair/phase_s1b0r_dynamic_universe_feasibility_repaired_daily.csv"
-OUT = ROOT / "data_tw/experiments/ltr_qlib_split_aligned_retrain/phase_s1b1_qlib_wf_scores"
+REPAIRED_DAILY = Path(
+    os.environ.get(
+        "S1B1_REPAIRED_DAILY",
+        str(
+            ROOT
+            / "data_tw/experiments/ltr_qlib_split_aligned_retrain/phase_s1b0r_calendar_price_repair/phase_s1b0r_dynamic_universe_feasibility_repaired_daily.csv"
+        ),
+    )
+)
+OUT = Path(
+    os.environ.get(
+        "S1B1_OUTPUT_DIR",
+        str(ROOT / "data_tw/experiments/ltr_qlib_split_aligned_retrain/phase_s1b1_qlib_wf_scores"),
+    )
+)
 FOLD_OUT = OUT / "folds"
 
 CALENDAR_POLICY = "qlib day.txt ∩ TWII normalized price calendar"
