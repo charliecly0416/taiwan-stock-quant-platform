@@ -16,6 +16,47 @@ assert.match(permission, /defaultRoutePath\s*=\s*'\/tw-stock-monitor'/)
 assert.match(routes, /path:\s*'\/tw-stock-monitor'/)
 assert.match(routes, /menu\.dashboard\.twStockMonitor/)
 assert.match(api, /const BASE_URL = '\/api\/tw-stock'/)
+assert.match(api, /getTwStockLTRReadonlyExplanation/)
+assert.match(api, /\/ltr-readonly-explanation/)
+assert.match(page, /data-testid="ltr-readonly-explanation-panel"/)
+assert.match(page, /为什么现在不动/)
+assert.match(page, /item\.why_no_action/)
+assert.match(page, /item\.tradeoff_summary/)
+assert.match(page, /item\.readonly_disclaimer/)
+assert.match(page, /查看历史回放明细/)
+assert.match(page, /detail\.net_return_summary/)
+assert.match(page, /detail\.drawdown_summary/)
+assert.match(page, /detail\.action_count_summary/)
+assert.match(page, /detail\.turnover_summary/)
+assert.match(page, /loadLtrReadonlyExplanation/)
+assert.match(page, /getTwStockLTRReadonlyExplanation\(\)/)
+assert.match(api, /getTwStockLTROptionalSimStrategies/)
+assert.match(api, /\/ltr-optional-sim-strategies/)
+assert.match(api, /getTwStockLTROptionalSimStrategies \(\) \{[\s\S]*method: 'get'/)
+assert.match(page, /data-testid="ltr-optional-sim-strategy-panel"/)
+assert.match(page, /可选模拟策略/)
+assert.match(page, /默认主策略/)
+assert.match(page, /ltrOptionalSimSelected: 'phase1c_ltr_simple_daily'/)
+assert.match(page, /换手 proxy/)
+assert.match(page, /首屏主指标使用独立测试区间/)
+assert.match(page, /样本内\/验证\/样本外混合结果/)
+assert.match(page, /item\.display_name/)
+assert.match(page, /ltrOptionalSimSelectedStrategy\.status_label/)
+assert.match(page, /费用后历史模拟/)
+assert.match(page, /independent_test 切片/)
+assert.match(page, /ltrOptionalSimSelectedStrategy\.display_name/)
+assert.match(page, /仅供只读历史模拟和研究复盘，不构成投资建议，不产生真实交易、委托或仓位。/)
+assert.match(page, /loadLtrOptionalSimStrategies/)
+assert.match(page, /getTwStockLTROptionalSimStrategies\(\)/)
+assert.doesNotMatch(page, /source_trace/)
+assert.doesNotMatch(page, /summary_notes/)
+
+assert.doesNotMatch(api, /manual-review\/explanation/)
+assert.doesNotMatch(api, /getTwStockManualReviewExplanation/)
+assert.doesNotMatch(page, /manualReviewReadonlyTestMode/)
+assert.doesNotMatch(page, /manual-review-readonly-test/)
+assert.doesNotMatch(page, /manual-review-explanation-panel/)
+
 assert.doesNotMatch(aiAssetPage, /getTradingOpportunities/)
 assert.doesNotMatch(aiAssetPage, /QuickTradePanel/)
 assert.doesNotMatch(aiAssetPage, /quick-trade|qt-floating-btn|radar-section/)
@@ -267,7 +308,37 @@ assert.doesNotMatch(actionBody, /scanTwStockMonitor\(/)
 assert.match(actionBody, /runReadonlyBacktest\(\)/)
 assert.doesNotMatch(actionBody, /runTwStockReadonlyBacktest\(/)
 
-const pageForForbiddenText = page.replace(/模拟买入/g, '').replace(/模拟卖出/g, '')
+function scrubReadonlyHistoricalSimulationText (source) {
+  const requiredContext = [
+    '只读历史模拟',
+    '历史模拟，不代表未来收益',
+    '不连接券商',
+    '不生成订单',
+    '模拟成交标记'
+  ]
+  for (const phrase of requiredContext) {
+    assert.ok(source.includes(phrase), `missing readonly simulation context: ${phrase}`)
+  }
+  const allowedReadonlyPhrases = new Map([
+    ['仅供只读历史模拟和研究复盘，不构成投资建议，不产生真实交易、委托或仓位。', 1],
+    ['不新增模拟买入', 1],
+    ['模拟买入候选', 2],
+    ['才卖出排名最低的一支', 1],
+    ['卖出排名最低的一支', 1],
+    ['再从 Top10 最高排名补一支', 2],
+    ['模拟买入', 1],
+    ['模拟卖出', 1]
+  ])
+  let scrubbed = source
+  for (const [phrase, expectedCount] of allowedReadonlyPhrases.entries()) {
+    const count = scrubbed.split(phrase).length - 1
+    assert.equal(count, expectedCount, `unexpected readonly simulation phrase count: ${phrase}`)
+    scrubbed = scrubbed.split(phrase).join('')
+  }
+  return scrubbed
+}
+
+const pageForForbiddenText = scrubReadonlyHistoricalSimulationText(page)
 
 for (const forbidden of [
 

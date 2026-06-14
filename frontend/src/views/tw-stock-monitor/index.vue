@@ -147,6 +147,139 @@
           <div v-else class="rank-tech-empty">等待今日复盘数据。</div>
         </section>
       </div>
+
+
+      <section class="ltr-readonly-explanation" data-testid="ltr-readonly-explanation-panel">
+        <div class="rank-tech-panel-head">
+          <strong>为什么现在不动</strong>
+          <a-tag color="blue">只读复盘</a-tag>
+        </div>
+        <a-alert
+          v-if="ltrReadonlyExplanationError"
+          class="rank-tech-alert"
+          type="warning"
+          show-icon
+          :message="ltrReadonlyExplanationError"
+        />
+        <div v-if="loadingLtrReadonlyExplanation" class="rank-tech-empty">正在读取只读解释...</div>
+        <div v-else-if="ltrReadonlyExplanationMethods.length" class="ltr-explanation-grid">
+          <div v-for="item in ltrReadonlyExplanationMethods" :key="item.method_key" class="ltr-explanation-card">
+            <strong>{{ item.why_no_action }}</strong>
+            <span>{{ item.tradeoff_summary }}</span>
+            <a-tag color="purple">{{ item.research_role_label }}</a-tag>
+            <small>{{ item.readonly_disclaimer }}</small>
+            <a-collapse class="ltr-explanation-detail" :bordered="false">
+              <a-collapse-panel key="detail" header="查看历史回放明细">
+                <div class="ltr-detail-grid">
+                  <span>{{ item.detail.net_return_summary }}</span>
+                  <span>{{ item.detail.drawdown_summary }}</span>
+                  <span>{{ item.detail.action_count_summary }}</span>
+                  <span>{{ item.detail.turnover_summary }}</span>
+                  <span class="ltr-detail-wide">{{ item.detail.relative_to_top50_adaptive }}</span>
+                  <small class="ltr-detail-wide">{{ item.detail.detail_disclaimer }}</small>
+                </div>
+              </a-collapse-panel>
+            </a-collapse>
+          </div>
+        </div>
+        <div v-else class="rank-tech-empty">只读解释暂不可用。</div>
+      </section>
+
+      <section class="ltr-optional-sim-strategy" data-testid="ltr-optional-sim-strategy-panel">
+        <div class="rank-tech-panel-head">
+          <strong>可选模拟策略</strong>
+          <div>
+            <a-tag color="blue">默认主策略</a-tag>
+            <a-tag color="cyan">可选模拟</a-tag>
+            <a-tag color="green">只读历史模拟</a-tag>
+          </div>
+        </div>
+        <a-alert
+          class="rank-tech-alert"
+          type="info"
+          show-icon
+          :message="ltrOptionalSimBoundaryText"
+        />
+        <a-alert
+          class="rank-tech-alert"
+          type="warning"
+          show-icon
+          message="历史模拟，不代表未来收益；首屏主指标使用独立测试区间，明细包含样本内/验证/样本外混合结果。"
+        />
+        <a-alert
+          v-if="ltrOptionalSimError"
+          class="rank-tech-alert"
+          type="warning"
+          show-icon
+          :message="ltrOptionalSimError"
+        />
+        <div v-if="loadingLtrOptionalSimStrategies" class="rank-tech-empty">正在读取可选模拟策略...</div>
+        <div v-else-if="ltrOptionalSimStrategies.length" class="ltr-optional-content">
+          <div class="ltr-optional-selector">
+            <span>当前查看</span>
+            <a-select
+              v-model="ltrOptionalSimSelected"
+              size="small"
+              style="width: 280px"
+            >
+              <a-select-option
+                v-for="item in ltrOptionalSimStrategies"
+                :key="item.method_key"
+                :value="item.method_key"
+              >
+                {{ item.display_name }}
+              </a-select-option>
+            </a-select>
+          </div>
+          <div class="ltr-optional-grid" v-if="ltrOptionalSimSelectedStrategy">
+            <div class="ltr-optional-card active">
+              <div class="ltr-optional-card-head">
+                <strong>{{ ltrOptionalSimSelectedStrategy.display_name }}</strong>
+                <a-tag :color="ltrOptionalSimSelectedStrategy.is_default_main_strategy ? 'blue' : 'cyan'">{{ ltrOptionalSimSelectedStrategy.status_label }}</a-tag>
+              </div>
+              <span>{{ ltrOptionalSimSelectedStrategy.note }}</span>
+              <div class="ltr-optional-metrics">
+                <div>
+                  <small>样本范围</small>
+                  <b>{{ ltrOptionalSimSelectedStrategy.sample_scope || '-' }}</b>
+                </div>
+                <div>
+                  <small>费用后历史模拟</small>
+                  <b>{{ ltrOptionalSimMetricText(ltrOptionalSimSelectedStrategy, 'fee_tax_adjusted_net_return', 'percent') }}</b>
+                </div>
+                <div>
+                  <small>最大回撤</small>
+                  <b>{{ ltrOptionalSimMetricText(ltrOptionalSimSelectedStrategy, 'max_drawdown', 'percent') }}</b>
+                </div>
+                <div>
+                  <small>动作数</small>
+                  <b>{{ ltrOptionalSimMetricText(ltrOptionalSimSelectedStrategy, 'action_count', 'integer') }}</b>
+                </div>
+                <div>
+                  <small>换手 proxy</small>
+                  <b>{{ ltrOptionalSimMetricText(ltrOptionalSimSelectedStrategy, 'turnover_proxy_by_notional_over_avg_equity', 'number') }}</b>
+                </div>
+                <div>
+                  <small>independent_test 切片</small>
+                  <b>{{ ltrOptionalSimSelectedStrategy.oos_interpretation_allowed ? '是' : '否' }}</b>
+                </div>
+              </div>
+              <a-collapse class="ltr-explanation-detail" :bordered="false">
+                <a-collapse-panel key="optional-detail" header="查看只读历史模拟明细">
+                  <div class="ltr-detail-grid">
+                    <span v-for="slice in ltrOptionalSimSelectedStrategy.walk_forward" :key="`${ltrOptionalSimSelectedStrategy.method_key}-${slice.fold_id}`">
+                      {{ slice.test_period || slice.fold_id }}：费用后 {{ formatReplayPercent(slice.fee_tax_adjusted_net_return) }}，回撤 {{ formatReplayPercent(slice.max_drawdown) }}，动作 {{ slice.action_count == null ? '-' : slice.action_count }}，换手 {{ formatNumber(slice.turnover_proxy_by_notional_over_avg_equity, 2) }}
+                    </span>
+                    <span class="ltr-detail-wide">period 数 {{ ltrOptionalSimSelectedStrategy.method_summary && ltrOptionalSimSelectedStrategy.method_summary.period_count }}，正收益 period {{ ltrOptionalSimSelectedStrategy.method_summary && ltrOptionalSimSelectedStrategy.method_summary.positive_period_count }}</span>
+                    <small class="ltr-detail-wide">{{ ltrOptionalSimSelectedStrategy.boundary_text }}</small>
+                  </div>
+                </a-collapse-panel>
+              </a-collapse>
+            </div>
+          </div>
+        </div>
+        <div v-else class="rank-tech-empty">可选模拟策略暂不可用。</div>
+      </section>
       <div class="portfolio-replay-section">
         <div class="rank-tech-panel-head">
           <strong>过去表现</strong>
@@ -1316,6 +1449,8 @@
 import moment from 'moment'
 import {
   getTwStockTrends,
+  getTwStockLTRReadonlyExplanation,
+  getTwStockLTROptionalSimStrategies,
   getTwStockMonitorConfig,
   saveTwStockMonitorConfig,
   getTwStockAlerts,
@@ -1371,6 +1506,8 @@ export default {
       loadingCrossAnalysis: false,
       loadingCrossAnalysisDetail: false,
       loadingRankTechCross: false,
+      loadingLtrReadonlyExplanation: false,
+      loadingLtrOptionalSimStrategies: false,
       runningPortfolioReplay: false,
       loadingAgentContext: false,
       sendingAgentQuestion: false,
@@ -1454,6 +1591,11 @@ export default {
       rankTechVariant: 'all',
       rankTechLatestPayload: null,
       rankTechLatestError: '',
+      ltrReadonlyExplanationPayload: null,
+      ltrReadonlyExplanationError: '',
+      ltrOptionalSimPayload: null,
+      ltrOptionalSimError: '',
+      ltrOptionalSimSelected: 'phase1c_ltr_simple_daily',
       portfolioReplayPayload: null,
       portfolioReplayError: '',
       agentContext: null,
@@ -1960,6 +2102,21 @@ export default {
       if (!this.qlibPayload && !this.qlibError) return '尚未載入 qlib Option C 研究排序'
       return '目前沒有可用 qlib 研究排序表'
     },
+
+    ltrReadonlyExplanationMethods () {
+      const methods = this.ltrReadonlyExplanationPayload && this.ltrReadonlyExplanationPayload.methods
+      return Array.isArray(methods) ? methods : []
+    },
+    ltrOptionalSimStrategies () {
+      const strategies = this.ltrOptionalSimPayload && this.ltrOptionalSimPayload.strategies
+      return Array.isArray(strategies) ? strategies : []
+    },
+    ltrOptionalSimSelectedStrategy () {
+      return this.ltrOptionalSimStrategies.find(item => item.method_key === this.ltrOptionalSimSelected) || this.ltrOptionalSimStrategies[0] || null
+    },
+    ltrOptionalSimBoundaryText () {
+      return (this.ltrOptionalSimPayload && this.ltrOptionalSimPayload.boundary_text) || '仅供只读历史模拟和研究复盘，不构成投资建议，不产生真实交易、委托或仓位。'
+    },
     rankTechAccepted () {
       return !!(this.rankTechLatestPayload && this.rankTechLatestPayload.ok && this.rankTechLatestPayload.status === 'accepted')
     },
@@ -2220,6 +2377,8 @@ export default {
     this.loadDailyAutoUpdateStatus()
     this.loadCrossAnalysis()
     this.loadRankTechPortfolioPanel()
+    this.loadLtrReadonlyExplanation()
+    this.loadLtrOptionalSimStrategies()
     this.loadTwStockAgentContext()
     this.refreshAll()
     window.addEventListener('resize', this.redrawCharts)
@@ -2531,6 +2690,46 @@ export default {
       } finally {
         this.loadingRankTechCross = false
       }
+    },
+
+    async loadLtrReadonlyExplanation () {
+      this.loadingLtrReadonlyExplanation = true
+      this.ltrReadonlyExplanationError = ''
+      try {
+        const data = this.unwrap(await getTwStockLTRReadonlyExplanation())
+        this.ltrReadonlyExplanationPayload = data || null
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.ltrReadonlyExplanationPayload = response && response.data ? response.data : null
+        this.ltrReadonlyExplanationError = (response && response.msg) || error.message || '只读解释暂不可用。'
+      } finally {
+        this.loadingLtrReadonlyExplanation = false
+      }
+    },
+    async loadLtrOptionalSimStrategies () {
+      this.loadingLtrOptionalSimStrategies = true
+      this.ltrOptionalSimError = ''
+      try {
+        const data = this.unwrap(await getTwStockLTROptionalSimStrategies())
+        this.ltrOptionalSimPayload = data || null
+        if (data && data.default_method_key) this.ltrOptionalSimSelected = data.default_method_key
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.ltrOptionalSimPayload = response && response.data ? response.data : null
+        this.ltrOptionalSimError = (response && response.msg) || error.message || '可选模拟策略暂不可用。'
+      } finally {
+        this.loadingLtrOptionalSimStrategies = false
+      }
+    },
+    ltrOptionalSimMetricText (item, key, type) {
+      const metric = item && item.metrics && item.metrics[key]
+      const values = metric !== null && metric !== undefined && metric !== ''
+        ? [metric]
+        : ((item && Array.isArray(item.walk_forward) ? item.walk_forward : []).map(row => row && row[key]).filter(value => value !== null && value !== undefined && value !== ''))
+      if (!values.length) return '-'
+      if (type === 'percent') return values.map(value => this.formatReplayPercent(value)).join(' / ')
+      if (type === 'number') return values.map(value => Number.isFinite(Number(value)) ? this.formatNumber(value, 2) : '-').join(' / ')
+      return values.map(value => Number.isFinite(Number(value)) ? String(Number(value)) : '-').join(' / ')
     },
     observationReplayReader () {
       return getTwStockObservationReplay
@@ -3473,7 +3672,7 @@ export default {
       this.loading = true
       try {
         await this.loadConfig()
-        await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs(), this.loadQlibHealth(), this.loadQlibSignals(), this.loadRankChanges(), this.loadDailyAutoUpdateStatus(), this.loadQlibOpsLatest(), this.loadCrossAnalysis(), this.loadRankTechPortfolioPanel(), this.loadTwStockAgentContext(), this.loadChartSymbolOptions()])
+        await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs(), this.loadQlibHealth(), this.loadQlibSignals(), this.loadRankChanges(), this.loadDailyAutoUpdateStatus(), this.loadQlibOpsLatest(), this.loadCrossAnalysis(), this.loadRankTechPortfolioPanel(), this.loadLtrReadonlyExplanation(), this.loadLtrOptionalSimStrategies(), this.loadTwStockAgentContext(), this.loadChartSymbolOptions()])
         this.lastRefreshedAt = new Date().toLocaleTimeString()
         this.syncAutoRefreshTimer()
       } finally {
@@ -5327,6 +5526,102 @@ export default {
   color: #d1e7ff;
   font-size: 12px;
   white-space: pre-wrap;
+}
+
+
+.ltr-optional-sim-strategy {
+  margin-top: 16px;
+}
+.ltr-optional-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ltr-optional-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #475467;
+  font-size: 13px;
+}
+.ltr-optional-card.active {
+  border-color: #3b82f6;
+  background: #f8fbff;
+}
+.ltr-optional-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+.ltr-optional-card {
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  padding: 12px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ltr-optional-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ltr-optional-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+.ltr-optional-metrics div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #eef2f7;
+  border-radius: 6px;
+  background: #fff;
+}
+.ltr-optional-metrics small,
+.ltr-optional-metrics b {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.ltr-optional-metrics small {
+  color: #667085;
+  font-size: 12px;
+}
+
+.ltr-readonly-explanation {
+  margin-top: 16px;
+}
+.ltr-explanation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.ltr-explanation-card {
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fff;
+}
+.ltr-explanation-card small {
+  color: #666;
+  line-height: 1.5;
+}
+.ltr-explanation-detail {
+  margin-top: 4px;
+}
+.ltr-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+.ltr-detail-wide {
+  grid-column: 1 / -1;
 }
 
 </style>

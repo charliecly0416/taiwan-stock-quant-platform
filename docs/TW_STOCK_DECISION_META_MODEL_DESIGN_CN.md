@@ -85,10 +85,10 @@ Yahoo/Scrapling OHLCV
 
 Candidate Generator
   -> qlib Top50
-  -> qlib score 0.4-0.8 区间
+  -> qlib score 校准区间
   -> 排名明显改善
   -> 技术状态转强
-  -> 流动性和数据完整性过滤
+  -> 动态流动性、滑点风险和数据完整性过滤
 
 qlib output + 技术趋势 + FinMind 补充信息 + 大盘状态 + 持仓状态
   -> Decision Model
@@ -169,8 +169,9 @@ date-symbol -> features -> model
 
 - 稳定股票池约 150 支，要求有足够 OHLCV 历史、流动性、非长期停牌。
 - qlib Top50 必须包含。
-- qlib score 位于历史测试有效区间，例如 `0.4-0.8` 的股票必须纳入候选，但不能机械视为一定更好。
+- qlib score 位于历史校准有效区间的股票必须纳入候选，但不能机械视为一定更好。注意：不同训练版本和数据口径下 score 量级可能不同，必须先做分布校准，不能直接写死 `0.4-0.8` 或 `0.04-0.08`。
 - 排名改善明显、技术状态转强、法人资金明显改善的股票可以补充纳入。
+- 20 日均成交额、成交量稳定性、缺失率、停牌/涨跌停风险必须通过基础过滤。低流动性股票即使模型分数高，也应进入降权或排除，而不是直接排到候选前列。
 
 这样既避免只看 Top30/Top50 的选择偏差，也避免全市场过大导致噪声和产品复杂度上升。
 
@@ -182,7 +183,7 @@ date-symbol -> features -> model
 - qlib_score
 - qlib_score_percentile_by_date
 - qlib_score_zscore_by_date
-- qlib_score_band，如 low/mid/high 或 0.4-0.8 flag
+- qlib_score_band，如 low/mid/high 或经 Phase 0 校准后的 score 区间 flag
 - rank_change_1d / 3d / 5d
 - top10/top30/top50 flags
 - top30_streak / top50_streak
@@ -200,19 +201,25 @@ date-symbol -> features -> model
 - 20d return
 - 20d volatility
 - volume_ratio_20d
+- avg_trading_value_20d
+- liquidity_percentile_by_date
+- turnover_spike_1d/5d
 - position_risk_status: reasonable/elevated/overheated/pullback
 
 #### 大盘环境特征
 
-- TWII market_regime: bull/normal/caution/bear
+- TWII market_regime: bull/normal/caution/bear，作为可解释摘要，不作为唯一硬规则
 - TWII ret20 / ret60
 - TWII close vs MA60/MA120
+- TWII_trend_strength，如 close/MA60-1、close/MA120-1
 - market_volatility_20d
-- market_breadth_20d，如上涨家数比例、站上 MA20 股票比例
+- market_breadth_20d，如上涨家数比例、站上 MA20 股票比例，保留 0-1 连续值
 - top50_avg_score / top50_avg_trend_score
 - market_drawdown_from_60d_high
 
 大盘信息是 Decision Model 的必选输入，不是可选增强。否则模型无法学习同一个 qlib score 在牛市、震荡市、熊市里的不同含义。
+
+实现时应优先使用连续大盘指标，让 LightGBM 自行学习边界；`market_regime` 只作为给用户解释和分组评估的摘要标签，不能成为唯一硬编码买卖闸门。
 
 建议显式构造交互特征：
 
@@ -233,8 +240,9 @@ date-symbol -> features -> model
 - short_balance_change_5d
 - monthly_revenue_yoy / mom
 - valuation_percentile，如 PER/PBR 分位
+- days_since_last_report，用于表达财务/月报数据时效衰减
 
-所有 FinMind 特征必须按实际可用时间做 T+1 或更保守滞后，禁止偷看未来。
+所有 FinMind 特征必须按实际可用时间做 T+1 或更保守滞后，禁止偷看未来。财务/月营收类数据必须用公告日 `announcement_date / available_at` join，不能按所属月份 `period` 直接 join。日频面板中允许安全 forward fill，但必须记录 `source_period`、`available_at` 和 `days_since_last_report`。
 
 #### 持仓状态特征
 
@@ -255,35 +263,54 @@ date-symbol -> features -> model
 
 目标：判断一个候选股票是否值得新进观察。候选不局限于 qlib Top50，而是来自 Candidate Generator。
 
-候选标签：
+候选标签第一版不要只依赖固定绝对阈值。固定 `future_20d_excess_return_after_fee > 2%` 在熊市可能造成正样本极度稀疏，甚至某些月份全 0，导致模型退化。
+
+推荐同时生成三类标签/目标，供 Phase 2 审计后选择：
 
 ```text
-entry_label = 1 if future_20d_excess_return_after_fee > threshold and future_20d_max_drawdown > -risk_limit else 0
+entry_label_dynamic = 1 if future_20d_return_after_fee > (TWII_future_20d_return + margin) and future_20d_max_drawdown > dynamic_drawdown_floor else 0
+entry_target_regression = future_20d_excess_return_after_fee / max(abs(future_20d_max_drawdown), min_drawdown_eps)
+entry_rank_target = future_20d_excess_return_after_fee with date group
 ```
 
-可选阈值：
+建议：
 
-- future_20d_excess_return_after_fee > 2%
-- future_20d_max_drawdown > -8%
+- 第一版优先训练 regression 或 binary + regression 对照，不要只依赖单一 0/1 静态标签。
+- `margin`、`dynamic_drawdown_floor` 必须只在训练集/验证集调参，不能在测试集上反复调。
+- 每个训练区间都要报告正负样本比例，若某区间正样本过稀，应回退到连续目标或排序目标。
 
 输出：
 
-- entry_score: 0-1
+- entry_score: 0-1 或标准化后的候选优先级
 - confidence
+- label_quality_report: 正负样本比例、分市场状态分布、缺失率
 
 #### Exit Risk Model
 
 目标：判断已持有股票是否应该风险复盘。
 
-候选标签：
+候选标签不应只看 `future_10d_excess_return`。退出和入场不对称，风险爆发常发生在 1-3 天内，10 日窗口可能过于迟滞。
+
+推荐同时生成：
 
 ```text
-exit_label = 1 if future_10d_excess_return_after_fee < -threshold or future_10d_drawdown < -risk_limit else 0
+exit_label_3d = 1 if future_3d_drawdown < -short_risk_limit or future_3d_excess_return_after_fee < -short_threshold else 0
+exit_label_10d = 1 if future_10d_excess_return_after_fee < -threshold or future_10d_drawdown < -risk_limit else 0
+exit_volatility_target = future_5d_realized_volatility / trailing_20d_volatility
 ```
+
+退出模型应更重视短期动量衰减和风险放大特征，例如：
+
+- 1d/3d return reversal
+- volume_spike_1d
+- distance_to_ma20_pct 快速恶化
+- MACD/RSI/Bollinger 转弱
+- rank_deterioration_1d/3d
 
 输出：
 
 - exit_risk_score: 0-1
+- risk_horizon: short_3d / medium_10d
 - reason features
 
 ### 5.4 模型选择
@@ -435,7 +462,17 @@ FinMind 的月营收、法人、融资融券不是都能在交易日盘中可用
 - 回测同时报告 Top30/Top50 限制版和扩大候选池版。
 - 单独评估熊市、震荡市、牛市下各 score band 的收益、回撤和换手。
 
-### 8.5 第五风险：qlib score 绝对值不可比
+### 8.5 第五风险：流动性和滑点陷阱
+
+扩大候选池后可能纳入成交额偏低、小市值或价格容易被短期资金影响的股票。回测用收盘价成交看似可行，但真实模拟中可能存在滑点、涨跌停无法成交、成交额不足等问题。
+
+防护：
+
+- Candidate Generator 必须加入 20 日均成交额、成交量稳定性、缺失率、停牌/涨跌停风险过滤。
+- entry_score 排序后增加 liquidity penalty，不让贴近流动性下限的股票轻易排到最前。
+- 回放报告必须输出流动性过滤数量和被惩罚候选数量。
+
+### 8.6 第六风险：qlib score 绝对值不可比
 
 `qlib score` 不一定等于预期收益率，也不保证不同日期、不同训练版本之间绝对值完全可比。历史上观察到 `0.4-0.8` 在熊市更稳，不代表这个区间永远有效。
 
@@ -445,7 +482,7 @@ FinMind 的月营收、法人、融资融券不是都能在交易日盘中可用
 - score band 只作为特征，不作为硬买卖规则。
 - 每次模型版本变化后重新校准 score band 表现。
 
-### 8.6 第六风险：只优化收益，忽略换手和回撤
+### 8.7 第七风险：只优化收益，忽略换手和回撤
 
 如果模型只追求短期 forward return，可能选出高波动、高换手股票，费用后收益反而更差。
 
@@ -455,7 +492,7 @@ FinMind 的月营收、法人、融资融券不是都能在交易日盘中可用
 - 验收必须看 after-fee return、max drawdown、turnover、action count。
 - 候选排序中保留 position_risk_status 和 liquidity filter。
 
-### 8.7 第七风险：大盘状态定义本身不稳定
+### 8.8 第八风险：大盘状态定义本身不稳定
 
 如果 market_regime 规则过度拟合 2022，可能在未来误判。
 
@@ -475,7 +512,8 @@ FinMind 的月营收、法人、融资融券不是都能在交易日盘中可用
 
 - 审计 qd_tw_stock_daily_bars 覆盖率。
 - 审计 FinMind institutional/margin/monthly revenue/valuation 数据覆盖率。
-- 为每类数据定义 available_at / lag 规则。
+- 审计 TWII、market breadth、流动性和涨跌停/停牌相关特征覆盖率。
+- 为每类数据定义 available_at / lag 规则，财务/月营收必须以公告日 join。
 - 生成 feature availability report。
 
 验收：
@@ -492,15 +530,16 @@ FinMind 的月营收、法人、融资融券不是都能在交易日盘中可用
 - 从 qlib historical signal 读取 rank/score，并覆盖稳定股票池而不只 Top50。
 - 建立 Candidate Generator：Top50、score band、排名改善、技术转强、流动性过滤。
 - 从 KlineService/本地归档读取技术趋势。
-- 从 FinMind 归档读取补充特征。
-- 生成 future return / drawdown 标签。
-- 输出 parquet/csv 样本和 schema。
+- 从 FinMind 归档读取补充特征，并按公告日/available_at 安全 forward fill。
+- 生成 future return / drawdown 标签，同时生成动态标签、连续收益目标和分日期排序目标。
+- 输出 parquet/csv 样本、schema、label quality report 和 leakage audit report。
 
 验收：
 
 - 任意样本都能追溯来源。
 - 没有未来日期字段。
-- 有单测验证 T+1 lag。
+- 有单测验证 T+1 lag、公告日 join、safe forward fill 和 label horizon 不泄漏。
+- 每个训练区间输出正负样本比例，避免静态标签导致全 0 或极端不平衡。
 
 ### Phase 2：训练 Entry Model v1
 

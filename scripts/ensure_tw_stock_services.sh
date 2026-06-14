@@ -33,11 +33,22 @@ start_frontend() {
   if is_listening 8000; then
     return 0
   fi
-  cd "$ROOT/frontend" || exit 1
+  cd "$ROOT" || exit 1
+  if [ ! -f "$ROOT/frontend/dist/index.html" ]; then
+    (
+      cd "$ROOT/frontend" || exit 1
+      corepack pnpm build >> "$LOG_DIR/frontend_build.log" 2>&1
+    ) || {
+      echo "$(date -Is) frontend build failed" >> "$LOG_DIR/service_watchdog.log"
+      return 1
+    }
+  fi
   setsid env \
-    VITE_ALLOWED_HOSTS=${VITE_ALLOWED_HOSTS:-.ngrok-free.app} \
-    VITE_DEV_PROXY_TARGET=http://127.0.0.1:5000 \
-    corepack pnpm dev --host 0.0.0.0 --port 8000 >> "$LOG_DIR/frontend_8000.log" 2>&1 < /dev/null &
+    FRONTEND_HOST=0.0.0.0 \
+    FRONTEND_PORT=8000 \
+    FRONTEND_DIST="$ROOT/frontend/dist" \
+    BACKEND_URL=http://127.0.0.1:5000 \
+    "$PY" "$ROOT/scripts/serve_frontend_static_proxy.py" >> "$LOG_DIR/frontend_8000.log" 2>&1 < /dev/null &
   echo "$(date -Is) started frontend:8000" >> "$LOG_DIR/service_watchdog.log"
 }
 

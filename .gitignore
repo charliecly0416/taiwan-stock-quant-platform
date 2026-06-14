@@ -25,6 +25,9 @@ backend/data_tw/
 qlib_data/
 qlib_pipeline/data_tw/
 qlib_pipeline/mlruns/
+qlib_pipeline/home/
+home/
+mlruns/
 *.bin
 *.pkl
 *.parquet
@@ -44,3 +47,4 @@ tmp/
 .DS_Store
 .idea/
 .vscode/
+tools/arXiv-mcp/

@@ -44,6 +44,7 @@ from examples.tw.run_option_c_daily_signal_option_c_provider import (  # noqa: E
 
 DEFAULT_OUTPUT_ROOT = QLIB_ROOT / "data_tw/experiments/option_c_historical_signal_backfill"
 CALENDAR_PATH = OPTION_C_PROVIDER / "calendars/day.txt"
+REQUIRED_PROVIDER_FIELDS = {"open", "high", "low", "close", "volume", "vwap", "factor"}
 
 
 def utc_now() -> str:
@@ -79,6 +80,64 @@ def run_id_for(asof: str, batch_id: str) -> str:
     return f"option_c_daily_signal_{asof.replace('-', '')}_{safe_batch}_historical_backfill"
 
 
+def provider_instrument_ranges() -> dict[str, tuple[str, str]]:
+    path = OPTION_C_PROVIDER / "instruments/all.txt"
+    ranges: dict[str, tuple[str, str]] = {}
+    if not path.exists():
+        return ranges
+    for line in path.read_text(encoding="utf-8").splitlines():
+        parts = line.strip().split()
+        if len(parts) >= 3:
+            ranges[parts[0]] = (parts[1], parts[2])
+    return ranges
+
+
+def provider_feature_complete(symbol: str) -> bool:
+    feature_dir = OPTION_C_PROVIDER / "features" / symbol.lower()
+    if not feature_dir.exists():
+        return False
+    fields = {path.name.split(".")[0] for path in feature_dir.glob("*.day.bin")}
+    return REQUIRED_PROVIDER_FIELDS.issubset(fields)
+
+
+def normalized_has_asof(symbol: str, asof: str) -> bool:
+    import pandas as pd
+
+    path = OPTION_C_NORMALIZED / f"{symbol}.csv"
+    if not path.exists():
+        return False
+    try:
+        dates = pd.read_csv(path, usecols=["date"])["date"].astype(str)
+    except Exception:
+        return False
+    return bool((dates == asof).any())
+
+
+def asof_aware_universe(asof: str, candidate_symbols: list[str]) -> tuple[list[str], list[dict[str, Any]]]:
+    """Return symbols visible in the dedicated Option C source at this asof."""
+    ranges = provider_instrument_ranges()
+    selected: list[str] = []
+    excluded: list[dict[str, Any]] = []
+    for symbol in sorted(candidate_symbols):
+        reasons: list[str] = []
+        inst_range = ranges.get(symbol)
+        if inst_range is None:
+            reasons.append("outside_instrument_date_range")
+        else:
+            start, end = inst_range
+            if asof < start or asof > end:
+                reasons.append("outside_instrument_date_range")
+        if not normalized_has_asof(symbol, asof):
+            reasons.append("missing_source_asof")
+        if not provider_feature_complete(symbol):
+            reasons.append("missing_provider_feature")
+        if reasons:
+            excluded.append({"symbol": symbol, "reasons": sorted(set(reasons))})
+        else:
+            selected.append(symbol)
+    return selected, excluded
+
+
 def write_report(batch_root: Path, payload: dict[str, Any]) -> None:
     lines = [
         "---",
@@ -102,7 +161,16 @@ def write_report(batch_root: Path, payload: dict[str, Any]) -> None:
     (batch_root / "backfill_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def generate_one(asof: str, *, batch_root: Path, batch_id: str, symbols: list[str], skip_existing: bool, research_only_skip_formal_validation: bool = False) -> dict[str, Any]:
+def generate_one(
+    asof: str,
+    *,
+    batch_root: Path,
+    batch_id: str,
+    symbols: list[str],
+    skip_existing: bool,
+    research_only_skip_formal_validation: bool = False,
+    asof_aware: bool = False,
+) -> dict[str, Any]:
     run_id = run_id_for(asof, batch_id)
     run_dir = batch_root / run_id
     if skip_existing and (run_dir / "run_metadata.json").exists():
@@ -117,7 +185,15 @@ def generate_one(asof: str, *, batch_root: Path, batch_id: str, symbols: list[st
     errors: list[str] = []
     status = "failed"
     signal_summary: dict[str, Any] = {}
+    active_symbols = list(symbols)
+    excluded_symbols: list[dict[str, Any]] = []
     try:
+        if asof_aware:
+            active_symbols, excluded_symbols = asof_aware_universe(asof, symbols)
+            if not active_symbols:
+                status = "blocked_empty_asof_aware_universe"
+                errors.append("empty_asof_aware_universe")
+                raise RuntimeError("empty asof-aware universe")
         if research_only_skip_formal_validation:
             validation = {
                 "status": "research_only_bypassed",
@@ -127,13 +203,21 @@ def generate_one(asof: str, *, batch_root: Path, batch_id: str, symbols: list[st
                 "formal_validation_bypassed_for_research_only": True,
             }
         else:
-            validation = formal_validation(asof, symbols)
+            validation = formal_validation(asof, active_symbols)
+        if asof_aware:
+            validation["asof_aware_universe"] = {
+                "enabled": True,
+                "candidate_count": len(symbols),
+                "active_count": len(active_symbols),
+                "excluded_count": len(excluded_symbols),
+                "excluded_symbols": excluded_symbols,
+            }
         write_json(artifacts["formal_validation"], validation)
         if validation.get("status") != "pass" and not research_only_skip_formal_validation:
             status = "blocked_formal_validation_failed"
             errors.extend(validation.get("errors") or [])
             raise RuntimeError("formal validation failed")
-        prediction = generate_prediction_for_symbols(asof, symbols)
+        prediction = generate_prediction_for_symbols(asof, active_symbols)
         pred_path = run_dir / "prediction.csv"
         top30_path = run_dir / "top30_signals.csv"
         top50_path = run_dir / "top50_signals.csv"
@@ -149,6 +233,10 @@ def generate_one(asof: str, *, batch_root: Path, batch_id: str, symbols: list[st
             "status": status,
             "asof": asof,
             "prediction_rows": int(prediction.shape[0]),
+            "asof_aware_universe": bool(asof_aware),
+            "candidate_universe_count": len(symbols),
+            "active_universe_count": len(active_symbols),
+            "excluded_universe_count": len(excluded_symbols),
             "top30_rows": int(top30.shape[0]),
             "top50_rows": int(top50.shape[0]),
             "finite_prediction_share": stats["finite_count"] / stats["count"] if stats["count"] else 0.0,
@@ -175,6 +263,11 @@ def generate_one(asof: str, *, batch_root: Path, batch_id: str, symbols: list[st
             "top30_generated": False,
             "top50_generated": False,
             "errors": errors,
+            "asof_aware_universe": bool(asof_aware),
+            "candidate_universe_count": len(symbols),
+            "active_universe_count": len(active_symbols),
+            "excluded_universe_count": len(excluded_symbols),
+            "excluded_symbols": excluded_symbols,
             "diagnostic_only": True,
             "research_signal_not_order": True,
             "historical_backfill": True,
@@ -189,6 +282,11 @@ def generate_one(asof: str, *, batch_root: Path, batch_id: str, symbols: list[st
             "dry_run": False,
             "allow_refresh": False,
             "historical_backfill": True,
+            "asof_aware_universe": bool(asof_aware),
+            "candidate_universe_count": len(symbols),
+            "active_universe_count": len(active_symbols),
+            "excluded_universe_count": len(excluded_symbols),
+            "excluded_symbols": excluded_symbols,
             "formal_validation_bypassed_for_research_only": bool(research_only_skip_formal_validation),
             "frozen_recorder": RECORDER_ID,
             "recorder_path": rel(RECORDER_DIR),
@@ -230,7 +328,16 @@ def generate_one(asof: str, *, batch_root: Path, batch_id: str, symbols: list[st
             encoding="utf-8",
         )
         write_manifest(run_dir, status, artifacts)
-    return {"asof": asof, "run_id": run_id, "status": status, "run_dir": rel(run_dir), "errors": errors}
+    return {
+        "asof": asof,
+        "run_id": run_id,
+        "status": status,
+        "run_dir": rel(run_dir),
+        "errors": errors,
+        "active_universe_count": len(active_symbols),
+        "excluded_universe_count": len(excluded_symbols),
+        "excluded_symbols": excluded_symbols,
+    }
 
 
 def main() -> int:
@@ -243,6 +350,7 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="List trading days only; do not generate signal artifacts.")
     parser.add_argument("--no-skip-existing", action="store_true", help="Regenerate existing run directories in this batch.")
     parser.add_argument("--research-only-skip-formal-validation", action="store_true", help="Bypass formal source asof validation for older historical stress tests. Research-only; never production evidence.")
+    parser.add_argument("--asof-aware-universe", action="store_true", help="Filter static accepted universe to symbols visible in the dedicated Option C source at each asof.")
     args = parser.parse_args()
 
     start = parse_date(args.start_date)
@@ -273,6 +381,7 @@ def main() -> int:
         "provider_mutation_triggered": False,
         "research_signal_not_order": True,
         "formal_validation_bypassed_for_research_only": bool(args.research_only_skip_formal_validation),
+        "asof_aware_universe": bool(args.asof_aware_universe),
     }
     if args.dry_run:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -289,6 +398,7 @@ def main() -> int:
             symbols=symbols,
             skip_existing=not args.no_skip_existing,
             research_only_skip_formal_validation=bool(args.research_only_skip_formal_validation),
+            asof_aware=bool(args.asof_aware_universe),
         )
         results.append(item)
         if item["status"] == "accepted":

@@ -31,6 +31,8 @@ from app.services.tw_stock_portfolio_replay import TWStockPortfolioReplayService
 from app.services.tw_stock_cross_analysis_history import TWStockCrossAnalysisHistoryService
 from app.services.tw_stock_agent_context import TWStockAgentContextService
 from app.services.tw_stock_agent_chat import TWStockAgentChatService
+from app.services.tw_ltr_readonly_explanation import TWLTRReadonlyExplanationService
+from app.services.tw_ltr_optional_sim_strategy import TWLTROptionalSimStrategyService
 from app.services import tw_stock_monitor as monitor_service
 from app.utils.db import get_db_connection
 from app.utils.auth import login_required
@@ -47,6 +49,8 @@ portfolio_replay_service = TWStockPortfolioReplayService(observation_service=obs
 cross_analysis_history_service = TWStockCrossAnalysisHistoryService(cross_service=cross_analysis_service)
 tw_stock_agent_service = TWStockAgentContextService(cross_service=cross_analysis_service)
 tw_stock_agent_chat_service = TWStockAgentChatService(context_service=tw_stock_agent_service)
+ltr_readonly_explanation_service = TWLTRReadonlyExplanationService()
+ltr_optional_sim_strategy_service = TWLTROptionalSimStrategyService()
 daily_auto_update_status_service = TWStockDailyAutoUpdateStatusService()
 tw_stock_sim_account_service = TWStockSimAccountService()
 
@@ -112,6 +116,7 @@ def _parse_as_of():
     if not raw:
         return None
     return date.fromisoformat(raw)
+
 
 
 def _current_user_has_option_c_ops_permission() -> bool:
@@ -214,6 +219,7 @@ def cancel_tw_stock_sim_order(sim_order_uid: str):
     """Cancel a manual simulation draft."""
     payload = tw_stock_sim_account_service.cancel(user_id=_current_user_id(), sim_order_uid=sim_order_uid)
     return _sim_response(payload)
+
 
 
 @tw_stock_bp.route("/trend", methods=["GET"])
@@ -545,6 +551,50 @@ def run_tw_stock_portfolio_replay():
                 "writes_business_db": False,
                 "comparison": {},
                 "trading": research_only_trading_flags(),
+            },
+        }), 500
+
+
+@tw_stock_bp.route("/ltr-readonly-explanation", methods=["GET"])
+def get_tw_stock_ltr_readonly_explanation():
+    """Return Phase4B product view for the frozen LTR readonly explanation payload."""
+    try:
+        payload = ltr_readonly_explanation_service.product_view()
+        return jsonify({"code": 1, "msg": "success", "data": payload})
+    except Exception as exc:
+        logger.error(f"TWStock LTR readonly explanation failed: {exc}", exc_info=True)
+        message = f"Failed to read TWStock LTR readonly explanation: {exc}"
+        return jsonify({
+            "code": 0,
+            "msg": message,
+            "data": {
+                "ok": False,
+                "status": "read_error",
+                "message": message,
+                "methods": [],
+                "research_only": True,
+            },
+        }), 500
+
+
+@tw_stock_bp.route("/ltr-optional-sim-strategies", methods=["GET"])
+def get_tw_stock_ltr_optional_sim_strategies():
+    """Return Phase V4 readonly optional LTR simulation strategy product view."""
+    try:
+        payload = ltr_optional_sim_strategy_service.product_view()
+        return jsonify({"code": 1, "msg": "success", "data": payload})
+    except Exception as exc:
+        logger.error(f"TWStock LTR optional simulation strategies failed: {exc}", exc_info=True)
+        message = f"Failed to read TWStock LTR optional simulation strategies: {exc}"
+        return jsonify({
+            "code": 0,
+            "msg": message,
+            "data": {
+                "ok": False,
+                "status": "read_error",
+                "message": message,
+                "strategies": [],
+                "research_only": True,
             },
         }), 500
 

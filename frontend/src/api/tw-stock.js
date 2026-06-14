@@ -10,6 +10,21 @@ export function getTwStockTrends (params) {
   })
 }
 
+
+export function getTwStockLTRReadonlyExplanation () {
+  return request({
+    url: `${BASE_URL}/ltr-readonly-explanation`,
+    method: 'get'
+  })
+}
+
+export function getTwStockLTROptionalSimStrategies () {
+  return request({
+    url: `${BASE_URL}/ltr-optional-sim-strategies`,
+    method: 'get'
+  })
+}
+
 export function getTwStockMonitorConfig (params) {
   return request({
     url: `${BASE_URL}/monitor/config`,
