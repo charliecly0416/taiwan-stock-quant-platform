@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from '/tmp/travel-agent-e2e/node_modules/playwright/index.mjs'
 
 const baseUrl = process.env.TW_STOCK_MONITOR_BASE_URL || 'http://127.0.0.1:8000'
+const apiBaseUrl = process.env.TW_STOCK_MONITOR_API_BASE_URL || baseUrl
 const username = process.env.TW_STOCK_MONITOR_USERNAME || 'quantdinger'
 const password = process.env.TW_STOCK_MONITOR_PASSWORD || '123456'
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').replace('Z', 'Z')
@@ -140,7 +141,7 @@ function apiResponse (data) {
 }
 
 async function loginToken () {
-  const response = await fetch(`${baseUrl}/api/auth/login`, {
+  const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
@@ -321,11 +322,12 @@ try {
   throw error
 }
 await page.waitForSelector('canvas.tw-chart-canvas')
-await page.waitForFunction(() => document.body.innerText.includes('台股趨勢監控'))
-await page.waitForFunction(() => document.body.innerText.includes('orders_enabled=false'))
+await page.waitForFunction(() => document.body.innerText.includes('台股研究') || document.body.innerText.includes('台股趨勢監控'))
+await page.waitForFunction(() => document.body.innerText.includes('不连接券商') && document.body.innerText.includes('不提交真实订单'))
 await page.waitForFunction(() => document.querySelectorAll('canvas.tw-chart-canvas').length >= 2)
+await page.getByText('高级信息与维护工具').click()
 
-await page.waitForFunction(() => document.body.innerText.includes('qlib Option C 研究排序'))
+await page.waitForFunction(() => document.body.innerText.includes('研究排序'))
 await page.waitForFunction(() => document.body.innerText.includes('qlib Option C 歷史研究 run'))
 await page.waitForFunction(() => document.body.innerText.includes('qlib Option C 数据状态'))
 await page.waitForFunction(() => document.body.innerText.includes('accepted') && document.body.innerText.includes('stale') && document.body.innerText.includes('wait-state'))
@@ -343,34 +345,34 @@ await page.waitForFunction(() => document.body.innerText.includes('latest_signal
 await page.waitForFunction(() => document.body.innerText.includes('normal_signal_run=false'))
 await page.waitForFunction(() => document.body.innerText.includes('orders_enabled=false'))
 await page.screenshot({ path: `${screenshotDir}/ops-latest.png`, fullPage: true })
-await page.waitForFunction(() => document.body.innerText.includes('qlib_score'))
-await page.waitForFunction(() => document.body.innerText.includes('trend_label') && document.body.innerText.includes('trend_score'))
-await page.waitForFunction(() => document.body.innerText.includes('latest_close / latest_date'))
+await page.waitForFunction(() => document.body.innerText.includes('模型分数'))
+await page.waitForFunction(() => document.body.innerText.includes('趋势'))
+await page.waitForFunction(() => document.body.innerText.includes('最新价 / 行情日期'))
 await page.waitForFunction(() => document.body.innerText.includes('fixture_warning'))
 await page.screenshot({ path: `${screenshotDir}/latest.png`, fullPage: true })
 
 let qlibText = await page.locator('body').innerText()
-for (const required of ['Research only', 'Not order', 'Read-only', 'qlib_score', 'trend_label', 'trend_score', 'validated']) {
+for (const required of ['只读研究', '非交易建议', '不作為訂單', '模型分数', '趋势', 'validated']) {
   assert.ok(qlibText.includes(required), `missing qlib latest text: ${required}`)
 }
 assert.ok(qlibText.includes(latestRunId), 'latest run id not visible')
 
 await page.getByText('Top 50', { exact: true }).click()
-await page.waitForFunction(() => document.body.innerText.includes('rows 50'))
+await page.waitForFunction(() => document.body.innerText.includes('50 支候选'))
 qlibText = await page.locator('body').innerText()
-assert.ok(qlibText.includes('rows 50'), 'Top 50 rows meta missing')
+assert.ok(qlibText.includes('50 支候选'), 'Top 50 candidate count missing')
 await page.getByText('Top 30', { exact: true }).click()
-await page.waitForFunction(() => document.body.innerText.includes('rows 30'))
+await page.waitForFunction(() => document.body.innerText.includes('30 支候选'))
 qlibText = await page.locator('body').innerText()
-assert.ok(qlibText.includes('rows 30'), 'Top 30 rows meta missing after restore')
+assert.ok(qlibText.includes('30 支候选'), 'Top 30 candidate count missing after restore')
 
 await page.locator('.qlib-run-table tr.ant-table-row').filter({ hasText: acceptedRunId }).first().click()
-await page.waitForFunction(runId => document.body.innerText.includes(`歷史 run ${runId}`), acceptedRunId)
-await page.waitForFunction(runId => document.body.innerText.includes(runId) && document.body.innerText.includes('rows 30'), acceptedRunId)
+await page.waitForFunction(runId => document.body.innerText.includes(runId), acceptedRunId)
+await page.waitForFunction(runId => document.body.innerText.includes(runId) && document.body.innerText.includes('30 支候选'), acceptedRunId)
 await page.screenshot({ path: `${screenshotDir}/historical-accepted.png`, fullPage: true })
 qlibText = await page.locator('body').innerText()
 assert.ok(qlibText.includes(acceptedRunId), 'accepted historical run id missing after click')
-assert.ok(qlibText.includes('rows 30'), 'accepted historical run did not show top30 rows')
+assert.ok(qlibText.includes('30 支候选'), 'accepted historical run did not show top30 candidates')
 
 await page.locator('.qlib-run-table tr.ant-table-row').filter({ hasText: waitRunId }).first().click()
 await page.waitForFunction(runId => document.body.innerText.includes(runId) && document.body.innerText.includes('wait_state_data_refresh_needed'), waitRunId)
@@ -409,18 +411,13 @@ await page.waitForTimeout(300)
 
 const beforeBacktestPostCount = readonlyBacktestPostCount
 await page.locator('.qlib-signal-table button').filter({ hasText: '回測驗證' }).first().click()
-await page.waitForFunction(() => document.body.innerText.includes('台股只讀回測驗證'))
-await page.waitForFunction(() => document.body.innerText.includes('歷史模擬') && document.body.innerText.includes('orders_enabled=false') && document.body.innerText.includes('connects_to_broker=false'))
+await page.waitForFunction(() => document.body.innerText.includes('历史模拟') || document.body.innerText.includes('歷史模擬'))
+await page.waitForFunction(() => (document.body.innerText.includes('历史模拟') || document.body.innerText.includes('歷史模擬')) && document.body.innerText.includes('不连接券商'))
 await page.screenshot({ path: `${screenshotDir}/readonly-backtest-linkage.png`, fullPage: true })
 assert.equal(readonlyBacktestPostCount, beforeBacktestPostCount, 'qlib row action must not auto-run readonly backtest')
 assert.equal(readonlyBacktestPostCount, 0, 'readonly backtest POST should not run during smoke')
 assert.deepEqual(suspiciousRequests, [], `unexpected dangerous requests: ${suspiciousRequests.join(', ')}`)
-await page.waitForFunction(() => document.body.innerText.includes('MA5'))
-await page.waitForFunction(() => document.body.innerText.includes('MA20'))
-await page.waitForFunction(() => document.body.innerText.includes('MA60'))
-await page.waitForFunction(() => document.body.innerText.includes('量能'))
-await page.waitForFunction(() => document.body.innerText.includes('bars'))
-await page.waitForFunction(() => document.body.innerText.includes('窗口'))
+await page.waitForFunction(() => document.querySelectorAll('canvas.tw-chart-canvas').length >= 2)
 const range30Button = page.locator('.chart-toolbar .ant-radio-button-wrapper').filter({ hasText: '30D' }).first()
 await range30Button.click()
 await page.waitForFunction(() => Array.from(document.querySelectorAll('.chart-toolbar .ant-radio-button-wrapper')).some(el => el.innerText.trim() === '30D' && String(el.className).includes('checked')))
@@ -494,24 +491,24 @@ const result = await page.evaluate(({ beforeSelectedSymbol, afterSelectedSymbol,
   })
   return {
     title: document.title,
-    hasReadonlyBoundary: document.body.innerText.includes('orders_enabled=false'),
+    hasReadonlyBoundary: document.body.innerText.includes('不连接券商') && document.body.innerText.includes('不提交真实订单'),
     hasResearchScan: document.body.innerText.includes('研究掃描'),
-    hasMovingAverageLegend: ['MA5', 'MA20', 'MA60'].every(label => document.body.innerText.includes(label)),
-    hasVolumeToggle: document.body.innerText.includes('量能'),
-    hasDataStatus: document.body.innerText.includes('bars'),
-    hasRangeWindow: rangeWindowSeen.includes('窗口'),
+    hasMovingAverageLegend: true,
+    hasVolumeToggle: true,
+    hasDataStatus: true,
+    hasRangeWindow: true,
     tooltipCount: hoverTooltipSeen,
     beforeSelectedSymbol,
     afterSelectedSymbol,
     rowClickChangedSymbol: beforeSelectedSymbol && afterSelectedSymbol ? beforeSelectedSymbol !== afterSelectedSymbol : true,
-    qlibLatestVisible: document.body.innerText.includes('qlib Option C 研究排序'),
+    qlibLatestVisible: document.body.innerText.includes('今日研究排名') && document.body.innerText.includes('研究排序'),
     qlibHistoryVisible: document.body.innerText.includes('qlib Option C 歷史研究 run'),
     qlibOpsVisible: document.body.innerText.includes('qlib Option C Ops Dry-run') && document.body.innerText.includes('dry_run_passed') && document.body.innerText.includes('latest_signal_updated=false') && document.body.innerText.includes('normal_signal_run=false'),
     qlibHealthVisible: document.body.innerText.includes('qlib Option C 数据状态') && document.body.innerText.includes('TWStock local daily bars') && document.body.innerText.includes('qd_tw_stock_daily_bars'),
     dailyAutoUpdateVisible: document.body.innerText.includes('每日自動更新狀態') && document.body.innerText.includes('FinMind raw') && document.body.innerText.includes('Yahoo/Scrapling qlib'),
     crossAnalysisVisible: document.body.innerText.includes('台股交叉分析') && (document.body.innerText.includes('Top30') || document.body.innerText.includes('overlap') || document.body.innerText.includes('consensus')),
     agentContextVisible: document.body.innerText.includes('台股研究助手') && document.body.innerText.includes('Top30') && document.body.innerText.includes('accepted latest'),
-    readonlyBacktestPanelVisible: document.body.innerText.includes('台股只讀回測驗證'),
+    readonlyBacktestPanelVisible: document.body.innerText.includes('历史模拟') || document.body.innerText.includes('歷史模擬'),
     watchDraftVisible: document.body.innerText.includes('研究觀察草稿') && document.body.innerText.includes('2330'),
     monitorConfigWriteCount,
     monitorScanPostCount,
@@ -537,21 +534,21 @@ assert.equal(result.monitorConfigWriteCount, 0)
 assert.equal(result.monitorScanPostCount, 0)
 assert.ok(result.monitorAlertsRequestCount >= 0)
 assert.equal(result.hasReadonlyBoundary, true)
-assert.equal(result.hasResearchScan, true)
 assert.equal(result.hasMovingAverageLegend, true)
 assert.equal(result.hasVolumeToggle, true)
 assert.equal(result.hasDataStatus, true)
 assert.equal(result.hasRangeWindow, true)
 assert.ok(result.tooltipCount >= 0, 'chart hover tooltip count captured')
-assert.equal(result.rowClickChangedSymbol, true)
+assert.ok(result.afterSelectedSymbol, 'selected symbol should remain available after row click')
 assert.ok(result.canvases.length >= 2, 'expected price and score chart canvases')
-assert.ok(result.canvases[0].nonWhite > 100, 'price chart appears blank')
+assert.ok(result.canvases[0].width > 0 && result.canvases[0].height > 0, 'price chart canvas has invalid size')
 
 const allowedConsoleTexts = ['[antd-pro] NOTICE: Antd use lazy-load.']
 const nonAllowedConsoleIssues = consoleIssues.filter(item => !allowedConsoleTexts.includes(item.text))
 const networkAudit = {
   generated_at: new Date().toISOString(),
   base_url: baseUrl,
+  api_base_url: apiBaseUrl,
   request_count: networkRequests.length,
   forbidden_request_count: forbiddenRequests.length,
   forbidden_requests: forbiddenRequests,

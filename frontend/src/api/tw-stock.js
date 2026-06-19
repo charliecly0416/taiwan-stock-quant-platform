@@ -18,6 +18,46 @@ export function getTwStockLTRReadonlyExplanation () {
   })
 }
 
+export function getTwStockReadonlyStrategySnapshot () {
+  return request({
+    url: `${BASE_URL}/readonly-strategy-snapshot`,
+    method: 'get'
+  })
+}
+
+export function getTwStockPhaseYZProductizationStatus (params = {}) {
+  return request({
+    url: `${BASE_URL}/phase-yz/productization-status`,
+    method: 'get',
+    params
+  })
+}
+
+
+export function getTwStockCurrentStrategyContext (params = {}) {
+  return request({
+    url: `${BASE_URL}/current-strategy-context`,
+    method: 'get',
+    params
+  })
+}
+
+
+export function getTwStockReadonlyReplayWindowIndex () {
+  return request({
+    url: `${BASE_URL}/readonly-replay-window-index`,
+    method: 'get'
+  })
+}
+
+export function getTwStockReadonlyReplayWindow (params = {}) {
+  return request({
+    url: `${BASE_URL}/readonly-replay-window`,
+    method: 'get',
+    params
+  })
+}
+
 export function getTwStockLTROptionalSimStrategies () {
   return request({
     url: `${BASE_URL}/ltr-optional-sim-strategies`,
@@ -330,6 +370,64 @@ export function getTwStockSimTrades (accountUid, { limit = 100 } = {}) {
     method: 'get',
     params: {
       limit: Math.max(1, Math.min(Number(limit || 100), 500))
+    }
+  })
+}
+
+export function getTwStockPaperPortfolioLatestDecision (params = {}) {
+  return request({
+    url: `${BASE_URL}/paper-portfolio/latest-decision`,
+    method: 'get',
+    params
+  })
+}
+
+export function getTwStockPaperPortfolioState (params = {}) {
+  return request({
+    url: `${BASE_URL}/paper-portfolio/state`,
+    method: 'get',
+    params
+  })
+}
+
+export function getTwStockPaperPortfolioApplyRuns (params = {}) {
+  return request({
+    url: `${BASE_URL}/paper-portfolio/apply-runs`,
+    method: 'get',
+    params
+  })
+}
+
+export function applyTwStockPaperPortfolioDecision (data = {}) {
+  return request({
+    url: `${BASE_URL}/paper-portfolio/apply-decision`,
+    method: 'post',
+    data: {
+      paper_account_id: data.paper_account_id || data.paperAccountId,
+      paper_account_epoch: data.paper_account_epoch || data.paperAccountEpoch,
+      decision_id: data.decision_id || data.decisionId,
+      paper_order_intent_artifact_path: data.paper_order_intent_artifact_path || data.paperOrderIntentArtifactPath,
+      decision_artifact_id: data.decision_artifact_id || data.decisionArtifactId,
+      input_checksum: data.input_checksum || data.inputChecksum,
+      idempotency_key: data.idempotency_key || data.idempotencyKey,
+      confirmed_by_user: data.confirmed_by_user === true,
+      confirm_text: data.confirm_text || data.confirmText || '确认应用到模拟账户'
+    }
+  })
+}
+
+export function resetTwStockPaperPortfolio (data = {}) {
+  return request({
+    url: `${BASE_URL}/paper-portfolio/reset`,
+    method: 'post',
+    data: {
+      paper_account_id: data.paper_account_id || data.paperAccountId,
+      current_epoch: data.current_epoch || data.currentEpoch,
+      idempotency_key: data.idempotency_key || data.idempotencyKey,
+      input_checksum: data.input_checksum || data.inputChecksum,
+      confirmed_by_user: data.confirmed_by_user === true,
+      confirm_text: data.confirm_text || data.confirmText || '确认重置模拟账户',
+      reset_initial_cash: data.reset_initial_cash || data.resetInitialCash
     }
   })
 }

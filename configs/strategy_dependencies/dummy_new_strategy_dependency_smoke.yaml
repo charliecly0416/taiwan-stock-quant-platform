@@ -1,0 +1,60 @@
+strategy_rule: dummy_new_strategy_dependency_smoke
+dependency_version: strategy_dependency_v1
+applies_to_artifact_names:
+- dummy_new_model_signal_adapter_smoke
+required_core_fields:
+- date
+- instrument
+- candidate_rank
+- buy_score
+- full_qlib_rank
+- signal_asof
+- available_at
+required_capabilities:
+- core_signal_v1
+- candidate_boundary:qlib_top50
+- buy_ordering:buy_score_desc
+- full_rank_exit:full_qlib_rank
+- m5_onboarding_smoke
+optional_extensions: []
+required_extensions: []
+ranking_usage:
+- field: buy_score
+  usage: buy_ordering
+- field: full_qlib_rank
+  usage: exit_worst_rank
+forbidden_fields:
+- future_return_*
+- future_excess_return_*
+- forward_return_*
+- label_*
+- realized_pnl
+- realized_return
+- action
+- holding
+- position
+- target_position
+- order_qty
+- execution_price
+- execution_date
+- broker_order_id
+max_buy_count: smoke_only
+max_sell_count: smoke_only
+diagnostic_only: true
+smoke_only: true
+not_valid_strategy_evidence: true
+no_replay_return_conclusion: true
+not_default_candidate: true
+forbidden_actions:
+  no_training: true
+  no_tuning: true
+  no_score_recompute: true
+  no_replay: true
+  no_return_filtering: true
+  no_default_strategy_change: true
+  no_frontend_change: true
+  no_daily_orchestrator_change: true
+  no_provider_publish: true
+  no_accepted_latest_switch: true
+  no_monitor: true
+  no_broker_order: true

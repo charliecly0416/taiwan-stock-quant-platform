@@ -1,0 +1,55 @@
+policy_version: replay_window_policy_yz0_clean_v1
+created_for_phase: YZ0
+fixed_window_only: true
+user_selectable_range_enabled: false
+available_window_metadata_only: true
+fixed_window:
+  name: 2026_ytd
+  start: '2026-01-01'
+  end: '2026-05-07'
+allowed_replay_start_min: '2026-01-01'
+allowed_replay_end_policy: latest_available_signal_date
+latest_available_signal_date: '2026-05-07'
+allowed_windows:
+- name: 2026_ytd
+  start: '2026-01-01'
+  end: '2026-05-07'
+  source: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/order_intent_replay_d3/d3_order_intent_replay_parity_20260617T062610Z/manifest.json
+disallow_training_overlap: true
+disallow_future_beyond_signal: true
+models:
+  e4_frozen_qlib_2018_2022:
+    model_id: e4_frozen_qlib_2018_2022
+    model_family: e1_frozen_qlib_baseline
+    qlib_train_start: '2018-01-01'
+    qlib_train_end: '2022-12-31'
+    ltr_train_start: ''
+    ltr_train_end: ''
+    allowed_replay_start_min: '2026-01-01'
+    source_manifest: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e1_frozen_qlib_training_and_oos_score/phasee1_training_manifest.json
+    source_training_report: docs/tw_extended_oos_qlib_orthogonal_ltr/PHASEE0_CONTRACT_AND_FEASIBILITY_AUDIT_REPORT_CN.md
+    production_selectable: true
+  e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025:
+    model_id: e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025
+    model_family: e1_frozen_qlib_plus_e3_orthogonal_ltr
+    qlib_train_start: '2018-01-01'
+    qlib_train_end: '2022-12-31'
+    ltr_train_start: '2023-01-01'
+    ltr_train_end: '2025-12-31'
+    allowed_replay_start_min: '2026-01-01'
+    source_manifest: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e3_orthogonal_ltr_training/phasee3_training_manifest.json
+    source_training_report: docs/tw_extended_oos_qlib_orthogonal_ltr/PHASEE0_CONTRACT_AND_FEASIBILITY_AUDIT_REPORT_CN.md
+    production_selectable: true
+diagnostic_rules:
+  one_sell_one_buy_buggy_e8r:
+    display_name: 单换手异常候选（研究）
+    public_alias: single_turnover_anomaly_research
+    diagnostic_only: true
+    research_only: true
+    not_valid_strategy_evidence: true
+strategy_registry: configs/tw_modular_registry.yaml
+source_policy_evidence:
+- scripts/audit_extended_oos_qlib_orthogonal_ltr_phase_e0.py
+- docs/tw_modular_contracts/PHASED3RR_REVIEW_AND_PHASED4_WORK_CN.md
+default_model_id: e4_frozen_qlib_2018_2022
+default_strategy_rule: top50_exit_one_worst_sell

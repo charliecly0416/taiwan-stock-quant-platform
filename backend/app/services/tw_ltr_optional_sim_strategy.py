@@ -52,6 +52,13 @@ class TWLTROptionalSimStrategyService:
             self.gate_path = self.out_dir / "phaseb1_gate_summary.json"
 
     def product_view(self) -> dict[str, Any]:
+        missing = [
+            str(path)
+            for path in (self.period_comparison_path, self.method_summary_path, self.gate_path)
+            if not path.exists()
+        ]
+        if missing:
+            return self._missing_artifact_view(missing)
         period_rows = self._read_csv(self.period_comparison_path)
         summary_rows = self._read_csv(self.method_summary_path)
         gate = self._read_json(self.gate_path)
@@ -94,6 +101,40 @@ class TWLTROptionalSimStrategyService:
             },
             "phaseb1_gate": gate.get("recommended_gate"),
             "phaseb2_gate_basis": "phaseb1b_repaired_request_phaseb2_ltr_simple_default_design",
+            "research_only": True,
+        }
+
+    def _missing_artifact_view(self, missing_paths: list[str]) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "status": "artifact_missing",
+            "schema_version": "phaseb2_ltr_simple_default_readonly_product_view_v1",
+            "payload_source": "phaseb1_conservative_replay_artifacts",
+            "default_method_key": "phase1c_ltr_simple_daily",
+            "boundary_text": self.boundary_text,
+            "selection_policy": {
+                "default_selected": False,
+                "ltr_auto_enabled": False,
+                "ltr_simple_default": False,
+                "top50_adaptive_reference_only": True,
+                "readonly_only": True,
+            },
+            "strategies": [],
+            "caveats": [
+                "历史可选模拟策略产物未找到；页面保持只读空态，不触发任何数据刷新或写入。",
+            ],
+            "missing_artifacts": missing_paths,
+            "no_write_guarantees": {
+                "read_only_http_method": True,
+                "reads_static_artifacts_only": True,
+                "does_not_change_runtime_state": True,
+                "does_not_trigger_data_refresh": True,
+                "does_not_switch_accepted_pointer": True,
+                "does_not_touch_monitor_or_execution_paths": True,
+                "does_not_touch_broker_or_orders": True,
+            },
+            "phaseb1_gate": None,
+            "phaseb2_gate_basis": "artifact_missing_readonly_empty_state",
             "research_only": True,
         }
 

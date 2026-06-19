@@ -24,6 +24,7 @@ from app.services.tw_stock_qlib_option_c_eod_pipeline import option_c_eod_pipeli
 from app.services.tw_stock_qlib_option_c_eod_automation import option_c_eod_automation_scheduler
 from app.services.tw_stock_daily_auto_update_status import TWStockDailyAutoUpdateStatusService
 from app.services.tw_stock_sim_account import TWStockSimAccountService
+from app.services.tw_stock_paper_portfolio import TWStockPaperPortfolioService
 from app.services.tw_stock_cross_analysis import TWStockCrossAnalysisService
 from app.services.tw_stock_rank_tech_cross import TWStockRankTechCrossService
 from app.services.tw_stock_observation_replay import TWStockObservationReplayService
@@ -33,6 +34,8 @@ from app.services.tw_stock_agent_context import TWStockAgentContextService
 from app.services.tw_stock_agent_chat import TWStockAgentChatService
 from app.services.tw_ltr_readonly_explanation import TWLTRReadonlyExplanationService
 from app.services.tw_ltr_optional_sim_strategy import TWLTROptionalSimStrategyService
+from app.services.phase_yz3_productization_status import load_yz3_productization_status
+from app.services.tw_stock_current_strategy_context import CurrentStrategyContextError, load_current_strategy_context
 from app.services import tw_stock_monitor as monitor_service
 from app.utils.db import get_db_connection
 from app.utils.auth import login_required
@@ -53,6 +56,27 @@ ltr_readonly_explanation_service = TWLTRReadonlyExplanationService()
 ltr_optional_sim_strategy_service = TWLTROptionalSimStrategyService()
 daily_auto_update_status_service = TWStockDailyAutoUpdateStatusService()
 tw_stock_sim_account_service = TWStockSimAccountService()
+tw_stock_paper_portfolio_service = TWStockPaperPortfolioService()
+
+
+@tw_stock_bp.route("/phase-yz/productization-status", methods=["GET"])
+def get_phase_yz_productization_status():
+    """Return clean YZ E4 productization state without side effects."""
+    signal_asof = (request.args.get("signal_asof") or request.args.get("signalAsOf") or "").strip()
+    payload = load_yz3_productization_status(signal_asof=signal_asof or None)
+    return jsonify({"code": 1, "msg": "success", "data": payload})
+
+
+@tw_stock_bp.route("/current-strategy-context", methods=["GET"])
+def get_current_strategy_context():
+    """Return one read-only current-strategy context for all frontend modules."""
+    signal_asof = (request.args.get("signal_asof") or request.args.get("signalAsOf") or "").strip()
+    try:
+        payload = load_current_strategy_context(signal_asof=signal_asof or None)
+        return jsonify({"code": 1, "msg": "success", "data": payload})
+    except CurrentStrategyContextError as exc:
+        status = 404 if exc.status == "missing_artifact" else 400
+        return jsonify({"code": 0, "msg": exc.message, "data": {"ok": False, "status": exc.status}}), status
 
 
 
@@ -68,7 +92,7 @@ def _sim_response(payload: dict):
     http_status = 200
     if status == "not_found":
         http_status = 404
-    elif status in {"invalid_initial_cash", "invalid_symbol", "invalid_side", "invalid_quantity", "invalid_lot_size", "unsupported_source_type"}:
+    elif status in {"invalid_initial_cash", "invalid_symbol", "invalid_side", "invalid_quantity", "invalid_lot_size", "unsupported_source_type", "invalid_request", "invalid_confirmation", "invalid_artifact", "stale_epoch", "same_day_apply_rejected", "idempotency_conflict", "execution_price_unavailable"}:
         http_status = 400
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else payload.get("message", status), "data": payload}), http_status
 
@@ -220,6 +244,53 @@ def cancel_tw_stock_sim_order(sim_order_uid: str):
     payload = tw_stock_sim_account_service.cancel(user_id=_current_user_id(), sim_order_uid=sim_order_uid)
     return _sim_response(payload)
 
+
+
+@tw_stock_bp.route("/paper-portfolio/state", methods=["GET"])
+@login_required
+def get_tw_stock_paper_portfolio_state():
+    """Return current simulation account state for paper portfolio apply."""
+    paper_account_id = (request.args.get("paper_account_id") or request.args.get("paperAccountId") or "").strip()
+    payload = tw_stock_paper_portfolio_service.state(user_id=_current_user_id(), paper_account_id=paper_account_id)
+    return _sim_response(payload)
+
+
+@tw_stock_bp.route("/paper-portfolio/apply-runs", methods=["GET"])
+@login_required
+def get_tw_stock_paper_portfolio_apply_runs():
+    """List paper portfolio apply runs for the current user."""
+    paper_account_id = (request.args.get("paper_account_id") or request.args.get("paperAccountId") or "").strip()
+    try:
+        limit = max(1, min(int(request.args.get("limit") or 100), 500))
+    except Exception:
+        limit = 100
+    payload = tw_stock_paper_portfolio_service.apply_runs(user_id=_current_user_id(), paper_account_id=paper_account_id, limit=limit)
+    return _sim_response(payload)
+
+
+@tw_stock_bp.route("/paper-portfolio/latest-decision", methods=["GET"])
+@login_required
+def get_tw_stock_paper_portfolio_latest_decision():
+    """Read the latest server-side paper decision artifact for the current user."""
+    paper_account_id = (request.args.get("paper_account_id") or request.args.get("paperAccountId") or "").strip()
+    payload = tw_stock_paper_portfolio_service.latest_decision(user_id=_current_user_id(), paper_account_id=paper_account_id)
+    return _sim_response(payload)
+
+
+@tw_stock_bp.route("/paper-portfolio/apply-decision", methods=["POST"])
+@login_required
+def apply_tw_stock_paper_portfolio_decision():
+    """Apply a readonly PaperOrderIntentArtifact to a simulation-only account."""
+    payload = tw_stock_paper_portfolio_service.apply_decision(user_id=_current_user_id(), payload=_request_json())
+    return _sim_response(payload)
+
+
+@tw_stock_bp.route("/paper-portfolio/reset", methods=["POST"])
+@login_required
+def reset_tw_stock_paper_portfolio():
+    """Reset a simulation-only paper portfolio after explicit user confirmation."""
+    payload = tw_stock_paper_portfolio_service.reset(user_id=_current_user_id(), payload=_request_json())
+    return _sim_response(payload)
 
 
 @tw_stock_bp.route("/trend", methods=["GET"])

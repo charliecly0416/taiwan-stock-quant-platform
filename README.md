@@ -7,8 +7,15 @@ The project is designed for research and human review. It does not place broker 
 
 ## Chinese Documentation
 
+- [当前项目文档入口与归档政策](docs/tw_modular_contracts/TW_CURRENT_PROJECT_DOC_ENTRY_AND_ARCHIVE_POLICY_CN.md)
 - [项目介绍与原理](docs/PROJECT_INTRO_CN.md)
 - [使用文档](docs/USER_GUIDE_CN.md)
+- [模块化研究管线未来开发规范](docs/tw_modular_contracts/TW_MODULAR_PIPELINE_FUTURE_DEVELOPMENT_GUIDE_CN.md)
+- [项目模块地图与链路串联说明](docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md)
+- [开发、测试与实验手册](docs/tw_modular_contracts/TW_DEVELOPER_TEST_AND_EXPERIMENT_PLAYBOOK_CN.md)
+- [当前策略上下文 API 字段字典](docs/tw_modular_contracts/TW_CURRENT_STRATEGY_CONTEXT_API_FIELD_DICTIONARY_CN.md)
+- [新策略接入模板](docs/tw_modular_contracts/TW_NEW_STRATEGY_ONBOARDING_TEMPLATE_CN.md)
+- [台股日更自动化 Runbook](docs/tw_modular_contracts/TW_DAILY_AUTO_UPDATE_RUNBOOK_CN.md)
 - [每日自动更新闭环](docs/DAILY_AUTO_UPDATE_CN.md)
 - [最大生产闭环说明](docs/FULL_PRODUCTION_CLOSED_LOOP_CN.md)
 

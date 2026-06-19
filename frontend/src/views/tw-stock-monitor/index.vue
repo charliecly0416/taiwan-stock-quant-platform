@@ -62,6 +62,153 @@
       :message="degradedNotice"
     />
 
+    <a-card
+      class="current-strategy-context-card"
+      :bordered="false"
+      data-testid="current-strategy-context-card"
+    >
+      <template slot="title">
+        <div class="card-title-line">
+          <span>统一策略上下文</span>
+          <div class="readonly-tags">
+            <a-tag color="blue">read-only</a-tag>
+            <a-tag :color="currentStrategyContextTagColor">{{ currentStrategyContextStatusText }}</a-tag>
+          </div>
+        </div>
+      </template>
+      <div class="current-context-toolbar">
+        <span>{{ currentStrategyContextBrief }}</span>
+        <a-button size="small" :loading="loadingCurrentStrategyContext" @click="loadCurrentStrategyContext">
+          <a-icon type="reload" /> 刷新统一口径
+        </a-button>
+      </div>
+      <a-alert
+        v-if="currentStrategyContextError"
+        class="current-context-alert"
+        type="warning"
+        show-icon
+        :message="currentStrategyContextError"
+      />
+      <a-alert
+        v-if="currentStrategyContextMismatchText"
+        class="current-context-alert"
+        type="info"
+        show-icon
+        :message="currentStrategyContextMismatchText"
+      />
+      <div class="current-context-grid">
+        <div>
+          <span>信号日期</span>
+          <strong>{{ currentContextSignalAsOf }}</strong>
+          <small>用于生成 {{ currentContextTargetDate }} 决策信息</small>
+        </div>
+        <div>
+          <span>默认模型</span>
+          <strong>{{ currentContextModelText }}</strong>
+          <small>{{ currentContextStrategyRule }}</small>
+        </div>
+        <div>
+          <span>LTR 排名</span>
+          <strong>{{ currentContextLTRCoverageText }}</strong>
+          <small>重排 qlib Top50，榜首 {{ currentContextLTRTopSymbol }}</small>
+        </div>
+        <div>
+          <span>Qlib 底座</span>
+          <strong>{{ currentContextQlibCoverageText }}</strong>
+          <small>Top50 与 Top150 同源输出</small>
+        </div>
+      </div>
+    </a-card>
+
+    <a-card
+      class="phase-yz-productization-card"
+      :bordered="false"
+      data-testid="phase-yz-productization-card"
+    >
+      <template slot="title">
+        <div class="card-title-line">
+          <span>YZ Clean E4 产品化</span>
+          <div class="readonly-tags">
+            <a-tag color="green">clean registry</a-tag>
+            <a-tag color="blue">next_open</a-tag>
+            <a-tag :color="phaseYZProductizationTagColor">{{ phaseYZProductizationStateText }}</a-tag>
+          </div>
+        </div>
+      </template>
+      <div class="phase-yz-toolbar">
+        <a-button size="small" :loading="loadingPhaseYZProductization" @click="loadPhaseYZProductizationStatus">
+          <a-icon type="reload" /> 刷新产品化状态
+        </a-button>
+        <a-button
+          size="small"
+          type="primary"
+          data-testid="phase-yz-paper-apply-disabled"
+          :disabled="phaseYZPaperApplyDisabled"
+        >
+          <a-icon type="pause-circle" /> {{ phaseYZPaperApplyText }}
+        </a-button>
+      </div>
+      <a-alert
+        v-if="phaseYZProductizationError"
+        class="phase-yz-alert"
+        type="warning"
+        show-icon
+        :message="phaseYZProductizationError"
+      />
+      <a-alert
+        v-if="phaseYZProductizationPending"
+        class="phase-yz-alert"
+        type="info"
+        show-icon
+        data-testid="phase-yz-execution-price-pending"
+        :message="phaseYZExecutionPriceMessage"
+      />
+      <div class="phase-yz-grid">
+        <div>
+          <span>信号日期</span>
+          <strong>{{ phaseYZSignalAsOf }}</strong>
+          <small>execution_price_mode: {{ phaseYZExecutionPriceMode }}</small>
+        </div>
+        <div>
+          <span>生产模型</span>
+          <strong>{{ phaseYZModelNames }}</strong>
+          <small>只展示 Model A / Model B</small>
+        </div>
+        <div>
+          <span>生产策略</span>
+          <strong>{{ phaseYZStrategyNames }}</strong>
+          <small>{{ phaseYZSelectedStrategy }}</small>
+        </div>
+        <div>
+          <span>目标成交日</span>
+          <strong>{{ phaseYZTargetNextTradingDay }}</strong>
+          <small>{{ phaseYZBlockedReasonText }}</small>
+        </div>
+      </div>
+    </a-card>
+
+    <readonly-strategy-snapshot-panel
+      :payload="readonlyStrategySnapshotPayload"
+      :error="readonlyStrategySnapshotError"
+      :loading="loadingReadonlyStrategySnapshot"
+      @refresh="loadReadonlyStrategySnapshot"
+    />
+
+    <readonly-replay-window-panel
+      :index-payload="readonlyReplayWindowIndexPayload"
+      :payload="readonlyReplayWindowPayload"
+      :index-error="readonlyReplayWindowIndexError"
+      :error="readonlyReplayWindowError"
+      :loading-index="loadingReadonlyReplayWindowIndex"
+      :loading-window="loadingReadonlyReplayWindow"
+      :selected-key="readonlyReplayWindowSelectedKey"
+      @select-window="handleReadonlyReplayWindowSelect"
+      @refresh-index="loadReadonlyReplayWindowIndex"
+      @query="loadReadonlyReplayWindow"
+    />
+
+    <paper-portfolio-panel :phase-yz-status="phaseYZProductizationPayload" />
+
     <a-card class="rank-tech-replay-card" :bordered="false" data-testid="rank-tech-portfolio-replay-readonly">
       <template slot="title">
         <div class="card-title-line">
@@ -1447,9 +1594,17 @@
 
 <script>
 import moment from 'moment'
+import ReadonlyStrategySnapshotPanel from './components/ReadonlyStrategySnapshotPanel.vue'
+import ReadonlyReplayWindowPanel from './components/ReadonlyReplayWindowPanel.vue'
+import PaperPortfolioPanel from './components/PaperPortfolioPanel.vue'
 import {
   getTwStockTrends,
   getTwStockLTRReadonlyExplanation,
+  getTwStockReadonlyStrategySnapshot,
+  getTwStockPhaseYZProductizationStatus,
+  getTwStockCurrentStrategyContext,
+  getTwStockReadonlyReplayWindowIndex,
+  getTwStockReadonlyReplayWindow,
   getTwStockLTROptionalSimStrategies,
   getTwStockMonitorConfig,
   saveTwStockMonitorConfig,
@@ -1487,6 +1642,11 @@ import {
 
 export default {
   name: 'TWStockMonitor',
+  components: {
+    ReadonlyStrategySnapshotPanel,
+    ReadonlyReplayWindowPanel,
+    PaperPortfolioPanel
+  },
   data () {
     return {
       loading: false,
@@ -1506,6 +1666,11 @@ export default {
       loadingCrossAnalysis: false,
       loadingCrossAnalysisDetail: false,
       loadingRankTechCross: false,
+      loadingReadonlyStrategySnapshot: false,
+      loadingCurrentStrategyContext: false,
+      loadingPhaseYZProductization: false,
+      loadingReadonlyReplayWindowIndex: false,
+      loadingReadonlyReplayWindow: false,
       loadingLtrReadonlyExplanation: false,
       loadingLtrOptionalSimStrategies: false,
       runningPortfolioReplay: false,
@@ -1591,6 +1756,23 @@ export default {
       rankTechVariant: 'all',
       rankTechLatestPayload: null,
       rankTechLatestError: '',
+      readonlyStrategySnapshotPayload: null,
+      readonlyStrategySnapshotError: '',
+      currentStrategyContextPayload: null,
+      currentStrategyContextError: '',
+      phaseYZProductizationPayload: null,
+      phaseYZProductizationError: '',
+      readonlyReplayWindowIndexPayload: null,
+      readonlyReplayWindowIndexError: '',
+      readonlyReplayWindowSelectedKey: '2026_ytd',
+      readonlyReplayWindowPayload: null,
+      readonlyReplayWindowError: '',
+      readonlyReplayWindowForm: {
+        model_id: 'e4_frozen_qlib_2018_2022',
+        strategy_rule: 'top50_exit_one_worst_sell',
+        start: moment('2026-01-01', 'YYYY-MM-DD'),
+        end: moment('2026-05-07', 'YYYY-MM-DD')
+      },
       ltrReadonlyExplanationPayload: null,
       ltrReadonlyExplanationError: '',
       ltrOptionalSimPayload: null,
@@ -1684,6 +1866,96 @@ export default {
     }
   },
   computed: {
+    currentStrategyContext () {
+      return (this.currentStrategyContextPayload && this.currentStrategyContextPayload.context) || {}
+    },
+    currentStrategyRankings () {
+      return (this.currentStrategyContextPayload && this.currentStrategyContextPayload.rankings) || {}
+    },
+    currentStrategyAsofAudit () {
+      return (this.currentStrategyContextPayload && this.currentStrategyContextPayload.consistency_audit && this.currentStrategyContextPayload.consistency_audit.asof_alignment) || {}
+    },
+    currentStrategyContextReady () {
+      return this.currentStrategyContextPayload && this.currentStrategyContextPayload.ok === true
+    },
+    currentStrategyContextStatusText () {
+      if (this.currentStrategyContextError) return '读取异常'
+      if (!this.currentStrategyContextPayload) return '待读取'
+      if (this.currentStrategyAsofAudit.status === 'pass') return '一致'
+      return '部分来源待同步'
+    },
+    currentStrategyContextTagColor () {
+      if (this.currentStrategyContextError) return 'red'
+      if (!this.currentStrategyContextPayload) return 'default'
+      return this.currentStrategyAsofAudit.status === 'pass' ? 'green' : 'orange'
+    },
+    currentStrategyContextBrief () {
+      if (!this.currentStrategyContextPayload) return '统一读取 E4 Qlib 与正交 LTR 产物，供策略快照、决策和回放共用。'
+      return `当前以 ${this.currentContextSignalAsOf} 信号生成 ${this.currentContextTargetDate} 的只读策略信息。`
+    },
+    currentStrategyContextMismatchText () {
+      const audit = this.currentStrategyAsofAudit
+      const checks = Array.isArray(audit.checks) ? audit.checks : []
+      const mismatches = checks.filter(item => item && item.status !== 'pass')
+      if (!mismatches.length) return ''
+      return mismatches.map(item => `${item.name}: ${item.actual_asof || item.details || '-'}，期望 ${item.expected_signal_asof || this.currentContextSignalAsOf}`).join('；')
+    },
+    currentContextSignalAsOf () {
+      return this.currentStrategyContext.signal_asof || '-'
+    },
+    currentContextTargetDate () {
+      return this.currentStrategyContext.target_date || '-'
+    },
+    currentContextModelText () {
+      const model = this.currentStrategyContext.default_model_id || '-'
+      const display = this.currentStrategyContext.display_model_id || ''
+      return display && display !== model ? `${display}` : model
+    },
+    currentContextStrategyRule () {
+      return this.currentStrategyContext.strategy_rule || '-'
+    },
+    currentContextLTRCoverageText () {
+      const rows = Array.isArray(this.currentStrategyRankings.ltr_top50) ? this.currentStrategyRankings.ltr_top50 : []
+      return `${rows.length}/50`
+    },
+    currentContextQlibCoverageText () {
+      const top50 = Array.isArray(this.currentStrategyRankings.qlib_top50) ? this.currentStrategyRankings.qlib_top50.length : 0
+      const top150 = Array.isArray(this.currentStrategyRankings.qlib_top150) ? this.currentStrategyRankings.qlib_top150.length : 0
+      return `${top50}/50 · ${top150}/150`
+    },
+    currentContextLTRTopSymbol () {
+      const rows = Array.isArray(this.currentStrategyRankings.ltr_top10) ? this.currentStrategyRankings.ltr_top10 : []
+      return rows.length ? (rows[0].instrument || rows[0].symbol || '-') : '-'
+    },
+    phaseYZProductizationPending () {
+      const payload = this.phaseYZProductizationPayload || {}
+      return payload.execution_price_status === 'execution_price_unavailable' || payload.paper_apply_allowed === false
+    },
+    phaseYZProductizationTagColor () { return this.phaseYZProductizationPending ? 'orange' : 'green' },
+    phaseYZProductizationStateText () { return this.phaseYZProductizationPending ? 'execution_price_unavailable' : 'ready' },
+    phaseYZPaperApplyDisabled () {
+      const payload = this.phaseYZProductizationPayload || {}
+      return payload.paper_apply_allowed !== true
+    },
+    phaseYZSignalAsOf () { return (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.signal_asof) || '-' },
+    phaseYZExecutionPriceMode () { return (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.execution_price_mode) || 'next_open' },
+    phaseYZExecutionPriceMessage () { return (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.execution_price_message) || '成交口径：次一交易日开盘价。行情暂不可用，等待下一轮数据更新。' },
+    phaseYZTargetNextTradingDay () {
+      const readiness = (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.execution_price_readiness) || {}
+      return readiness.target_next_trading_day || '-'
+    },
+    phaseYZModelNames () {
+      const models = (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.models) || []
+      return models.map(item => item.model_id).join(' / ') || 'e4_frozen_qlib_2018_2022 / e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025'
+    },
+    phaseYZStrategyNames () {
+      const strategies = (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.production_strategies) || []
+      return strategies.map(item => item.strategy_rule_id).join(' / ') || 'top50_exit_one_worst_sell'
+    },
+    phaseYZSelectedStrategy () { return (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.selected_strategy_rule_id) || 'top50_exit_one_worst_sell' },
+    phaseYZPaperApplyText () { return this.phaseYZPaperApplyDisabled ? '等待 next_open 成交价' : '可应用到模拟账户' },
+    phaseYZBlockedReasonText () { return (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.paper_apply_blocked_reason) || '-' },
+
     unreadCount () {
       return this.alertItems.filter(item => !item.is_read).length
     },
@@ -2103,6 +2375,203 @@ export default {
       return '目前沒有可用 qlib 研究排序表'
     },
 
+    readonlyStrategySnapshot () {
+      return (this.readonlyStrategySnapshotPayload && this.readonlyStrategySnapshotPayload.snapshot) || {}
+    },
+    readonlyStrategyManifest () {
+      return (this.readonlyStrategySnapshotPayload && this.readonlyStrategySnapshotPayload.manifest) || {}
+    },
+    readonlyStrategyValidation () {
+      return (this.readonlyStrategySnapshotPayload && this.readonlyStrategySnapshotPayload.validation) || {}
+    },
+    readonlyStrategyChecksum () {
+      return (this.readonlyStrategySnapshotPayload && this.readonlyStrategySnapshotPayload.checksum) || {}
+    },
+    readonlyTopCandidates () {
+      const items = this.readonlyStrategySnapshot.top_candidates
+      return Array.isArray(items) ? items.slice(0, 10) : []
+    },
+    readonlyExitCandidates () {
+      const items = this.readonlyStrategySnapshot.exit_candidates
+      return Array.isArray(items) ? items : []
+    },
+    readonlyStrategyGatePass () {
+      const payload = this.readonlyStrategySnapshotPayload || {}
+      return payload.ok === true &&
+        payload.readonly_only === true &&
+        payload.production_trade_enabled === false &&
+        payload.not_order === true &&
+        payload.no_order_action === true &&
+        payload.not_target_position === true &&
+        payload.not_investment_advice === true &&
+        this.readonlyStrategyValidation.ok === true &&
+        this.readonlyStrategyChecksum.ok === true
+    },
+    readonlyStrategyStatusText () {
+      if (this.readonlyStrategySnapshotError) return '读取异常'
+      if (!this.readonlyStrategySnapshotPayload) return '待读取'
+      return this.readonlyStrategyGatePass ? '通过' : '需复核'
+    },
+    readonlyStrategyStatusColor () {
+      if (this.readonlyStrategyGatePass) return 'green'
+      if (this.readonlyStrategySnapshotError) return 'red'
+      return 'orange'
+    },
+    readonlyStrategyValidationText () {
+      const validation = this.readonlyStrategyValidation
+      return validation.status || (validation.ok === true ? 'pass' : '-')
+    },
+    readonlyStrategyChecksumText () {
+      const checksum = this.readonlyStrategyChecksum
+      if (checksum.ok === true) return 'pass'
+      if (checksum.ok === false) return 'fail'
+      return '-'
+    },
+    readonlyStrategySourceManifest () {
+      const sources = (this.readonlyStrategySnapshotPayload && this.readonlyStrategySnapshotPayload.sources) || {}
+      return sources.manifest || this.readonlyStrategyManifest.snapshot || '-'
+    },
+    readonlyStrategyFlagText () {
+      const payload = this.readonlyStrategySnapshotPayload || {}
+      return [
+        `readonly=${String(payload.readonly_only === true)}`,
+        `production=${String(payload.production_trade_enabled === true)}`
+      ].join(' / ')
+    },
+
+    readonlyReplayWindowOptions () {
+      const items = this.readonlyReplayWindowIndexPayload && this.readonlyReplayWindowIndexPayload.windows
+      return Array.isArray(items) ? items : []
+    },
+    readonlyReplayWindowSelectedPreset () {
+      return this.readonlyReplayWindowOptions.find(item => item && item.window_key === this.readonlyReplayWindowSelectedKey) || this.readonlyReplayWindowOptions[0] || null
+    },
+    readonlyReplayWindowPresetText () {
+      const preset = this.readonlyReplayWindowSelectedPreset || {}
+      if (preset.window_type === 'generated_readonly') return 'D6 已审计非固定窗口'
+      if (preset.window_type === 'fixed_standard') return 'D4 固定标准窗口'
+      return '索引窗口'
+    },
+    readonlyReplayWindowPresetColor () {
+      const preset = this.readonlyReplayWindowSelectedPreset || {}
+      if (preset.window_type === 'generated_readonly') return 'purple'
+      if (preset.window_type === 'fixed_standard') return 'blue'
+      return 'default'
+    },
+    readonlyReplayWindowSummary () {
+      return (this.readonlyReplayWindowPayload && this.readonlyReplayWindowPayload.summary) || {}
+    },
+    readonlyReplayWindowText () {
+      const window = (this.readonlyReplayWindowPayload && this.readonlyReplayWindowPayload.window) || {}
+      return window.start && window.end ? `${window.start}..${window.end}` : '-'
+    },
+    readonlyReplayWindowChecksumText () {
+      const checksum = (this.readonlyReplayWindowPayload && this.readonlyReplayWindowPayload.checksum) || {}
+      if (checksum.ok === true) return 'pass'
+      if (checksum.ok === false) return 'fail'
+      return '-'
+    },
+    readonlyReplayWindowStatusText () {
+      if (this.readonlyReplayWindowError) return '后端拒绝'
+      if (!this.readonlyReplayWindowPayload) return '待读取'
+      return this.readonlyReplayWindowPayload.ok === true && this.readonlyReplayWindowPayload.readonly_only === true ? '通过' : '需复核'
+    },
+    readonlyDailyRunRegistryItems () {
+      const items = this.readonlyDailyRunRegistryPayload && this.readonlyDailyRunRegistryPayload.items
+      return Array.isArray(items) ? items : []
+    },
+    readonlyDailyRunRegistrySource () {
+      const sources = this.readonlyDailyRunRegistryPayload && this.readonlyDailyRunRegistryPayload.sources
+      return (sources && sources.run_registry_root) || '-'
+    },
+    readonlyProviderReadinessStatus () {
+      return (this.readonlyProviderReadinessPayload && this.readonlyProviderReadinessPayload.status) || '-'
+    },
+    readonlyDailyUpdateRunItems () {
+      const items = this.readonlyDailyUpdateRunsPayload && this.readonlyDailyUpdateRunsPayload.items
+      return Array.isArray(items) ? items : []
+    },
+    readonlyDailyUpdateLatestRun () {
+      const current = this.readonlyDailyUpdateRunPayload
+      const latest = this.readonlyDailyUpdateRunItems[0] || null
+      if (current && current.run_id) return current
+      return latest
+    },
+    readonlyDailyUpdateRunId () {
+      return (this.readonlyDailyUpdateLatestRun && this.readonlyDailyUpdateLatestRun.run_id) || '-'
+    },
+    readonlyDailyTriggerStatus () {
+      if (this.runningReadonlyDailyUpdate) return 'running'
+      if (this.loadingReadonlyProviderReadiness || this.loadingReadonlyDailyUpdateRuns || !this.readonlyProviderReadinessPayload) return 'loading'
+      const run = this.readonlyDailyUpdateLatestRun || {}
+      const readiness = this.readonlyProviderReadinessPayload || {}
+      const status = run.status || this.readonlyProviderReadinessStatus
+      if (status === 'success' && this.readonlyDailyManualTriggerRunId && run.run_id === this.readonlyDailyManualTriggerRunId) return 'success_after_trigger'
+      if (readiness.triggerable === false || status === 'already_latest') return 'already_latest'
+      if (status === 'success') return 'already_latest'
+      if (status === 'running') return 'running'
+      if (status === 'already_latest') return 'already_latest'
+      if (status === 'no_new_data') return 'no_data_after_trigger'
+      if (status === 'provider_failed') return 'provider_failed_after_trigger'
+      if (['validator_failed', 'partial_data_pending', 'deadline_missed_keep_previous_latest', 'selected_model_strategy_unavailable'].includes(status)) return 'failed_after_trigger'
+      return 'triggerable'
+    },
+    readonlyDailyTriggerDisabled () {
+      return this.runningReadonlyDailyUpdate || this.readonlyDailyTriggerStatus === 'loading' || this.readonlyDailyTriggerStatus === 'running' || this.readonlyDailyTriggerStatus === 'already_latest'
+    },
+    readonlyDailyTriggerStateText () {
+      const map = {
+        already_latest: '已是最新',
+        loading: '检查中',
+        running: '正在更新',
+        triggerable: '可更新',
+        no_data_after_trigger: '最新数据暂不可用',
+        success_after_trigger: '更新成功',
+        provider_failed_after_trigger: '数据源暂不可用',
+        failed_after_trigger: '更新失败'
+      }
+      return map[this.readonlyDailyTriggerStatus] || '可更新'
+    },
+    readonlyDailyTriggerTagColor () {
+      const map = {
+        already_latest: 'green',
+        loading: 'default',
+        running: 'blue',
+        triggerable: 'gold',
+        no_data_after_trigger: 'orange',
+        success_after_trigger: 'green',
+        provider_failed_after_trigger: 'orange',
+        failed_after_trigger: 'red'
+      }
+      return map[this.readonlyDailyTriggerStatus] || 'default'
+    },
+    readonlyDailyTriggerMessage () {
+      const run = this.readonlyDailyUpdateLatestRun || {}
+      if (this.readonlyDailyTriggerStatus === 'loading') return '正在检查数据是否已有最新结果。'
+      if (this.readonlyDailyTriggerStatus === 'running') return `正在更新 / ${run.run_id || '-'}`
+      if (this.readonlyDailyTriggerStatus === 'already_latest') return '已是最新，继续展示当前只读结果。'
+      if (this.readonlyDailyTriggerStatus === 'no_data_after_trigger') return '最新数据暂不可用，保留旧结果，等待自动重试。'
+      if (this.readonlyDailyTriggerStatus === 'success_after_trigger') return `更新成功，latest_asof ${run.target_asof || this.readonlyDailyDataAsOf || '-'}`
+      if (this.readonlyDailyTriggerStatus === 'provider_failed_after_trigger') {
+        if (run.user_message) return run.user_message
+        const provider = run.provider_user_status || {}
+        return provider.user_message || '外部行情源暂时不可用，旧策略结果已保留，系统会等待下一轮重试。'
+      }
+      if (this.readonlyDailyTriggerStatus === 'failed_after_trigger') {
+        if (run.user_message) return run.user_message
+        return '旧结果已保留，可稍后重试。'
+      }
+      return `数据就绪状态 ${this.readonlyProviderReadinessStatus}，成功后展示最新只读策略；失败或没数据时保留旧结果。`
+    },
+    readonlyReplayWindowSourceManifest () {
+      const sources = (this.readonlyReplayWindowPayload && this.readonlyReplayWindowPayload.sources) || {}
+      return sources.readonly_replay_manifest || sources.standard_artifact_index_manifest || '-'
+    },
+    readonlyReplayWindowIndexManifest () {
+      const sources = (this.readonlyReplayWindowPayload && this.readonlyReplayWindowPayload.sources) || {}
+      return sources.window_index_manifest || (this.readonlyReplayWindowIndexPayload && this.readonlyReplayWindowIndexPayload.sources && this.readonlyReplayWindowIndexPayload.sources.manifest) || '-'
+    },
+
     ltrReadonlyExplanationMethods () {
       const methods = this.ltrReadonlyExplanationPayload && this.ltrReadonlyExplanationPayload.methods
       return Array.isArray(methods) ? methods : []
@@ -2376,7 +2845,10 @@ export default {
     this.loadQlibOpsLatest()
     this.loadDailyAutoUpdateStatus()
     this.loadCrossAnalysis()
-    this.loadRankTechPortfolioPanel()
+    this.loadCurrentStrategyContext()
+    this.loadReadonlyStrategySnapshot()
+    this.loadReadonlyReplayWindowIndex()
+    this.loadRankTechCrossLatest()
     this.loadLtrReadonlyExplanation()
     this.loadLtrOptionalSimStrategies()
     this.loadTwStockAgentContext()
@@ -2415,6 +2887,10 @@ export default {
       if (instrument) return instrument
       const symbol = row && row.symbol ? String(row.symbol).trim().toUpperCase() : ''
       return symbol ? `TW${symbol.replace(/^TW/, '')}` : '-'
+    },
+    displayReadonlySymbol (row) {
+      const symbol = row && row.symbol ? String(row.symbol).trim().toUpperCase() : ''
+      return symbol || '-'
     },
     displayStockName (row) {
       const name = row && (row.name || row.symbol_name || row.stock_name)
@@ -2721,6 +3197,101 @@ export default {
         this.loadingLtrOptionalSimStrategies = false
       }
     },
+    async loadCurrentStrategyContext () {
+      this.loadingCurrentStrategyContext = true
+      this.currentStrategyContextError = ''
+      try {
+        const data = this.unwrap(await getTwStockCurrentStrategyContext())
+        this.currentStrategyContextPayload = data || null
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.currentStrategyContextPayload = response && response.data ? response.data : null
+        this.currentStrategyContextError = (response && response.msg) || error.message || '统一策略上下文读取失败。'
+      } finally {
+        this.loadingCurrentStrategyContext = false
+      }
+    },
+    async loadReadonlyReplayWindowIndex () {
+      this.loadingReadonlyReplayWindowIndex = true
+      this.readonlyReplayWindowIndexError = ''
+      try {
+        const data = this.unwrap(await getTwStockReadonlyReplayWindowIndex())
+        this.readonlyReplayWindowIndexPayload = data || null
+        if (!this.readonlyReplayWindowSelectedPreset && this.readonlyReplayWindowOptions.length) {
+          this.readonlyReplayWindowSelectedKey = this.readonlyReplayWindowOptions[0].window_key
+        }
+        if (this.readonlyReplayWindowSelectedPreset) {
+          this.applyReadonlyReplayWindowPreset()
+          await this.loadReadonlyReplayWindow()
+        } else {
+          this.readonlyReplayWindowPayload = null
+          this.readonlyReplayWindowError = '等待 clean E4 只读回放窗口索引。'
+        }
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.readonlyReplayWindowIndexPayload = response && response.data ? response.data : null
+        this.readonlyReplayWindowIndexError = (response && response.msg) || error.message || '只读回放窗口索引读取失败。'
+      } finally {
+        this.loadingReadonlyReplayWindowIndex = false
+      }
+    },
+    handleReadonlyReplayWindowSelect (windowKey) {
+      this.readonlyReplayWindowSelectedKey = windowKey
+      this.$nextTick(() => this.applyReadonlyReplayWindowPreset())
+    },
+    applyReadonlyReplayWindowPreset () {
+      const preset = this.readonlyReplayWindowSelectedPreset
+      if (!preset) return false
+      this.readonlyReplayWindowForm = {
+        model_id: preset.model_id,
+        strategy_rule: preset.strategy_rule,
+        start: moment(preset.start, 'YYYY-MM-DD'),
+        end: moment(preset.end, 'YYYY-MM-DD')
+      }
+      return true
+    },
+    async loadReadonlyStrategySnapshot () {
+      this.loadingReadonlyStrategySnapshot = true
+      this.readonlyStrategySnapshotError = ''
+      try {
+        const data = this.unwrap(await getTwStockReadonlyStrategySnapshot())
+        this.readonlyStrategySnapshotPayload = data || null
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.readonlyStrategySnapshotPayload = response && response.data ? response.data : null
+        this.readonlyStrategySnapshotError = (response && response.msg) || error.message || '策略快照读取失败。'
+      } finally {
+        this.loadingReadonlyStrategySnapshot = false
+      }
+    },
+    async loadReadonlyReplayWindow () {
+      if (!this.readonlyReplayWindowSelectedPreset) {
+        this.readonlyReplayWindowPayload = null
+        this.readonlyReplayWindowError = '等待 clean E4 只读回放窗口索引。'
+        return
+      }
+      this.applyReadonlyReplayWindowPreset()
+      this.loadingReadonlyReplayWindow = true
+      this.readonlyReplayWindowError = ''
+      const start = this.readonlyReplayWindowForm.start && this.readonlyReplayWindowForm.start.format ? this.readonlyReplayWindowForm.start.format('YYYY-MM-DD') : this.readonlyReplayWindowForm.start
+      const end = this.readonlyReplayWindowForm.end && this.readonlyReplayWindowForm.end.format ? this.readonlyReplayWindowForm.end.format('YYYY-MM-DD') : this.readonlyReplayWindowForm.end
+      try {
+        const data = this.unwrap(await getTwStockReadonlyReplayWindow({
+          model_id: this.readonlyReplayWindowForm.model_id,
+          strategy_rule: this.readonlyReplayWindowForm.strategy_rule,
+          start,
+          end
+        }))
+        this.readonlyReplayWindowPayload = data || null
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.readonlyReplayWindowPayload = response && response.data ? response.data : null
+        const details = response && response.data && response.data.allowed_replay_start_min ? `；最早允许 ${response.data.allowed_replay_start_min}` : ''
+        this.readonlyReplayWindowError = ((response && response.msg) || error.message || '只读回放窗口读取失败。') + details
+      } finally {
+        this.loadingReadonlyReplayWindow = false
+      }
+    },
     ltrOptionalSimMetricText (item, key, type) {
       const metric = item && item.metrics && item.metrics[key]
       const values = metric !== null && metric !== undefined && metric !== ''
@@ -2772,10 +3343,11 @@ export default {
     },
     handleRankTechReplayControlChange () {
       this.rankTechVariant = this.rankTechVariant || 'all'
-      this.loadRankTechPortfolioPanel()
+      this.loadRankTechCrossLatest()
     },
     handlePortfolioReplayControlChange () {
-      this.loadPortfolioReplay()
+      this.portfolioReplayPayload = null
+      this.portfolioReplayError = '参数已变更，请手动运行只读历史模拟。'
     },
     rankTechDecisionLabel (item) {
       const code = item && item.decision && item.decision.code
@@ -3550,7 +4122,6 @@ export default {
       if (!this.backtestTemplates.length) await this.loadBacktestTemplates()
       await this.$nextTick()
       this.scrollToBacktestPanel()
-      await this.runReadonlyBacktest()
     },
     qlibCustomRow (record) {
       return {
@@ -3668,11 +4239,22 @@ export default {
         this.runningBacktest = false
       }
     },
+    async loadPhaseYZProductizationStatus () {
+      this.loadingPhaseYZProductization = true
+      this.phaseYZProductizationError = ''
+      try {
+        this.phaseYZProductizationPayload = this.unwrap(await getTwStockPhaseYZProductizationStatus())
+      } catch (error) {
+        this.phaseYZProductizationError = (error && error.message) || 'YZ Clean E4 产品化状态暂不可读。'
+      } finally {
+        this.loadingPhaseYZProductization = false
+      }
+    },
     async refreshAll () {
       this.loading = true
       try {
         await this.loadConfig()
-        await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs(), this.loadQlibHealth(), this.loadQlibSignals(), this.loadRankChanges(), this.loadDailyAutoUpdateStatus(), this.loadQlibOpsLatest(), this.loadCrossAnalysis(), this.loadRankTechPortfolioPanel(), this.loadLtrReadonlyExplanation(), this.loadLtrOptionalSimStrategies(), this.loadTwStockAgentContext(), this.loadChartSymbolOptions()])
+        await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs(), this.loadQlibHealth(), this.loadQlibSignals(), this.loadRankChanges(), this.loadDailyAutoUpdateStatus(), this.loadQlibOpsLatest(), this.loadCrossAnalysis(), this.loadCurrentStrategyContext(), this.loadPhaseYZProductizationStatus(), this.loadReadonlyStrategySnapshot(), this.loadReadonlyReplayWindowIndex(), this.loadRankTechCrossLatest(), this.loadLtrReadonlyExplanation(), this.loadLtrOptionalSimStrategies(), this.loadTwStockAgentContext(), this.loadChartSymbolOptions()])
         this.lastRefreshedAt = new Date().toLocaleTimeString()
         this.syncAutoRefreshTimer()
       } finally {
@@ -4285,6 +4867,33 @@ export default {
 .research-boundary-alert {
   margin-bottom: 16px;
 }
+
+.phase-yz-productization-card { margin-bottom: 16px; }
+.phase-yz-toolbar,
+.phase-yz-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.phase-yz-toolbar { margin-bottom: 12px; }
+.phase-yz-alert { margin-bottom: 12px; }
+.phase-yz-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.phase-yz-grid > div {
+  min-height: 76px;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #fff;
+}
+.phase-yz-grid span,
+.phase-yz-grid small { color: #667085; font-size: 12px; }
+.phase-yz-grid strong { color: #111827; word-break: break-word; }
 
 .summary-grid {
   display: grid;
@@ -5083,6 +5692,226 @@ export default {
 }
 
 
+.current-strategy-context-card,
+.readonly-strategy-snapshot,
+.readonly-replay-window {
+  margin-top: 16px;
+}
+
+.current-context-toolbar,
+.current-context-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.current-context-toolbar {
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  color: #475467;
+  font-size: 12px;
+}
+
+.current-context-alert {
+  margin-bottom: 10px;
+}
+
+.current-context-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.current-context-grid > div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.current-context-grid span,
+.current-context-grid small {
+  display: block;
+  color: #667085;
+  font-size: 12px;
+}
+
+.current-context-grid strong {
+  display: block;
+  margin: 3px 0;
+  color: #111827;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.readonly-snapshot-toolbar,
+.readonly-window-toolbar,
+.readonly-section-head,
+.readonly-candidate-row,
+.readonly-source-grid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.readonly-window-toolbar {
+  margin-bottom: 10px;
+}
+
+.readonly-snapshot-toolbar {
+  justify-content: space-between;
+  margin-bottom: 10px;
+  color: #475467;
+  font-size: 12px;
+}
+
+.readonly-snapshot-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.readonly-snapshot-title-block strong {
+  color: #111827;
+  font-size: 13px;
+}
+
+.readonly-snapshot-title-block span {
+  color: #667085;
+}
+
+.readonly-snapshot-alert {
+  margin-bottom: 12px;
+}
+
+.readonly-snapshot-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.readonly-snapshot-grid,
+.readonly-source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.readonly-snapshot-metric,
+.readonly-source-grid span,
+.readonly-candidate-section {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  background: #fbfdff;
+  overflow-wrap: anywhere;
+}
+
+.readonly-snapshot-metric.primary {
+  border-color: #91caff;
+  background: #f0f7ff;
+}
+
+.readonly-snapshot-metric strong,
+.readonly-snapshot-metric small,
+.readonly-snapshot-metric span {
+  display: block;
+}
+
+.readonly-snapshot-metric strong {
+  margin-top: 4px;
+  color: #111827;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.readonly-snapshot-metric span,
+.readonly-source-grid strong,
+.readonly-candidate-row strong,
+.readonly-section-head strong {
+  color: #111827;
+  font-weight: 600;
+}
+
+.readonly-snapshot-metric small,
+.readonly-source-grid span,
+.readonly-candidate-row span,
+.readonly-snapshot-empty {
+  color: #667085;
+  font-size: 12px;
+}
+
+.readonly-candidate-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.readonly-candidate-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.readonly-section-head {
+  justify-content: space-between;
+}
+
+.readonly-section-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.readonly-section-head small {
+  color: #667085;
+  font-size: 12px;
+}
+
+.readonly-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.readonly-candidate-row {
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1px solid #eef2f7;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.readonly-candidate-main,
+.readonly-candidate-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.readonly-candidate-main strong {
+  font-size: 14px;
+}
+
+.readonly-candidate-meta {
+  text-align: right;
+}
+
+.readonly-candidate-row.compact {
+  justify-content: flex-start;
+}
+
+.readonly-snapshot-empty {
+  padding: 10px 0;
+}
+
 .rank-tech-replay-card {
   margin-top: 16px;
 }
@@ -5623,5 +6452,6 @@ export default {
 .ltr-detail-wide {
   grid-column: 1 / -1;
 }
+
 
 </style>

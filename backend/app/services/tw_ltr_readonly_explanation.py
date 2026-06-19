@@ -31,6 +31,8 @@ class TWLTRReadonlyExplanationService:
             self.payload_path = Path(payload_path)
 
     def product_view(self) -> dict[str, Any]:
+        if not self.payload_path.exists():
+            return self._missing_artifact_view()
         payload = self._load_payload()
         methods = [self._method_view(item) for item in payload.get("methods", []) if isinstance(item, dict)]
         return {
@@ -41,6 +43,28 @@ class TWLTRReadonlyExplanationService:
             "data_quality": self._data_quality_view(payload.get("data_quality") or {}),
             "methods": methods,
             "readonly_disclaimer": self.readonly_disclaimer,
+            "no_write_guarantees": {
+                "read_only_http_method": True,
+                "reads_static_payload_only": True,
+                "does_not_change_runtime_state": True,
+                "does_not_trigger_data_refresh": True,
+                "does_not_switch_accepted_pointer": True,
+                "does_not_touch_monitor_or_execution_paths": True,
+            },
+            "research_only": True,
+        }
+
+    def _missing_artifact_view(self) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "status": "artifact_missing",
+            "schema_version": "phase5_product_readonly_view_v1",
+            "payload_source": "phase3c_readonly_explanation_payload",
+            "as_of_scope": {},
+            "data_quality": self._data_quality_view({}),
+            "methods": [],
+            "readonly_disclaimer": self.readonly_disclaimer,
+            "message": "历史 LTR 只读解释产物未找到；页面保持只读空态，不触发任何数据刷新或写入。",
             "no_write_guarantees": {
                 "read_only_http_method": True,
                 "reads_static_payload_only": True,

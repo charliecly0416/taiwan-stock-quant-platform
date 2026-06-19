@@ -1,0 +1,418 @@
+registry_version: tw_modular_registry_yz0_clean_v1
+created_at: 2026-06-16
+contracts:
+  model_signal:
+    core_version: r1.0
+    docs: docs/tw_modular_contracts/MODEL_SIGNAL_CONTRACT_CN.md
+    extension_docs: docs/tw_modular_contracts/MODEL_SIGNAL_EXTENSION_SCHEMA_CN.md
+  strategy_dependency:
+    version: strategy_dependency_v1
+    docs: docs/tw_modular_contracts/STRATEGY_DEPENDENCY_CONTRACT_CN.md
+  full_rank:
+    version: full_rank_r9_v1
+    docs: docs/tw_modular_contracts/FULL_RANK_CONTRACT_CN.md
+capabilities:
+  core_signal_v1:
+    required_fields:
+    - date
+    - instrument
+    - model_name
+    - model_family
+    - candidate_rank
+    - buy_score
+    - raw_score
+    - score_rank
+    - full_qlib_rank
+    - signal_asof
+    - available_at
+  candidate_boundary:qlib_top50:
+    required_fields:
+    - candidate_rank
+  buy_ordering:buy_score_desc:
+    required_fields:
+    - buy_score
+  full_rank_exit:full_qlib_rank:
+    required_fields:
+    - full_qlib_rank
+  pit_available_at_checked:
+    required_fields:
+    - signal_asof
+    - available_at
+strategies:
+  production_selectable:
+    top50_exit_one_worst_sell:
+      display_name: Top50 调出最弱一档（模拟策略）
+      dependency_path: configs/strategy_dependencies/top50_exit_one_worst_sell.yaml
+      frontend_selectable: true
+      production_default: true
+      note: Strategy rule only; not bound to old e4_frozen_qlib_2023_2025_ltr model
+        id.
+  research_only:
+    one_sell_one_buy_correct:
+      display_name: 单换手对照候选（研究）
+      dependency_path: configs/strategy_dependencies/one_sell_one_buy_correct.yaml
+      frontend_selectable: false
+      production_default: false
+    one_sell_one_buy_buggy_e8r:
+      display_name: 单换手异常候选（研究）
+      public_alias: single_turnover_anomaly_research
+      dependency_path: configs/strategy_dependencies/one_sell_one_buy_buggy_e8r.yaml
+      frontend_selectable: false
+      production_default: false
+      diagnostic_only: true
+      not_valid_strategy_evidence: true
+  deprecated:
+    original:
+      dependency_path: configs/strategy_dependencies/original.yaml
+      reason: deprecated origin/original baseline; not frontend/API selectable
+    origin:
+      reason: alias of original; not frontend/API selectable
+    top50_exit_all:
+      dependency_path: configs/strategy_dependencies/top50_exit_all.yaml
+      reason: historical research strategy; not product selectable
+    sector_extension_analysis_smoke:
+      dependency_path: configs/strategy_dependencies/sector_extension_analysis_smoke.yaml
+      reason: smoke/template only
+    dummy_new_strategy_dependency_smoke:
+      dependency_path: configs/strategy_dependencies/dummy_new_strategy_dependency_smoke.yaml
+      reason: smoke/template only
+    m2_strategy_dependency_template:
+      dependency_path: configs/strategy_dependencies/m2_strategy_dependency_template.yaml
+      reason: contract template only
+forbidden_actions:
+  no_training: true
+  no_tuning: true
+  no_score_recompute: true
+  no_return_filtering: true
+  no_default_strategy_change: true
+  no_frontend_change: true
+  no_daily_orchestrator_change: true
+  no_provider_publish: true
+  no_accepted_latest_switch: true
+  no_monitor: true
+  no_broker_order: true
+m2_registry:
+  schema_version: m1.0.0
+  entry_schema: tw_modular_registry_entry_m2
+  entries:
+    data_source.tw_yahoo_m2_template:
+      artifact_type: data_source
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/DATA_SOURCE_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m1/data_source/pass_minimal
+      capabilities:
+      - raw_source_declared
+      - asof_available_at_checked
+      dependencies: []
+      allowed_consumers:
+      - data_ingestion
+      forbidden_consumers:
+      - strategy
+      - broker
+      - frontend_direct
+      production_allowed: false
+      diagnostic_only: false
+      owner_or_stage: phase_m2
+    data_ingestion.tw_yahoo_normalized_m2_template:
+      artifact_type: data_ingestion
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/DATA_INGESTION_ARTIFACT_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m1/data_ingestion/pass_minimal
+      capabilities:
+      - normalized_price_input
+      - symbol_mapping_audit
+      dependencies:
+      - data_source.tw_yahoo_m2_template
+      allowed_consumers:
+      - feature_artifact
+      - price_store
+      forbidden_consumers:
+      - strategy
+      - broker
+      - frontend_direct
+      production_allowed: false
+      diagnostic_only: false
+      owner_or_stage: phase_m2
+    feature_artifact.alpha_m2_template:
+      artifact_type: feature_artifact
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/FEATURE_ARTIFACT_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m1/feature_artifact/pass_pit_safe
+      capabilities:
+      - pit_feature_artifact
+      - forbidden_future_field_audit
+      dependencies:
+      - data_ingestion.tw_yahoo_normalized_m2_template
+      - price_store.tw_price_m2_template
+      allowed_consumers:
+      - model_adapter
+      - analysis_artifact
+      forbidden_consumers:
+      - strategy_direct
+      - frontend_direct
+      - broker
+      production_allowed: false
+      diagnostic_only: false
+      owner_or_stage: phase_m2
+    price_store.tw_price_m2_template:
+      artifact_type: price_store
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/PRICE_STORE_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m1/price_store/pass_minimal
+      capabilities:
+      - next_day_execution_availability
+      - adjustment_policy_declared
+      dependencies:
+      - data_ingestion.tw_yahoo_normalized_m2_template
+      allowed_consumers:
+      - feature_artifact
+      - replay_execution
+      forbidden_consumers:
+      - strategy_direct
+      - broker
+      - provider_latest
+      production_allowed: false
+      diagnostic_only: false
+      owner_or_stage: phase_m2
+    model_signal.m2_onboarding_template:
+      artifact_type: model_signal
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/MODEL_SIGNAL_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m1/model_signal/pass_onboarding_template
+      capabilities:
+      - model_adapter_required
+      - core_signal_v1
+      dependencies:
+      - feature_artifact.alpha_m2_template
+      allowed_consumers:
+      - strategy_rule
+      - analysis_artifact
+      forbidden_consumers:
+      - strategy_private_model_file
+      - frontend_direct
+      - broker
+      production_allowed: false
+      diagnostic_only: false
+      owner_or_stage: phase_m2
+    strategy_rule.m2_onboarding_template:
+      artifact_type: strategy_rule
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/STRATEGY_RULE_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m1/strategy_rule/pass_onboarding_template
+      capabilities:
+      - dependency_yaml_required
+      - order_intent_only
+      dependencies:
+      - model_signal.m2_onboarding_template
+      allowed_consumers:
+      - order_intent_artifact
+      forbidden_consumers:
+      - replay_result_private
+      - broker
+      - frontend_direct
+      production_allowed: false
+      diagnostic_only: false
+      owner_or_stage: phase_m2
+    replay_window.m2_onboarding_template:
+      artifact_type: readonly_replay_window
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/READONLY_REPLAY_WINDOW_PRODUCTIZATION_GUIDE_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m1/readonly_replay_window/pass_onboarding_template
+      capabilities:
+      - readonly_replay_window
+      - price_store_required
+      dependencies:
+      - strategy_rule.m2_onboarding_template
+      - price_store.tw_price_m2_template
+      allowed_consumers:
+      - readonly_api
+      - frontend_readonly_display
+      forbidden_consumers:
+      - broker
+      - quick_trade
+      - provider_publish
+      production_allowed: false
+      diagnostic_only: false
+      owner_or_stage: phase_m2
+    frontend_readonly_display.m2_template:
+      artifact_type: frontend_readonly_display
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/FRONTEND_READONLY_DISPLAY_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m1/frontend_readonly_display/pass_get_only
+      capabilities:
+      - get_only_api
+      - no_local_replay
+      dependencies:
+      - replay_window.m2_onboarding_template
+      allowed_consumers:
+      - end_user_readonly_ui
+      forbidden_consumers:
+      - post_put_patch_delete
+      - broker
+      - monitor_write
+      production_allowed: false
+      diagnostic_only: false
+      owner_or_stage: phase_m2
+    agent_readonly_context.m2_placeholder:
+      artifact_type: agent_readonly_context
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/AGENT_READONLY_CONTEXT_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m1/agent_readonly_context/pass_placeholder
+      capabilities:
+      - readonly_context_only
+      - agent_placeholder_m0_m6
+      dependencies:
+      - frontend_readonly_display.m2_template
+      allowed_consumers:
+      - frontend_agent_panel_placeholder
+      forbidden_consumers:
+      - agent_tool_action_prompt_expansion
+      - broker
+      - monitor_write
+      production_allowed: false
+      diagnostic_only: true
+      owner_or_stage: phase_m2
+    analysis_artifact.m2_template:
+      artifact_type: analysis_artifact
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/ANALYSIS_ARTIFACT_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m1/analysis_artifact/pass_diagnostic_only
+      capabilities:
+      - analysis_only
+      - claim_support_audit
+      dependencies:
+      - model_signal.m2_onboarding_template
+      allowed_consumers:
+      - review_report
+      forbidden_consumers:
+      - default_strategy_switch
+      - broker
+      - frontend_trade_advice
+      production_allowed: false
+      diagnostic_only: true
+      owner_or_stage: phase_m2
+    default_candidate_decision.m2_template:
+      artifact_type: default_candidate_decision
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/DEFAULT_CANDIDATE_DECISION_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m1/default_candidate_decision/pass_preserve_current_default
+      capabilities:
+      - user_confirmation_required
+      - current_default_preserved
+      dependencies:
+      - analysis_artifact.m2_template
+      allowed_consumers:
+      - reviewer
+      forbidden_consumers:
+      - automatic_default_switch
+      - broker
+      - provider_publish
+      production_allowed: false
+      diagnostic_only: false
+      owner_or_stage: phase_m2
+m5_smoke_registry:
+  schema_version: m5.0.0
+  entries:
+    model_signal.dummy_new_model_signal_adapter_smoke:
+      artifact_type: model_signal
+      schema_version: m5.0.0
+      smoke_only: true
+      not_valid_strategy_evidence: true
+      no_replay_return_conclusion: true
+      not_default_candidate: true
+      contract_doc: docs/tw_modular_contracts/MODEL_SIGNAL_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m5_smoke.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m5/onboarding_smoke/pass_minimal
+      capabilities:
+      - core_signal_v1
+      - m5_onboarding_smoke
+      dependencies:
+      - feature_artifact.alpha_m2_template
+      allowed_consumers:
+      - strategy_dependency_smoke_validator
+      forbidden_consumers:
+      - frontend_default_display
+      - default_candidate
+      - broker
+      - provider_publish
+      production_allowed: false
+      diagnostic_only: true
+      owner_or_stage: phase_m5
+    strategy_rule.dummy_new_strategy_dependency_smoke:
+      artifact_type: strategy_rule
+      schema_version: m5.0.0
+      smoke_only: true
+      not_valid_strategy_evidence: true
+      no_replay_return_conclusion: true
+      not_default_candidate: true
+      contract_doc: docs/tw_modular_contracts/STRATEGY_DEPENDENCY_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m5_smoke.py
+      golden_sample: data_tw/golden_samples/modular_contracts/m5/onboarding_smoke/pass_minimal
+      capabilities:
+      - strategy_dependency_check
+      - m5_onboarding_smoke
+      dependencies:
+      - model_signal.dummy_new_model_signal_adapter_smoke
+      allowed_consumers:
+      - order_intent_compatibility_smoke
+      forbidden_consumers:
+      - replay_return_conclusion
+      - frontend_default_display
+      - default_candidate
+      - broker
+      - provider_publish
+      production_allowed: false
+      diagnostic_only: true
+      owner_or_stage: phase_m5
+updated_at: '2026-06-18'
+production_models:
+  production_selectable:
+    e4_frozen_qlib_2018_2022:
+      display_name: E4 frozen qlib 2018-2022
+      model_family: e1_frozen_qlib_baseline
+      train_window:
+        qlib: 2018-01-01..2022-12-31
+        ltr: ''
+      daily_role: model_a_qlib_top150
+      source_manifest: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e1_frozen_qlib_training_and_oos_score/phasee1_training_manifest.json
+      frontend_selectable: true
+      production_default: true
+    e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025:
+      display_name: E4 frozen qlib + orthogonal LTR 2023-2025
+      model_family: e1_frozen_qlib_plus_e3_orthogonal_ltr
+      train_window:
+        qlib: 2018-01-01..2022-12-31
+        ltr: 2023-01-01..2025-12-31
+      daily_role: model_b_ltr_rerank_model_a_top50
+      source_manifest: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e3_orthogonal_ltr_training/phasee3_training_manifest.json
+      frontend_selectable: true
+      production_default: false
+  research_only: {}
+  deprecated:
+    e4_frozen_qlib_2023_2025_ltr:
+      reason: old intermediate E4 naming; removed from productized default path
+    fresh_qlib_adaptive:
+      reason: fresh/adaptive experiment only
+    fresh_qlib_2025_ltr:
+      reason: fresh qlib experiment only
+    frozen_qlib_2025_ltr:
+      reason: frozen fresh short LTR experiment only
+    frozen_qlib_2018_2022:
+      reason: legacy id replaced by e4_frozen_qlib_2018_2022
+    p3_daily_ltr_rerank:
+      reason: P3/fresh scoped experiment only
+    o4_controlled_ltr:
+      reason: O4 experiment only
+    bridge_ltr:
+      reason: bridge experiment only

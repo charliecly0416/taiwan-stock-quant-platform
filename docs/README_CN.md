@@ -456,7 +456,7 @@ BACKEND_PORT=127.0.0.1:5001
 IMAGE_PREFIX=docker.m.daocloud.io/library/
 ```
 
-域名、HTTPS 与反向代理等生产向部署见 **[云服务器部署文档](CLOUD_DEPLOYMENT_CN.md)**。
+台股趋势面板、后台 worker 与部署运维见 **[台股趋势监控部署与运维](TW_STOCK_MONITOR_DEPLOYMENT_CN.md)**。
 
 ## 最小示例：Python 指标策略
 
@@ -578,32 +578,63 @@ QuantDinger/
 
 ## 文档导航
 
-| [台股当前项目介绍与原理](PROJECT_INTRO_CN.md) | 当前台股研究页、五个收敛组合策略、安全边界和 Decision Model 下一阶段路线 |
-| [台股当前使用文档](USER_GUIDE_CN.md) | 当前 Top30/Top50、今日复盘、交叉分析、K 线、模拟账户和只读策略回放的用户操作说明 |
-| [Decision Model 设计方案](TW_STOCK_DECISION_META_MODEL_DESIGN_CN.md) | 下一阶段二阶段决策模型：扩大候选池、大盘自适应、Entry/Exit Risk 模型和验收标准 |
+### 当前台股模块化项目入口
+
 | 文档 | 说明 |
 |------|------|
-| [英文总览](../README.md) | 仓库根目录英文 README（与本文结构同步） |
-| [日本語](README_JA.md) · [한국어](README_KO.md) · [ไทย](README_TH.md) · [Tiếng Việt](README_VI.md) · [العربية](README_AR.md) | 精简版多语言 README（与英文/中文互补；深度说明仍以英文或本文为准） |
+| [当前项目文档入口与归档政策](tw_modular_contracts/TW_CURRENT_PROJECT_DOC_ENTRY_AND_ARCHIVE_POLICY_CN.md) | 新统筹/执行者/审查者进入当前项目的第一入口，说明推荐阅读顺序、模块化原则和历史归档政策 |
+| [台股项目模块地图与链路串联说明](tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md) | 当前数据、模型、信号、策略、回放、readonly artifact、API、前端、日更和模拟账户如何串联 |
+| [台股模块化研究管线未来开发规范](tw_modular_contracts/TW_MODULAR_PIPELINE_FUTURE_DEVELOPMENT_GUIDE_CN.md) | 新增数据、特征、模型、策略、回放和前端接入时必须遵守的模块合同和审查流程 |
+| [台股开发、测试与实验手册](tw_modular_contracts/TW_DEVELOPER_TEST_AND_EXPERIMENT_PLAYBOOK_CN.md) | 开发、测试、实验和验收命令入口，避免回到一功能一大脚本 |
+| [当前策略上下文 API 字段字典](tw_modular_contracts/TW_CURRENT_STRATEGY_CONTEXT_API_FIELD_DICTIONARY_CN.md) | `/api/tw-stock/current-strategy-context` 统一字段、排名、策略快照和只读语义 |
+| [新策略接入模板](tw_modular_contracts/TW_NEW_STRATEGY_ONBOARDING_TEMPLATE_CN.md) | 新策略从 dependency 到 OrderIntent、回放、前端和审查的模板 |
+| [台股日更自动化 Runbook](tw_modular_contracts/TW_DAILY_AUTO_UPDATE_RUNBOOK_CN.md) | 两小时日更脚本、readonly snapshot、validator、前端串联和运维排查 |
+
+### 当前产品化与日更链路
+
+| 文档 | 说明 |
+|------|------|
+| [模块化地基最终验收](tw_modular_contracts/MODULAR_FOUNDATION_FINAL_ACCEPTANCE_CN.md) | 模块化地基 M0-M6 的最终验收结论 |
+| [模块化台股日更最终验收](tw_modular_daily_update_productization/MODULAR_DAILY_UPDATE_FINAL_ACCEPTANCE_CN.md) | U0-U3 只读日更产品化主线的最终验收摘要 |
+| [模块化台股日更运行手册](tw_modular_daily_update_productization/MODULAR_DAILY_UPDATE_RUNBOOK_CN.md) | 只读日更 orchestrator、验证命令、读取接口与故障处理 |
+| [Phase V 路线总结](tw_modular_daily_update_productization/PHASEV_ROUTE_SUMMARY_FOR_COORDINATION_REVIEW_CN.md) | 真实 provider 数据就绪和自动链路的路线总结 |
+| [Phase W0 审查与收口结论](tw_modular_daily_update_productization/PHASEW0_REVIEW_AND_CLOSURE_CN.md) | 全量 provider 覆盖、模型/策略矩阵、前端契约和只读边界收口 |
+| [模拟账户/策略应用最终总结](tw_modular_daily_update_productization/PHASEX_PAPER_PORTFOLIO_STRATEGY_AND_SIMULATION_APP_FINAL_SUMMARY_CN.md) | 模拟账户、策略预览、apply/reset 和前端用户流总结 |
+| [严格 E4 产品化最终总结](tw_modular_daily_update_productization/PHASEYZ_STRICT_E4_PRODUCTIZATION_FINAL_SUMMARY_CN.md) | 当前只保留两个重要模型、默认 E4 LTR、产品化清理和前端收口 |
+| [真实 Provider 日更 Runbook](tw_modular_daily_update_productization/REAL_PROVIDER_DAILY_UPDATE_RUNBOOK_CN.md) | Yahoo/FinMind/orthogonal 数据就绪、fallback、all-ready gate 和日更运维 |
+
+### 模块合同与审查清单
+
+| 文档 | 说明 |
+|------|------|
+| [DataSource 合同](tw_modular_contracts/DATA_SOURCE_CONTRACT_CN.md) | 数据源、provider、as-of、available_at、coverage/schema audit 和禁止 publish/latest switch |
+| [DataIngestionArtifact 合同](tw_modular_contracts/DATA_INGESTION_ARTIFACT_CONTRACT_CN.md) | 原始数据到标准化落盘的 manifest、symbol mapping、coverage/schema audit |
+| [FeatureArtifact 合同](tw_modular_contracts/FEATURE_ARTIFACT_CONTRACT_CN.md) | 特征产物、PIT 可见性、lookback、available_at 和 forbidden future field audit |
+| [ModelSignal 合同](tw_modular_contracts/MODEL_SIGNAL_CONTRACT_CN.md) | 模型输出、score/rank、coverage、readonly safety 和扩展字段规则 |
+| [StrategyRule 合同](tw_modular_contracts/STRATEGY_RULE_CONTRACT_CN.md) | 策略规则输入、输出和禁止直接读模型私有产物 |
+| [OrderIntent 合同](tw_modular_contracts/ORDER_INTENT_CONTRACT_CN.md) | 只读候选动作 artifact，不等于真实订单或目标仓位 |
+| [ReplayResult 合同](tw_modular_contracts/REPLAY_RESULT_CONTRACT_CN.md) | 回放结果、窗口、执行价、费用和样本边界 |
+| [Readonly Strategy Snapshot 合同](tw_modular_contracts/READONLY_STRATEGY_SNAPSHOT_CONTRACT_CN.md) | 前端策略快照产物和 latest pointer 口径 |
+| [Readonly Replay Window 产品化规范](tw_modular_contracts/READONLY_REPLAY_WINDOW_PRODUCTIZATION_GUIDE_CN.md) | 新增回放窗口、API/frontend 只读边界和 validator |
+| [新模型开发手册](tw_modular_contracts/NEW_MODEL_AND_STRATEGY_DEVELOPER_GUIDE_CN.md) | 新模型/新策略开启前的工程规范 |
+| [新模型 Reviewer Checklist](tw_modular_contracts/NEW_MODEL_REVIEWER_CHECKLIST_CN.md) | 审查新模型时阻断 PIT 缺失、default switch、provider/latest 和订单链路 |
+| [新策略 Reviewer Checklist](tw_modular_contracts/NEW_STRATEGY_REVIEWER_CHECKLIST_CN.md) | 审查新策略时阻断未声明 dependency、私读、目标仓位/订单和收益误用 |
+
+### 通用产品与部署文档
+
+| 文档 | 说明 |
+|------|------|
+| [英文总览](../README.md) | 仓库根目录英文 README |
 | [更新日志](CHANGELOG.md) | 版本历史与迁移说明 |
-| [多用户部署](multi-user-setup.md) | PostgreSQL 多用户部署 |
-| [云服务器部署](CLOUD_DEPLOYMENT_CN.md) | 域名、HTTPS、反向代理与生产部署 |
-| [台股量化研究与落地方案](TAIWAN_STOCK_QUANT_RESEARCH_CN.md) | 台股数据源、回测、测试、部署、IBKR 纸面盘/实盘改造路线 |
-| [台股趋势监控部署与运维](TW_STOCK_MONITOR_DEPLOYMENT_CN.md) | 台股趋势面板、监控配置、scan-all、后台 worker、扫描日志、一键验收、CI/PR 安全维护入口 |
-| [Phase 5 台股趋势监控验收清单](TW_STOCK_PHASE5_ACCEPTANCE_CN.md) | Phase 5 已完成能力、上线前检查、安全验收、剩余技术债与后续建议 |
-| [台股 Phase 1-8 交接总结](TAIWAN_STOCK_HANDOFF_PHASE1_8_CN.md) | 新窗口继续 Phase 9 前的总断点，包含已完成能力、入口、测试命令、安全边界和后续路线 |
-| [台股 Phase 1-6 交接总结](TAIWAN_STOCK_HANDOFF_PHASE1_6_CN.md) | Phase 1-6 历史交接记录；最新入口请优先读取 Phase 1-8 交接总结 |
-| [Phase 6 台股趋势监控验收报告](TW_STOCK_PHASE6_ACCEPTANCE_CN.md) | Phase 6 站内通知、趋势历史、页面可视化和独立 worker/cron 验收 |
-| [Phase 7 台股趋势监控验收报告](TW_STOCK_PHASE7_ACCEPTANCE_CN.md) | Phase 7 页面 e2e、Webhook、universe 人工审核链路、service 化和运维收敛验收 |
-| [Phase 8 台股趋势监控验收报告](TW_STOCK_PHASE8_ACCEPTANCE_CN.md) | Phase 8 安全审计、一键验收、CI 接入、PR checklist 和触发范围验收 |
-| [Phase 9 台股趋势监控验收报告](TW_STOCK_PHASE9_ACCEPTANCE_CN.md) | Phase 9 交接、维护入口、Changelog、离线回归、正式前端边界和方向审视验收 |
-| [Phase 9E 台股正式前端准备清单](TW_STOCK_FRONTEND_PHASE9E_CN.md) | 正式 Vue 台股页面的 API、交互、安全约束和独立前端 CI 建议 |
-| [Phase 12A 台股正式 Vue 页面 API Contract](TW_STOCK_FRONTEND_PHASE12A_API_CONTRACT_CN.md) | 正式 Vue 台股页面的后端 API 响应字段、安全边界和独立 frontend/e2e workflow 约束 |
-| [Agent 环境设计](agent/AGENT_ENVIRONMENT_DESIGN.md) · [AI / Agent 集成](agent/AI_INTEGRATION_DESIGN.md) · [快速开始](agent/AGENT_QUICKSTART.md) · [OpenAPI](agent/agent-openapi.json) · [MCP 说明](../mcp_server/README.md) | 编码 Agent、网关、MCP（PyPI：`quantdinger-mcp`）；部分正文为英文 |
+| [台股当前项目介绍与原理](PROJECT_INTRO_CN.md) | 台股研究页、策略、安全边界和当前路线概览 |
+| [台股当前使用文档](USER_GUIDE_CN.md) | 用户操作说明：排名、复盘、交叉分析、K 线、模拟账户和只读回放 |
+| [台股趋势监控部署与运维](TW_STOCK_MONITOR_DEPLOYMENT_CN.md) | 台股趋势面板、监控配置、worker、扫描日志和验收入口 |
+| [Agent / MCP 文档](agent/MCP_SETUP.md) | Agent Gateway、MCP 配置和 AI 客户端接入 |
+| [策略开发指南](STRATEGY_DEV_GUIDE_CN.md) | QuantDinger 策略开发基础说明 |
 
-**策略：** [EN](STRATEGY_DEV_GUIDE.md) · [CN](STRATEGY_DEV_GUIDE_CN.md) · [TW](STRATEGY_DEV_GUIDE_TW.md) · [JA](STRATEGY_DEV_GUIDE_JA.md) · [KO](STRATEGY_DEV_GUIDE_KO.md) · [跨品种 EN](CROSS_SECTIONAL_STRATEGY_GUIDE_EN.md) / [CN](CROSS_SECTIONAL_STRATEGY_GUIDE_CN.md) · [示例](examples/)
+### 历史过程文档
 
-**集成与通知：** [IBKR](IBKR_TRADING_GUIDE_EN.md) · [MT5 EN](MT5_TRADING_GUIDE_EN.md) / [CN](MT5_TRADING_GUIDE_CN.md) · [OAuth EN](OAUTH_CONFIG_EN.md) / [CN](OAUTH_CONFIG_CN.md) · Telegram / Email / SMS：同目录下 `NOTIFICATION_*` 配置文件（中/英文件名见各文档标题）。
+阶段执行报告、阶段审查交接、修复过程文档和提示词已归档到 [历史阶段文档归档](archive/phase_history/README_CN.md)。归档是为了降低主文档噪音，不代表删除证据；需要追溯某条研究路线时，从归档索引按原目录查找。
 
 ## 常见问题
 

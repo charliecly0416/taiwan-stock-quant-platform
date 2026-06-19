@@ -1,0 +1,31 @@
+{
+  "account": {
+    "account_uid": "tw_sim_x1_fixture",
+    "user_id": 7,
+    "name": "Phase X1 readonly fixture",
+    "currency": "TWD",
+    "initial_cash": 500000.0,
+    "cash": 200000.0,
+    "paper_account_epoch": 1
+  },
+  "positions": [
+    {
+      "symbol": "9999",
+      "quantity": 1000,
+      "avg_cost": 50.0,
+      "cost_value": 50000.0
+    }
+  ],
+  "prices": {
+    "9999": {
+      "last_price": 80.0,
+      "price_date": "2026-03-27",
+      "source": "fixture"
+    },
+    "3583": {
+      "last_price": 120.0,
+      "price_date": "2026-03-27",
+      "source": "fixture"
+    }
+  }
+}

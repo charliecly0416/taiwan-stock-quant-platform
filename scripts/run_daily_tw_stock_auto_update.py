@@ -4,8 +4,8 @@
 This single entrypoint is meant for cron/systemd:
 1. Pick the asof date automatically in Asia/Taipei.
 2. Update QuantDinger raw Taiwan stock archives from FinMind.
-3. Refresh Yahoo/Scrapling adjusted data and rebuild/publish the Option C qlib provider.
-4. Publish accepted latest signals for backend/frontend display.
+3. In the default M3 contract path, skip legacy Yahoo/Scrapling provider refresh/publish.
+4. Optionally run legacy provider publish/latest only behind an explicit non-default gate.
 
 Research-only: no broker connection, no order generation, no positions.
 """
@@ -30,6 +30,11 @@ UNIVERSE = QLIB / "data_tw/experiments/option_c_forward_validation/timed_data_av
 LATEST = QLIB / "data_tw/experiments/option_c_daily_signal/latest_signal.json"
 CALENDAR = QLIB / "data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin/calendars/day.txt"
 PENDING_ASOF = OPS_ROOT / "pending_asof.json"
+READONLY_SNAPSHOT_ROOT = ROOT / "data_tw/artifacts/publish/readonly_strategy_snapshot"
+READONLY_DAILY_INTEGRATION_AUDIT = READONLY_SNAPSHOT_ROOT / "daily_integration_audit.json"
+READONLY_PUBLISH_SCRIPT = ROOT / "scripts/publish_tw_modular_readonly_snapshot.py"
+READONLY_VALIDATE_SCRIPT = ROOT / "scripts/validate_tw_modular_readonly_snapshot.py"
+READONLY_DEFAULT_TIMEOUT_SECONDS = 300
 
 
 def load_local_env() -> None:
@@ -138,6 +143,38 @@ def read_json(path: Path) -> dict[str, Any]:
         return {}
 
 
+def rel_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def resolve_path(path: str) -> Path:
+    p = Path(path)
+    return p if p.is_absolute() else ROOT / p
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def parse_json_stdout(command_result: dict[str, Any]) -> dict[str, Any]:
+    raw_path = str(command_result.get("stdout_path") or "").strip()
+    if not raw_path:
+        return {}
+    stdout_path = Path(raw_path)
+    if not stdout_path.exists():
+        return {}
+    try:
+        return json.loads(stdout_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def run_cmd(argv: list[str], *, cwd: Path, stdout_path: Path, stderr_path: Path, timeout: int) -> dict[str, Any]:
     completed = subprocess.run(
         argv,
@@ -167,6 +204,126 @@ def latest_asof() -> str:
     if latest.get("status") == "accepted":
         return str(latest.get("asof") or "")
     return ""
+
+
+def write_readonly_snapshot_latest_pointer(manifest_path: Path, *, out_root: Path = READONLY_SNAPSHOT_ROOT) -> Path:
+    manifest = read_json(manifest_path)
+    latest_path = out_root / "latest.json"
+    write_json(
+        latest_path,
+        {
+            "artifact_type": "readonly_strategy_snapshot_latest_pointer",
+            "schema_version": "readonly_strategy_snapshot_latest_r13_v1",
+            "asof": str(manifest.get("asof") or ""),
+            "readonly_only": True,
+            "production_trade_enabled": False,
+            "snapshot_manifest": rel_path(manifest_path),
+            "created_at": utc_now(),
+            "created_by": "scripts/run_daily_tw_stock_auto_update.py",
+            "not_provider_accepted_latest": True,
+            "not_trade_target_latest": True,
+        },
+    )
+    return latest_path
+
+
+def run_readonly_strategy_snapshot_publish(
+    *,
+    asof: str,
+    job_dir: Path,
+    enabled: bool | None = None,
+    dry_run: bool | None = None,
+    out_root: Path = READONLY_SNAPSHOT_ROOT,
+    timeout_seconds: int | None = None,
+    command_runner=run_cmd,
+) -> dict[str, Any]:
+    enabled = env_flag("ENABLE_TW_READONLY_STRATEGY_SNAPSHOT_PUBLISH", False) if enabled is None else enabled
+    dry_run = env_flag("TW_READONLY_STRATEGY_SNAPSHOT_DRY_RUN", True) if dry_run is None else dry_run
+    result: dict[str, Any] = {
+        "enabled": bool(enabled),
+        "attempted": False,
+        "ok": True,
+        "dry_run": bool(dry_run),
+        "manifest": "",
+        "latest_updated": False,
+        "validator_ok": False,
+        "error": "",
+    }
+    if not enabled:
+        return result
+
+    result["attempted"] = True
+    timeout = int(timeout_seconds or os.getenv("TW_READONLY_STRATEGY_SNAPSHOT_TIMEOUT_SECONDS", str(READONLY_DEFAULT_TIMEOUT_SECONDS)))
+    publish_stdout = job_dir / "readonly_snapshot_publish_stdout.txt"
+    publish_stderr = job_dir / "readonly_snapshot_publish_stderr.txt"
+    publish_argv = [
+        PYTHON,
+        str(READONLY_PUBLISH_SCRIPT.relative_to(ROOT)),
+        "--out-root",
+        str(out_root),
+        "--no-latest",
+        "--json",
+    ]
+    publish_result = command_runner(
+        publish_argv,
+        cwd=ROOT,
+        stdout_path=publish_stdout,
+        stderr_path=publish_stderr,
+        timeout=timeout,
+    )
+    result["publish"] = publish_result
+    publish_payload = parse_json_stdout(publish_result)
+    result["publish_payload"] = publish_payload
+    manifest = str(publish_payload.get("manifest") or "")
+    result["manifest"] = manifest
+    if not publish_result.get("ok") or not publish_payload.get("ok") or not manifest:
+        result.update({"ok": False, "error": "readonly snapshot writer failed"})
+        return result
+
+    validate_stdout = job_dir / "readonly_snapshot_validate_stdout.txt"
+    validate_stderr = job_dir / "readonly_snapshot_validate_stderr.txt"
+    validate_argv = [
+        PYTHON,
+        str(READONLY_VALIDATE_SCRIPT.relative_to(ROOT)),
+        "--manifest",
+        manifest,
+        "--json",
+    ]
+    validate_result = command_runner(
+        validate_argv,
+        cwd=ROOT,
+        stdout_path=validate_stdout,
+        stderr_path=validate_stderr,
+        timeout=timeout,
+    )
+    validate_payload = parse_json_stdout(validate_result)
+    result["validator"] = validate_result
+    result["validator_payload"] = validate_payload
+    result["validator_ok"] = bool(validate_result.get("ok") and validate_payload.get("ok"))
+    if not result["validator_ok"]:
+        result.update({"ok": False, "error": "readonly snapshot validator failed"})
+        return result
+
+    if dry_run:
+        return result
+
+    latest_path = write_readonly_snapshot_latest_pointer(resolve_path(manifest), out_root=out_root)
+    result["latest"] = rel_path(latest_path)
+    result["latest_updated"] = True
+    latest_stdout = job_dir / "readonly_snapshot_latest_validate_stdout.txt"
+    latest_stderr = job_dir / "readonly_snapshot_latest_validate_stderr.txt"
+    latest_validate_result = command_runner(
+        [PYTHON, str(READONLY_VALIDATE_SCRIPT.relative_to(ROOT)), "--latest", "--json"],
+        cwd=ROOT,
+        stdout_path=latest_stdout,
+        stderr_path=latest_stderr,
+        timeout=timeout,
+    )
+    result["latest_validator"] = latest_validate_result
+    result["latest_validator_payload"] = parse_json_stdout(latest_validate_result)
+    if not latest_validate_result.get("ok"):
+        result.update({"ok": False, "error": "readonly snapshot latest pointer validation failed"})
+    return result
 
 
 def materialize_symbols(job_dir: Path) -> Path:
@@ -231,6 +388,12 @@ def main() -> int:
     parser.add_argument("--force", action="store_true", help="Run even when latest_signal already has target asof.")
     parser.add_argument("--skip-finmind", action="store_true")
     parser.add_argument("--skip-qlib", action="store_true")
+    parser.add_argument(
+        "--enable-legacy-provider-publish",
+        action="store_true",
+        default=env_flag("TW_DAILY_AUTO_ENABLE_LEGACY_PROVIDER_PUBLISH", False),
+        help="Explicit non-default legacy gate for Yahoo/Scrapling refresh, provider publish, and accepted latest switching.",
+    )
     parser.add_argument("--finmind-scope", choices=["full", "daily"], default=os.getenv("TW_DAILY_AUTO_FINMIND_SCOPE", "full"))
     parser.add_argument("--finmind-lookback-days", type=int, default=int(os.getenv("TW_DAILY_AUTO_FINMIND_LOOKBACK_DAYS", "260")), help="FinMind TaiwanStockPrice archive lookback. Default 260d to keep qlib Top30/50 trend samples above 120 daily bars.")
     parser.add_argument("--skip-finmind-validate", action="store_true", default=os.getenv("TW_DAILY_AUTO_SKIP_FINMIND_VALIDATE", "true").lower() in {"1", "true", "yes", "on"})
@@ -271,6 +434,11 @@ def main() -> int:
         "yahoo_refresh_triggered": False,
         "provider_publish_triggered": False,
         "latest_signal_updated": False,
+        "m3_contract_mode": "legacy_provider_publish_enabled" if args.enable_legacy_provider_publish else "readonly_orchestrator_default",
+        "legacy_provider_publish_enabled": bool(args.enable_legacy_provider_publish),
+        "legacy_provider_refresh_default_reachable": False,
+        "legacy_provider_publish_default_reachable": False,
+        "legacy_accepted_latest_default_reachable": False,
     }
     write_json(job_dir / "job.json", job)
 
@@ -332,7 +500,12 @@ def main() -> int:
             job["finmind_update_warning"] = "FinMind/QuantDinger raw archive did not fully pass; Yahoo/qlib update continues."
         write_json(job_dir / "job.json", job)
 
-    if not args.skip_qlib:
+    if not args.skip_qlib and not args.enable_legacy_provider_publish:
+        job["qlib_legacy_provider_path_skipped"] = True
+        job["qlib_legacy_provider_skip_reason"] = "m3_readonly_orchestrator_default_requires_explicit_enable_legacy_provider_publish"
+        write_json(job_dir / "job.json", job)
+
+    if not args.skip_qlib and args.enable_legacy_provider_publish:
         refresh_job_id = f"option_c_yahoo_scrapling_refresh_{asof.replace('-', '')}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_daily_auto"
         refresh_argv = [
             PYTHON,
@@ -438,6 +611,12 @@ def main() -> int:
             return 4
 
     clear_pending_asof(asof)
+    readonly_snapshot = run_readonly_strategy_snapshot_publish(asof=asof, job_dir=job_dir)
+    job["readonly_snapshot"] = readonly_snapshot
+    if readonly_snapshot.get("attempted"):
+        write_json(READONLY_DAILY_INTEGRATION_AUDIT, {"job_id": job_id, "asof": asof, "created_at": utc_now(), **readonly_snapshot})
+    if readonly_snapshot.get("attempted") and not readonly_snapshot.get("ok"):
+        job["readonly_snapshot_warning"] = readonly_snapshot.get("error") or "readonly snapshot publish failed"
     job.update({"status": "daily_auto_update_passed", "finished_at": utc_now(), "latest_after": latest_asof(), "pending_asof_cleared": True})
     write_json(job_dir / "job.json", job)
     print(json.dumps(job, ensure_ascii=False, indent=2))

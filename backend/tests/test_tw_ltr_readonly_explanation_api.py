@@ -169,3 +169,30 @@ def test_ltr_optional_sim_strategies_route_source_is_get_only_and_readonly():
     ]
     for item in forbidden:
         assert item not in route_slice
+
+
+def test_ltr_readonly_explanation_missing_artifact_returns_readonly_empty_state(tmp_path):
+    from app.services.tw_ltr_readonly_explanation import TWLTRReadonlyExplanationService
+
+    service = TWLTRReadonlyExplanationService(tmp_path / "missing.json")
+    data = service.product_view()
+
+    assert data["ok"] is True
+    assert data["status"] == "artifact_missing"
+    assert data["methods"] == []
+    assert data["research_only"] is True
+    assert data["no_write_guarantees"]["does_not_trigger_data_refresh"] is True
+
+
+def test_ltr_optional_sim_strategies_missing_artifact_returns_readonly_empty_state(tmp_path):
+    from app.services.tw_ltr_optional_sim_strategy import TWLTROptionalSimStrategyService
+
+    service = TWLTROptionalSimStrategyService(tmp_path / "missing-dir")
+    data = service.product_view()
+
+    assert data["ok"] is True
+    assert data["status"] == "artifact_missing"
+    assert data["strategies"] == []
+    assert data["research_only"] is True
+    assert data["no_write_guarantees"]["does_not_trigger_data_refresh"] is True
+    assert data["no_write_guarantees"]["does_not_touch_broker_or_orders"] is True
