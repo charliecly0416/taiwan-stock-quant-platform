@@ -1,72 +1,35 @@
-这份架构设计在量价 Alpha 叠加多维度风控的思路上非常成熟。但在实际的应用机器学习工程落地上，特别是处理这类混杂了多频段（日线量价、月度财务表格、不定期的法人筹码）的金融数据时，往往会在边缘场景中遇到挑战。
+你是本项目后续统筹和审查者。请先阅读文档建立当前项目主线认知，不要立即改代码，也不要触发任何真实数据抓取、provider publish、accepted latest 切换、monitor 写入、broker/order/quick-trade。
 
-针对方案中可能存在的风险，我将重点放在**模型泛化能力、数据工程对齐、以及极端行情下的鲁棒性**上，为你拆解五个核心优化点：
+第一步请按顺序阅读：
 
----
+1. docs/tw_modular_contracts/TW_CURRENT_PROJECT_DOC_ENTRY_AND_ARCHIVE_POLICY_CN.md
+2. docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md
+3. docs/tw_modular_contracts/TW_MODULAR_PIPELINE_FUTURE_DEVELOPMENT_GUIDE_CN.md
+4. docs/tw_modular_contracts/TW_DEVELOPER_TEST_AND_EXPERIMENT_PLAYBOOK_CN.md
+5. docs/tw_modular_contracts/TW_CURRENT_STRATEGY_CONTEXT_API_FIELD_DICTIONARY_CN.md
+6. docs/tw_modular_contracts/TW_DAILY_AUTO_UPDATE_RUNBOOK_CN.md
+7. docs/tw_modular_daily_update_productization/PHASEYZ_STRICT_E4_PRODUCTIZATION_FINAL_SUMMARY_CN.md
+8. docs/tw_modular_daily_update_productization/PHASEX_PAPER_PORTFOLIO_STRATEGY_AND_SIMULATION_APP_FINAL_SUMMARY_CN.md
 
-### 1. 标签定义：从“绝对阈值”到“动态/横截面阈值”
+重点理解：
 
-**【深度分析】**
-方案中 `Entry Model` 的标签定义为 `future_20d_excess_return_after_fee > 2% and future_20d_max_drawdown > -8%`。
-这是一个极度危险的**静态阈值**。在 2022 年台股大熊市，或者单边暴跌的系统性风险期间，可能全市场 95% 的股票都无法满足这个条件。这会导致模型在某些月份的训练批次中，面临极端的**正样本稀疏（Label Imbalance）**，甚至全 0 样本。LightGBM 遇到这种情况，很容易直接退化，输出趋近于 0 的极度保守预测，导致模型在震荡市或熊市反弹中完全失效。
+- 当前产品化链路只保留两个重要模型：`e4_frozen_qlib_2018_2022` 和 `e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025`。
+- 当前默认候选是严格 E4 LTR，默认策略规则是 `top50_exit_one_worst_sell`，但系统仍保持 readonly/productization 边界。
+- 项目已经按数据源、数据落盘、特征、模型信号、策略规则、OrderIntent、回放结果、readonly artifact、API、前端、日更编排、模拟账户等模块解耦。
+- 后续新增模型/策略必须走模块合同、registry、validator、golden sample 和 reviewer checklist，不允许回到一个实验一个大脚本。
+- 历史阶段文档已经归档到 `docs/archive/phase_history/README_CN.md`。日常开发优先读当前合同、指南、runbook、最终总结和 checklist；只有追溯历史争议时才查归档。
+- 如果做审查，必须先判断执行报告是否偏离主线，再决定是否放行下一步；发现偏离、未来函数、训练/测试混用、数据口径不一致、默认策略被擅自切换时要停下来沟通。
 
-**【优化方案】**
+建议先跑只读验证，确认当前基线可用：
 
-* **使用动态阈值（Dynamic Thresholding）：** 基于当前市场的真实波动率（如 60 日 ATR）或基准指数的近期表现来动态设定阈值。
-* *修正后逻辑：* `future_20d_return > (TWII_20d_return + margin)` 且 `drawdown > max(-8%, TWII_drawdown_20d * 1.5)`。
+```bash
+python -m pytest backend/tests/test_phase_yz0_clean_registry.py backend/tests/test_phase_yz1_strict_e4_model_adapters.py backend/tests/test_phase_yz2_orthogonal_package.py backend/tests/test_phase_yz3_productization_status.py backend/tests/test_tw_stock_readonly_strategy_snapshot_api.py backend/tests/test_tw_stock_readonly_replay_window_api.py backend/tests/test_tw_ltr_readonly_explanation_api.py -q
 
+cd frontend
+corepack pnpm build
+node tests/unit/tw-stock-monitor-static-check.mjs
+node tests/unit/tw-stock-readonly-strategy-snapshot-check.mjs
+node tests/unit/tw-stock-readonly-replay-window-check.mjs
+```
 
-* **平滑过渡到排序目标：** 在第一版（Binary/Regression）中，与其强行切分 0/1，不如直接预测**风险调整后收益**（如 $\frac{Future\_20d\_Return}{Future\_20d\_Max\_Drawdown}$），然后在策略层取 Top 候选。这能最大程度保留连续性的信息。
-
-### 2. 候选池扩充：防范“流动性与滑点陷阱”
-
-**【深度分析】**
-方案中提到建立 `Candidate Generator`，将候选池扩大到约 150 支股票。扩充候选池确实能解决 baseline 的选择偏差问题，但会引入小市值、低流动性标的。
-在真实的量化交易环境中，小票的财务表现和技术形态往往容易被资金短期操控（即所谓的“骗线”）。由于缺乏足够的对手盘，回测中看似能够以开盘价或收盘价成交，实盘中却会面临巨大的滑点，直接吃掉本来就不高的超额收益。
-
-**【优化方案】**
-
-* **前置动态流动性过滤：** 在 `Candidate Generator` 环节，必须加上绝对的流动性门槛。例如：`20日均成交额 > X 千万台币`。
-* **流动性惩罚项：** 在最终的组合层，不要仅仅按照 `entry_score` 排序。对于换手率异动或流动性贴近下限的标的，给予分数惩罚。确保模型选出的股票是“既能看，也能买得进”的。
-
-### 3. 退出模型（Exit Risk Model）：解决“迟滞性”与“非对称性”
-
-**【深度分析】**
-方案中 `Exit Risk Model` 的标签定义看的是 `future_10d_excess_return_after_fee < -threshold`。
-买入（Entry）可以是一个中长期的左侧或右侧确认过程，但卖出（Exit）在实际交易中往往具有极强的不对称性——风险爆发往往在 1 到 2 天内完成。用未来 10 天的收益作为标签，会导致模型对突发的破位、动量崩溃（Momentum Crash）反应过于迟钝。
-
-**【优化方案】**
-
-* **引入短期动量衰减特征：** 退出模型需要更高权重的“微观结构变化”特征。比如：`1d_volume_spike`（单日爆量）、`price_distance_to_vwap`（偏离日内均价程度）、连续 3 日主动卖盘占比。
-* **非对称时间窗口：** 退出的标签可以缩短为 `future_3d_drawdown`，或者将预测目标从“会不会跌”改为“波动率是否会剧烈放大”。风险复盘模型的核心是躲避风暴，而不是预测精确的跌幅。
-
-### 4. 市场状态（Market Regime）：避免“硬编码”带来的过拟合
-
-**【深度分析】**
-大盘环境特征是该方案的核心亮点，但方案建议使用 `market_regime: bull/normal/caution/bear` 这种离散的分类标签。
-人类定义的绝对阈值（比如跌破年线就是熊市）容易在历史回测中表现极佳，但对未来的形态变化适应性差。这种硬边界会导致模型在状态切换的边缘（比如大盘在 MA120 上下反复震荡）产生大量的误判和频繁的仓位翻转。
-
-**【优化方案】**
-
-* **使用连续的状态描述：** 废弃离散的 4 分类，直接将描述大盘健康度、温度的连续指标作为输入。
-* *指标示例：* 横截面宽度 `market_breadth`（全市场站上 MA20 的股票比例，0 到 1 的连续值）、大盘趋势强度 `TWII_trend_strength`（价格偏离均线的百分比）。
-
-
-* **依赖树模型的自动分裂：** 把这些连续值喂给 LightGBM，让树模型根据训练集的收益反馈，自己去切分出何种程度的 `market_breadth` 应该对应哪种交易策略，远比人工设定 `regime` 更稳健。
-
-### 5. 特征工程对齐（Point-in-Time）：应对财务数据的“异步性”
-
-**【深度分析】**
-方案中提到了 FinMind 补充特征（如 `monthly_revenue_yoy` 月营收、`institutional_net_buy` 法人买卖）。
-在工程实现中，合并日频的量价特征和月频/不定期披露的财务表格是最容易发生“未来函数（Look-ahead Bias）”的地方。台股的月营收通常在次月 10 号前公布，如果直接按照所属月份 Join 数据，会导致模型提前“预知”了尚未公开的利好。
-
-**【优化方案】**
-
-* **严格的发布日对齐（Publish Date Join）：** 必须抛弃“财务期（Period）”，转而使用真实的“公告日（Announcement Date）”。例如，5 月份的营收，在数据表中只允许在 6 月 10 日及之后的回测日期中被看到。
-* **Forward Fill 机制：** 财务类数据的更新频率低，在构建按日切片的面板数据时，需要使用安全的 `ffill`（前向填充）策略，保留上一期的有效值，同时增加一个辅助特征：`days_since_last_report`（距离上次财报/月报发布的天数），让模型能够学习到数据的“时效衰减”。
-
----
-
-**总结建议落地优先级：**
-
-如果按投入产出比（ROI）来排，你可以优先落实 **#1（动态标签防失衡）** 和 **#5（严格防泄漏对齐）**。这两点是保证第一阶段 LightGBM baseline 跑出来结果“真实可信”的基石。在基石稳固之后，再通过引入 **#4（连续大盘指标）** 来拔高模型的超额收益表现。
+核心原则：先读文档建图，再做只读验证，最后才进入新模型/新策略开发。任何新开发都要保持模块输入输出清晰、可验证、可审查、可回滚。
