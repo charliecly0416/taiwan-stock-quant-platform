@@ -548,7 +548,7 @@ export default {
       }
       if (!this.isMobile && val['screen-xs']) {
         this.isMobile = true
-        this.collapsed = false
+        this.collapsed = true
         this.settings.contentWidth = CONTENT_WIDTH_TYPE.Fluid
         // this.settings.fixSiderbar = false
         this.$nextTick(() => {

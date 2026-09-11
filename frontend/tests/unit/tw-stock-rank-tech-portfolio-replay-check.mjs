@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 const root = resolve(new URL('..', import.meta.url).pathname, '..')
 const read = path => readFileSync(resolve(root, path), 'utf8')
 
-const api = read('src/api/tw-stock.js')
+const api = `${read('src/api/tw-stock-readonly.js')}\n${read('src/api/tw-stock-action.js')}`
 const page = read('src/views/tw-stock-monitor/index.vue')
 
 for (const required of [
@@ -37,7 +37,7 @@ for (const forbidden of ['/sim/', 'quick-trade', 'broker', 'target_position', 't
   assert.ok(!portfolioMatch[0].includes(forbidden), `portfolio wrapper contains forbidden token ${forbidden}`)
 }
 
-const blockMatch = page.match(/<a-card class="rank-tech-replay-card"[\s\S]*?<\/a-card>\n\n\s*<a-card ref="readonlyBacktestPanel"/)
+const blockMatch = page.match(/<a-card[^>]*class="rank-tech-replay-card"[\s\S]*?<\/a-card>\n\n\s*<a-card ref="readonlyBacktestPanel"/)
 assert.ok(blockMatch, 'missing Step5 rank-tech portfolio replay card')
 const block = blockMatch[0]
 
@@ -102,7 +102,7 @@ for (const required of [
   assert.ok(page.includes(required), `page missing Step5 state or method ${required}`)
 }
 
-const loadLatestMatch = page.match(/async loadRankTechCrossLatest \(\) \{[\s\S]*?\n    \},\n    observationReplayReader/)
+const loadLatestMatch = page.match(/async loadRankTechCrossLatest \(\) \{[\s\S]*?\n    \},\n\n    async loadLtrReadonlyExplanation/)
 assert.ok(loadLatestMatch, 'missing loadRankTechCrossLatest method')
 assert.match(loadLatestMatch[0], /getTwStockRankTechCrossLatest/)
 assert.doesNotMatch(loadLatestMatch[0], /sim|quick-trade|broker|saveTwStock|scanTwStock|triggerQlib|publish|refresh-provider/i)
@@ -113,7 +113,7 @@ assert.match(replayMatch[0], /runTwStockPortfolioReplay/)
 assert.match(replayMatch[0], /persist:\s*false/)
 assert.doesNotMatch(replayMatch[0], /getTwStockSim|draftTwStockSimOrder|confirmTwStockSimOrder|quick-trade|broker\/|\/broker|saveTwStock|scanTwStock|triggerQlib|publish|refresh-provider/i)
 
-assert.match(page, /this\.loadRankTechPortfolioPanel\(\)/)
-assert.match(page, /\.rank-tech-grid,\n\s*\.portfolio-replay-grid \{\n\s*grid-template-columns: 1fr;/)
+assert.match(page, /loadRankTechPortfolioPanel(?:\(\)|["'])/)
+assert.match(page, /\.rank-tech-grid,[\s\S]*?\.portfolio-replay-grid,[\s\S]*?\{\n\s*grid-template-columns: 1fr;/)
 
 console.log('tw-stock rank-tech portfolio replay checks passed')

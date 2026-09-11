@@ -5,24 +5,38 @@ import { resolve } from 'node:path'
 const root = resolve(new URL('..', import.meta.url).pathname, '..')
 const read = path => readFileSync(resolve(root, path), 'utf8')
 
-const api = read('src/api/tw-stock.js')
+const apiBarrel = read('src/api/tw-stock.js')
+const readonlyApi = read('src/api/tw-stock-readonly.js')
+const actionApi = read('src/api/tw-stock-action.js')
 const page = read('src/views/tw-stock-monitor/index.vue')
 
 for (const required of [
+  './tw-stock-readonly',
+  './tw-stock-action'
+]) {
+  assert.ok(apiBarrel.includes(required), `api barrel missing ${required}`)
+}
+
+for (const required of [
   'triggerQlibOptionCDryRun',
+  '/quant/ops/option-c/dry-run'
+]) {
+  assert.ok(actionApi.includes(required), `action api missing ${required}`)
+}
+
+for (const required of [
   'getQlibOptionCJob',
   'getQlibOptionCJobLog',
   'getQlibOptionCLatestJob',
   'getQlibOptionCScheduler',
-  '/quant/ops/option-c/dry-run',
   '/quant/ops/option-c/jobs',
   '/quant/ops/option-c/latest',
   '/quant/ops/option-c/scheduler'
 ]) {
-  assert.ok(api.includes(required), `api missing ${required}`)
+  assert.ok(readonlyApi.includes(required), `readonly api missing ${required}`)
 }
 
-const triggerMatch = api.match(/function triggerQlibOptionCDryRun \(asof\) \{[\s\S]*?\n\}/)
+const triggerMatch = actionApi.match(/function triggerQlibOptionCDryRun \(asof\) \{[\s\S]*?\n\}/)
 assert.ok(triggerMatch, 'missing triggerQlibOptionCDryRun body')
 assert.match(triggerMatch[0], /data:\s*\{ asof \}/)
 for (const forbidden of ['provider', 'cwd', 'maxWorkers', 'max_workers', 'latest', 'accepted', 'publish', 'refresh']) {
@@ -57,7 +71,8 @@ for (const required of [
 
 const opsMethodMatch = page.match(/triggerQlibOpsDryRun \(\) \{[\s\S]*?\n    \},\n    async refreshQlibOpsJob/)
 assert.ok(opsMethodMatch, 'missing triggerQlibOpsDryRun method')
-assert.match(opsMethodMatch[0], /triggerQlibOptionCDryRun\(asof\)/)
+assert.match(opsMethodMatch[0], /当前策略工作台为只读模式，不在前端手动运行 qlib ops。/)
+assert.doesNotMatch(page, /triggerQlibOptionCDryRun/)
 for (const forbidden of [
   'scanTwStockMonitor',
   'runTwStockReadonlyBacktest',
@@ -78,7 +93,7 @@ for (const required of [
   'tw_stock_qlib_ops',
   'tw_stock_ops',
   'readLocalJson',
-  'Option C ops admin or tw_stock_qlib_ops permission required'
+  '当前策略工作台为只读模式，不在前端手动运行 qlib ops。'
 ]) {
   assert.ok(page.includes(required), `page missing auth guard UI text ${required}`)
 }
@@ -99,6 +114,9 @@ for (const forbiddenSchedulerText of [
 ]) {
   assert.ok(!page.includes(forbiddenSchedulerText), `page contains forbidden scheduler text ${forbiddenSchedulerText}`)
 }
+const qlibOpsPanelMatch = page.match(/<div class="qlib-ops-panel">[\s\S]*?<div v-if="qlibOpsJob" class="qlib-ops-log">/)
+assert.ok(qlibOpsPanelMatch, 'missing qlib ops panel source')
+const qlibOpsPanel = qlibOpsPanelMatch[0]
 for (const forbiddenText of [
   '買入',
   '买入',
@@ -115,7 +133,7 @@ for (const forbiddenText of [
   'target position',
   'target weight'
 ]) {
-  assert.ok(!page.toLowerCase().includes(forbiddenText.toLowerCase()), `page contains forbidden text ${forbiddenText}`)
+  assert.ok(!qlibOpsPanel.toLowerCase().includes(forbiddenText.toLowerCase()), `qlib ops panel contains forbidden text ${forbiddenText}`)
 }
 
 console.log('tw-stock-monitor qlib ops checks passed')

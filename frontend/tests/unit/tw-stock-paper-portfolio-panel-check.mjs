@@ -3,8 +3,11 @@ import path from 'node:path'
 import assert from 'node:assert/strict'
 
 const root = process.cwd()
-const read = file => fs.readFileSync(path.join(root, file), 'utf8')
-const api = read('src/api/tw-stock.js')
+const frontendRoot = path.basename(root) === 'frontend' ? root : path.join(root, 'frontend')
+const read = file => fs.readFileSync(path.join(frontendRoot, file), 'utf8')
+const readonlyApi = read('src/api/tw-stock-readonly.js')
+const actionApi = read('src/api/tw-stock-action.js')
+const api = `${readonlyApi}\n${actionApi}`
 const monitor = read('src/views/tw-stock-monitor/index.vue')
 const panel = read('src/views/tw-stock-monitor/components/PaperPortfolioPanel.vue')
 
@@ -14,8 +17,8 @@ assert.ok(monitor.includes(':phase-yz-status="phaseYZProductizationPayload"'), '
 assert.ok(panel.includes('data-testid="paper-portfolio-panel"'), 'panel test id missing')
 assert.ok(panel.includes('应用到模拟账户'), 'apply text must include 模拟')
 assert.ok(panel.includes('重置模拟账户'), 'reset text must include 模拟账户')
-assert.ok(panel.includes('此操作只会写入模拟账户，不会提交真实订单。'), 'apply confirmation safety text missing')
-assert.ok(panel.includes('旧状态会进入 reset archive'), 'reset archive text missing')
+assert.ok(panel.includes('此操作只会写入模拟账户，不会产生真实交易委托。'), 'apply confirmation safety text missing')
+assert.ok(panel.includes('旧状态会归档'), 'reset archive text missing')
 assert.ok(panel.includes('paper_order_intent_artifact_path'), 'apply payload must use artifact path')
 assert.ok(!panel.includes('paper_order_intent:'), 'frontend must not submit raw paper_order_intent payload')
 

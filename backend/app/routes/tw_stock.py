@@ -6,7 +6,7 @@ import os
 import time
 from datetime import date
 
-from flask import Blueprint, g, jsonify, render_template_string, request
+from flask import Blueprint, current_app, g, jsonify, render_template_string, request
 
 from app.services.tw_stock_trend import TWStockTrendService
 from app.services.tw_stock_qlib_option_c import (
@@ -23,6 +23,7 @@ from app.services.tw_stock_qlib_option_c_accepted_latest_scheduler import option
 from app.services.tw_stock_qlib_option_c_eod_pipeline import option_c_eod_pipeline
 from app.services.tw_stock_qlib_option_c_eod_automation import option_c_eod_automation_scheduler
 from app.services.tw_stock_daily_auto_update_status import TWStockDailyAutoUpdateStatusService
+from app.services.tw_stock_readonly_ops_status import TWStockReadonlyOpsStatusService
 from app.services.tw_stock_sim_account import TWStockSimAccountService
 from app.services.tw_stock_paper_portfolio import TWStockPaperPortfolioService
 from app.services.tw_stock_cross_analysis import TWStockCrossAnalysisService
@@ -32,13 +33,16 @@ from app.services.tw_stock_portfolio_replay import TWStockPortfolioReplayService
 from app.services.tw_stock_cross_analysis_history import TWStockCrossAnalysisHistoryService
 from app.services.tw_stock_agent_context import TWStockAgentContextService
 from app.services.tw_stock_agent_chat import TWStockAgentChatService
+from app.services.tw_stock_agent_simple_chat import TWStockAgentSimpleChatService
 from app.services.tw_ltr_readonly_explanation import TWLTRReadonlyExplanationService
 from app.services.tw_ltr_optional_sim_strategy import TWLTROptionalSimStrategyService
 from app.services.phase_yz3_productization_status import load_yz3_productization_status
 from app.services.tw_stock_current_strategy_context import CurrentStrategyContextError, load_current_strategy_context
+from app.services.readonly_shadow_exposure import ReadonlyShadowExposureError, load_readonly_shadow_exposure
+from app.services.tradingagents_readonly_analysis import TradingAgentsReadonlyAnalysisError, load_tradingagents_readonly_analysis
 from app.services import tw_stock_monitor as monitor_service
 from app.utils.db import get_db_connection
-from app.utils.auth import login_required
+from app.utils.auth import get_current_user_id, login_required
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -52,9 +56,13 @@ portfolio_replay_service = TWStockPortfolioReplayService(observation_service=obs
 cross_analysis_history_service = TWStockCrossAnalysisHistoryService(cross_service=cross_analysis_service)
 tw_stock_agent_service = TWStockAgentContextService(cross_service=cross_analysis_service)
 tw_stock_agent_chat_service = TWStockAgentChatService(context_service=tw_stock_agent_service)
+tw_stock_agent_simple_chat_service = TWStockAgentSimpleChatService()
 ltr_readonly_explanation_service = TWLTRReadonlyExplanationService()
 ltr_optional_sim_strategy_service = TWLTROptionalSimStrategyService()
 daily_auto_update_status_service = TWStockDailyAutoUpdateStatusService()
+readonly_ops_status_service = TWStockReadonlyOpsStatusService(
+    daily_status_service=daily_auto_update_status_service,
+)
 tw_stock_sim_account_service = TWStockSimAccountService()
 tw_stock_paper_portfolio_service = TWStockPaperPortfolioService()
 
@@ -77,6 +85,83 @@ def get_current_strategy_context():
     except CurrentStrategyContextError as exc:
         status = 404 if exc.status == "missing_artifact" else 400
         return jsonify({"code": 0, "msg": exc.message, "data": {"ok": False, "status": exc.status}}), status
+
+
+@tw_stock_bp.route("/readonly-shadow-exposure", methods=["GET"])
+def get_readonly_shadow_exposure():
+    """Return MTRP9 readonly shadow exposure from MTRP8 artifacts without writes."""
+    strategy_rule = (request.args.get("strategy_rule") or "top50_hold_rank_buffer_100").strip()
+    include_rows = _parse_bool_arg("include_rows", "includeRows", default=True)
+    try:
+        payload = load_readonly_shadow_exposure(strategy_rule=strategy_rule, include_rows=include_rows)
+        return jsonify({"code": 1, "msg": "success", "data": payload})
+    except ReadonlyShadowExposureError as exc:
+        status = 404 if exc.status in {"missing_artifact", "unknown_strategy_rule"} else 400
+        return jsonify({
+            "code": 0,
+            "msg": exc.message,
+            "data": {
+                "ok": False,
+                "status": exc.status,
+                "message": exc.message,
+                "readonly_only": True,
+                "simulation_only": True,
+                "not_order": True,
+                "not_target_position": True,
+                "not_investment_advice": True,
+                "production_allowed": False,
+                "production_ready": False,
+                "default_switch_allowed": False,
+                "paper_apply_allowed": False,
+            },
+        }), status
+
+
+def _tradingagents_analysis_response(*, run_id: str | None = None):
+    include_markdown = _parse_bool_arg("include_markdown", "includeMarkdown", default=False)
+    artifact_root = None
+    if current_app.config.get("TESTING"):
+        artifact_root = (request.args.get("artifact_root") or request.args.get("artifactRoot") or "").strip() or None
+    try:
+        payload = load_tradingagents_readonly_analysis(
+            run_id=run_id,
+            artifact_root=artifact_root,
+            include_markdown=include_markdown,
+        )
+        return jsonify({
+            "code": 1 if payload.get("ok") else 0,
+            "msg": "success" if payload.get("ok") else payload.get("status", "artifact_unavailable"),
+            "data": payload,
+        }), 200
+    except TradingAgentsReadonlyAnalysisError as exc:
+        status = 200 if run_id is None and exc.status in {"latest_missing", "artifact_missing"} else (404 if exc.status in {"latest_missing", "artifact_missing"} else 400)
+        return jsonify({
+            "code": 0,
+            "msg": exc.message,
+            "data": {
+                "ok": False,
+                "status": exc.status,
+                "message": exc.message,
+                "schema_version": "tradingagents_readonly_analysis_api_v1",
+                "readonly_only": True,
+                "not_order": True,
+                "not_target_position": True,
+                "not_investment_advice": True,
+                "production_trade_enabled": False,
+            },
+        }), status
+
+
+@tw_stock_bp.route("/tradingagents-readonly-analysis/latest", methods=["GET"])
+def get_tradingagents_readonly_analysis_latest():
+    """Return latest validated sanitized TradingAgents readonly analysis artifact."""
+    return _tradingagents_analysis_response()
+
+
+@tw_stock_bp.route("/tradingagents-readonly-analysis/<run_id>", methods=["GET"])
+def get_tradingagents_readonly_analysis_run(run_id: str):
+    """Return one validated sanitized TradingAgents readonly analysis artifact."""
+    return _tradingagents_analysis_response(run_id=run_id)
 
 
 
@@ -753,6 +838,31 @@ def chat_tw_stock_agent_answer():
         return jsonify({"code": 0, "msg": message, "data": {"ok": False, "status": "read_error", "message": message, "trading": research_only_trading_flags()}}), 500
 
 
+@tw_stock_bp.route("/agent/simple-chat", methods=["POST"])
+def simple_chat_tw_stock_agent_answer():
+    """Return TWStock research Agent answer from validated DailyAgentPromptArtifact."""
+    data = _request_json()
+    artifact_dir = data.get("artifactDir") or data.get("artifact_dir") or None
+    if artifact_dir and str(os.environ.get("FLASK_ENV") or "").lower() in {"prod", "production"}:
+        artifact_dir = None
+    try:
+        payload = tw_stock_agent_simple_chat_service.chat(
+            question=data.get("question") or "",
+            symbol=data.get("symbol") or "",
+            max_items=data.get("maxItems") or data.get("max_items") or 10,
+            artifact_dir=artifact_dir,
+        )
+        return jsonify({
+            "code": 1 if payload.get("ok") else 0,
+            "msg": "success" if payload.get("ok") else str(payload.get("mode") or "simple_chat_unavailable"),
+            "data": payload,
+        })
+    except Exception as exc:
+        logger.error(f"TWStock Agent simple chat failed: {exc}", exc_info=True)
+        message = f"Failed to simple chat with TWStock Agent: {exc}"
+        return jsonify({"code": 0, "msg": message, "data": {"ok": False, "status": "read_error", "message": message, "trading": research_only_trading_flags()}}), 500
+
+
 @tw_stock_bp.route("/cross-analysis/history/import-latest", methods=["POST"])
 @login_required
 def import_tw_stock_cross_analysis_history_latest():
@@ -913,6 +1023,13 @@ def get_daily_auto_update_status():
     return jsonify({"code": 1, "msg": "success", "data": payload})
 
 
+@tw_stock_bp.route("/quant/ops/readonly-status", methods=["GET"])
+def get_readonly_ops_status():
+    """Return DAOV1 readonly ops status from local evidence only."""
+    payload = readonly_ops_status_service.status()
+    return jsonify({"code": 1, "msg": "success", "data": payload})
+
+
 @tw_stock_bp.route("/quant/ops/option-c/scheduler", methods=["GET"])
 def get_qlib_option_c_scheduler_status():
     """Return disabled-by-default Option C dry-run scheduler status."""
@@ -1035,6 +1152,14 @@ def _request_json() -> dict:
 
 
 def _monitor_user_id(data: dict | None = None) -> int:
+    # Authenticated requests always use the JWT subject. Query/body user ids
+    # are retained only for unauthenticated read-only compatibility routes.
+    authenticated_user_id = get_current_user_id()
+    if authenticated_user_id is not None:
+        try:
+            return max(1, int(authenticated_user_id))
+        except Exception:
+            return 1
     raw = None
     if isinstance(data, dict):
         raw = data.get("user_id") or data.get("userId")
@@ -1160,6 +1285,7 @@ def get_monitor_config():
 
 
 @tw_stock_bp.route("/monitor/config", methods=["POST", "PUT"])
+@login_required
 def save_monitor_config():
     """Persist TWStock monitor config. This controls alerts only, never orders."""
     data = _request_json()
@@ -1259,6 +1385,7 @@ def get_monitor_alerts():
 
 
 @tw_stock_bp.route("/monitor/alerts", methods=["POST"])
+@login_required
 def create_monitor_alert():
     """Persist one TWStock monitor alert. This is not a trade decision."""
     data = _request_json()
@@ -1300,6 +1427,7 @@ def create_monitor_alert():
 
 
 @tw_stock_bp.route("/monitor/alerts/<int:alert_id>", methods=["PUT"])
+@login_required
 def update_monitor_alert(alert_id: int):
     """Mark an alert as reviewed and optionally attach the user's manual decision note."""
     data = _request_json()
@@ -1612,6 +1740,7 @@ def _scan_monitor_config(config: dict, *, force: bool = False) -> dict:
 
 
 @tw_stock_bp.route("/monitor/scan", methods=["POST"])
+@login_required
 def scan_monitor():
     """Run a backend TWStock monitor scan and persist alerts. No orders are created."""
     data = _request_json()
@@ -1653,6 +1782,7 @@ def run_tw_stock_monitor_scan_all(*, force: bool = False, trigger_source: str = 
 
 
 @tw_stock_bp.route("/monitor/scan-all", methods=["POST"])
+@login_required
 def scan_all_monitors():
     """Scan enabled TWStock monitor configs. Intended for cron/manual trigger, not trading."""
     data = _request_json()

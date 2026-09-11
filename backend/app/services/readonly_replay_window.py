@@ -11,6 +11,7 @@ from typing import Any
 import yaml
 
 from app.services import readonly_replay_window_index as replay_index
+from scripts.tw_daily_runtime_stages import runtime_truth
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 POLICY = REPO_ROOT / "configs/tw_replay_window_policy.yaml"
@@ -71,8 +72,9 @@ def _clean_strategy_sets(registry: dict[str, Any]) -> dict[str, set[str]]:
 def _clean_default_request(policy: dict[str, Any] | None = None) -> dict[str, str]:
     payload = policy or _load_yaml(POLICY)
     models = payload.get("models") or {}
-    default_model = str(payload.get("default_model_id") or next(iter(models.keys()), ""))
-    default_strategy = str(payload.get("default_strategy_rule") or "")
+    truth = runtime_truth()
+    default_model = str(truth.active_model_id or payload.get("default_model_id") or next(iter(models.keys()), ""))
+    default_strategy = str(truth.strategy_rule or payload.get("default_strategy_rule") or "")
     if not default_strategy:
         registry = _load_yaml(REGISTRY)
         production = sorted(_clean_strategy_sets(registry)["production_selectable"])

@@ -9,6 +9,7 @@ from typing import Any
 from app.services.phase_yz3_productization_status import load_yz3_productization_status, resolve_latest_yz_signal_asof
 from app.services.readonly_strategy_snapshot import ReadonlyStrategySnapshotError, load_readonly_strategy_snapshot
 from app.services.tw_stock_artifact_registry import registry_get, registry_path
+from scripts.tw_daily_runtime_stages import runtime_truth
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -16,10 +17,12 @@ SIGNAL_ROOT = registry_path("artifacts", "signal_root")
 YZ2_ROOT = registry_path("artifacts", "yz2_feature_root")
 YZ2R_ROOT = registry_path("artifacts", "yz2r_execution_price_readiness_root")
 READONLY_STRATEGY_LATEST = registry_path("artifacts", "readonly_strategy_latest")
-MODEL_A = str(registry_get("models", "base_model_id"))
-MODEL_B = str(registry_get("models", "treatment_model_id"))
+_RUNTIME_TRUTH = runtime_truth()
+MODEL_A = _RUNTIME_TRUTH.active_model_id
+MODEL_B = _RUNTIME_TRUTH.shadow_model_id or str(registry_get("models", "treatment_model_id"))
 LEGACY_DISPLAY_MODEL_B = str(registry_get("models", "treatment_display_model_id", default=MODEL_B))
-DEFAULT_STRATEGY = str(registry_get("strategies", "default_strategy_rule"))
+DEFAULT_STRATEGY = _RUNTIME_TRUTH.strategy_rule
+EXECUTION_PRICE_MODE = _RUNTIME_TRUTH.execution_price_mode
 MODEL_A_SUBDIR = str(registry_get("artifacts", "model_a_subdir", default="model_a"))
 MODEL_B_PREFERRED_SUBDIR = str(registry_get("artifacts", "model_b_preferred_subdir", default="model_b_yz2"))
 MODEL_B_FALLBACK_SUBDIR = str(registry_get("artifacts", "model_b_fallback_subdir", default="model_b"))
@@ -102,13 +105,11 @@ def _ranking_payload(signal_asof: str) -> dict[str, Any]:
     model_b_manifest = _model_b_manifest(signal_asof)
     if not model_a_manifest.exists():
         raise CurrentStrategyContextError("missing_model_a", f"Missing Model A manifest for {signal_asof}")
-    if not model_b_manifest.exists():
-        raise CurrentStrategyContextError("missing_model_b", f"Missing Model B manifest for {signal_asof}")
 
     model_a = _load_json(model_a_manifest)
-    model_b = _load_json(model_b_manifest)
     model_a_rows = _read_csv_rows(_manifest_signal_path(model_a_manifest))
-    model_b_rows = _read_csv_rows(_manifest_signal_path(model_b_manifest))
+    model_b = _load_json(model_b_manifest) if model_b_manifest.exists() else {}
+    model_b_rows = _read_csv_rows(_manifest_signal_path(model_b_manifest)) if model_b_manifest.exists() else []
     model_a_by_symbol = {str(row.get("instrument") or ""): row for row in model_a_rows}
 
     ltr_rows = []
@@ -129,7 +130,7 @@ def _ranking_payload(signal_asof: str) -> dict[str, Any]:
             "qlib_buy_score": _num(qlib.get("buy_score") or qlib.get("raw_score")),
             "qlib_raw_score": _num(qlib.get("raw_score")),
             "in_qlib_top50": (_int(row.get("full_qlib_rank"), 999999) or 999999) <= 50,
-            "source_model_signal": _rel(model_b_manifest),
+            "source_model_signal": _rel(model_b_manifest) if model_b_manifest.exists() else "",
             "source_base_qlib_signal": _rel(model_a_manifest),
         }
         ltr_rows.append(item)
@@ -160,11 +161,13 @@ def _ranking_payload(signal_asof: str) -> dict[str, Any]:
             "signals": _rel(_manifest_signal_path(model_a_manifest)),
         },
         "model_b": {
-            "model_id": model_b.get("model_id") or MODEL_B,
-            "display_model_id": LEGACY_DISPLAY_MODEL_B,
-            "manifest": _rel(model_b_manifest),
+            "enabled": bool(model_b_rows) and _RUNTIME_TRUTH.active.get("model_b") is not None,
+            "status": "reference_only" if _RUNTIME_TRUTH.active.get("model_b") is None else "available",
+            "model_id": model_b.get("model_id") or (MODEL_B if _RUNTIME_TRUTH.active.get("model_b") is not None else ""),
+            "display_model_id": LEGACY_DISPLAY_MODEL_B if _RUNTIME_TRUTH.active.get("model_b") is not None else "",
+            "manifest": _rel(model_b_manifest) if model_b_manifest.exists() else "",
             "row_count": model_b.get("row_count"),
-            "signals": _rel(_manifest_signal_path(model_b_manifest)),
+            "signals": _rel(_manifest_signal_path(model_b_manifest)) if model_b_manifest.exists() else "",
             "source_feature_artifact": model_b.get("source_feature_artifact"),
             "source_model_artifact": model_b.get("source_model_artifact"),
         },
@@ -176,7 +179,8 @@ def _ranking_payload(signal_asof: str) -> dict[str, Any]:
             "ltr_score_rank": "rank after orthogonal LTR rerank within qlib top50; lower is better",
             "qlib_candidate_rank": "base qlib rank inside top50 before LTR rerank",
             "qlib_full_rank": "base qlib rank across the 150-stock production universe",
-            "buy_score": "LTR modules should use ltr_buy_score; raw qlib modules should use qlib_buy_score",
+            "buy_score": "Model-A-only mode uses qlib_buy_score; Model B/LTR fields are reference-only",
+            "model_b": "Model B structure is retained for future retraining reference and is not active baseline input",
         },
     }
 
@@ -190,6 +194,7 @@ def _snapshot_summary() -> dict[str, Any]:
             "asof": snapshot.get("asof") or payload.get("asof"),
             "signal_asof": snapshot.get("signal_asof") or snapshot.get("data_asof"),
             "target_date": snapshot.get("target_date") or snapshot.get("asof"),
+            "base_model_id": snapshot.get("base_model_id"),
             "model_id": snapshot.get("canonical_model_id") or snapshot.get("model_id"),
             "display_model_id": snapshot.get("model_id"),
             "strategy_rule": snapshot.get("strategy_rule"),
@@ -202,6 +207,61 @@ def _snapshot_summary() -> dict[str, Any]:
         }
     except ReadonlyStrategySnapshotError as exc:
         return {"ok": False, "status": exc.status, "message": exc.message, "latest": _rel(READONLY_STRATEGY_LATEST)}
+
+
+def _snapshot_rankings(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Build a minimal ranking payload from the readonly snapshot when YZ LTR is older."""
+    top_candidates = snapshot.get("top_candidates") if isinstance(snapshot.get("top_candidates"), list) else []
+    qlib_rows: list[dict[str, Any]] = []
+    for raw in top_candidates:
+        if not isinstance(raw, dict):
+            continue
+        rank = _int(raw.get("full_qlib_rank") or raw.get("candidate_rank") or raw.get("score_rank"))
+        instrument = raw.get("instrument") or raw.get("symbol")
+        qlib_rows.append({
+            "instrument": instrument,
+            "symbol": instrument,
+            "signal_asof": raw.get("signal_asof") or snapshot.get("signal_asof") or snapshot.get("asof"),
+            "available_at": raw.get("available_at") or raw.get("signal_asof") or snapshot.get("signal_asof") or snapshot.get("asof"),
+            "qlib_full_rank": rank,
+            "qlib_score_rank": _int(raw.get("score_rank") or rank),
+            "qlib_candidate_rank": _int(raw.get("candidate_rank") or rank),
+            "qlib_buy_score": _num(raw.get("buy_score") or raw.get("raw_score")),
+            "qlib_raw_score": _num(raw.get("raw_score")),
+            "in_qlib_top50": (rank or 999999) <= 50,
+            "source_base_qlib_signal": raw.get("source_artifact") or snapshot.get("manifest") or "",
+        })
+    qlib_rows = _sort_by_rank(qlib_rows, "qlib_full_rank")
+    return {
+        "signal_asof": snapshot.get("signal_asof") or snapshot.get("asof") or "",
+        "model_a": {
+            "model_id": snapshot.get("base_model_id") or snapshot.get("model_id") or MODEL_A,
+            "manifest": snapshot.get("manifest") or "",
+            "row_count": len(qlib_rows),
+            "signals": snapshot.get("source_signal_manifest") or "",
+        },
+        "model_b": {
+            "enabled": False,
+            "status": "reference_only",
+            "model_id": "",
+            "display_model_id": "",
+            "manifest": "",
+            "row_count": 0,
+            "signals": "",
+            "source_feature_artifact": "",
+            "source_model_artifact": "",
+        },
+        "ltr_top50": [],
+        "ltr_top10": [],
+        "qlib_top150": qlib_rows,
+        "qlib_top50": qlib_rows[:50],
+        "field_contract": {
+            "qlib_full_rank": "base qlib rank from the published readonly strategy snapshot",
+            "buy_score": "candidate-only snapshot score; not a return, probability, or position size",
+            "candidate_only": "Model-A-only candidate snapshot; Model B/LTR is retained for future retraining reference only.",
+            "model_b": "reference_only",
+        },
+    }
 
 
 def _asof_status(context_signal_asof: str, payloads: dict[str, Any]) -> dict[str, Any]:
@@ -225,17 +285,38 @@ def _asof_status(context_signal_asof: str, payloads: dict[str, Any]) -> dict[str
 
 def load_current_strategy_context(signal_asof: str | None = None) -> dict[str, Any]:
     """Load one read-only context that frontend modules can share."""
-    resolved_signal_asof = resolve_latest_yz_signal_asof(signal_asof)
-    if not resolved_signal_asof:
-        raise CurrentStrategyContextError("missing_signal_asof", "No YZ strict E4 signal artifact is available")
-
-    rankings = _ranking_payload(resolved_signal_asof)
-    productization = load_yz3_productization_status(signal_asof=resolved_signal_asof)
     snapshot = _snapshot_summary()
+    explicit_signal_asof = str(signal_asof or "").strip()
+    latest_yz_signal_asof = resolve_latest_yz_signal_asof(None)
+    snapshot_signal_asof = snapshot.get("signal_asof") if snapshot.get("ok") else ""
+    resolved_signal_asof = explicit_signal_asof or snapshot_signal_asof or latest_yz_signal_asof
+    if not resolved_signal_asof:
+        raise CurrentStrategyContextError("missing_signal_asof", "No strategy signal artifact is available")
+
+    model_a_only = _RUNTIME_TRUTH.active.get("model_b") is None
+    context_mode = "model_a_only" if model_a_only else "full_ltr_strategy"
+    ranking_status = "model_a_only" if model_a_only else "clean_yz_ltr"
+    try:
+        rankings = _ranking_payload(resolved_signal_asof)
+    except CurrentStrategyContextError:
+        if not snapshot.get("ok") or snapshot_signal_asof != resolved_signal_asof:
+            raise
+        rankings = _snapshot_rankings(snapshot)
+        context_mode = "model_a_only" if model_a_only else "candidate_only_snapshot"
+        ranking_status = "model_a_only_snapshot" if model_a_only else "readonly_snapshot_candidate_only"
+
+    productization = load_yz3_productization_status(signal_asof=resolved_signal_asof)
     yz2_feature_manifest = YZ2_ROOT / resolved_signal_asof / "manifest.json"
     yz2r_manifest = YZ2R_ROOT / resolved_signal_asof / "manifest.json"
-    context_asof = snapshot.get("asof") if snapshot.get("ok") and snapshot.get("signal_asof") == resolved_signal_asof else resolved_signal_asof
-    target_date = snapshot.get("target_date") if snapshot.get("ok") and snapshot.get("signal_asof") == resolved_signal_asof else productization.get("execution_price_readiness", {}).get("target_next_trading_day")
+    snapshot_aligned = snapshot.get("ok") and snapshot.get("signal_asof") == resolved_signal_asof
+    context_asof = snapshot.get("asof") if snapshot_aligned else resolved_signal_asof
+    target_date = snapshot.get("target_date") if snapshot_aligned else productization.get("execution_price_readiness", {}).get("target_next_trading_day")
+    selected_model_id = MODEL_A if model_a_only else (snapshot.get("model_id") if snapshot_aligned else MODEL_B)
+    display_model_id = MODEL_A if model_a_only else (snapshot.get("display_model_id") if snapshot_aligned else LEGACY_DISPLAY_MODEL_B)
+    base_model_id = MODEL_A
+    strategy_rule = snapshot.get("strategy_rule") if snapshot_aligned else DEFAULT_STRATEGY
+    ranking_source = "model_a_qlib" if model_a_only and context_mode == "model_a_only" else ("readonly_snapshot_candidate_only" if context_mode == "candidate_only_snapshot" else "ltr_rerank_within_qlib_top50")
+    candidate_boundary = "model_a_top50" if model_a_only and context_mode == "model_a_only" else ("snapshot_top_candidates" if context_mode == "candidate_only_snapshot" else "qlib_top50")
 
     audit_payloads = {
         "readonly_strategy_snapshot": snapshot,
@@ -255,13 +336,17 @@ def load_current_strategy_context(signal_asof: str | None = None) -> dict[str, A
             "display_asof": context_asof,
             "signal_asof": resolved_signal_asof,
             "target_date": target_date or "",
-            "default_model_id": MODEL_B,
-            "display_model_id": LEGACY_DISPLAY_MODEL_B,
-            "base_model_id": MODEL_A,
-            "strategy_rule": DEFAULT_STRATEGY,
-            "ranking_source": "ltr_rerank_within_qlib_top50",
-            "candidate_boundary": "qlib_top50",
-            "execution_price_mode": "next_open",
+            "default_model_id": selected_model_id or "",
+            "display_model_id": display_model_id or selected_model_id or "",
+            "base_model_id": base_model_id or "",
+            "strategy_rule": strategy_rule or "",
+            "ranking_source": ranking_source,
+            "candidate_boundary": candidate_boundary,
+            "execution_price_mode": EXECUTION_PRICE_MODE,
+            "context_mode": context_mode,
+            "ranking_status": ranking_status,
+            "latest_yz_signal_asof": latest_yz_signal_asof,
+            "snapshot_signal_asof": snapshot_signal_asof,
         },
         "rankings": rankings,
         "strategy_snapshot": snapshot,
@@ -274,7 +359,7 @@ def load_current_strategy_context(signal_asof: str | None = None) -> dict[str, A
         },
         "source_manifests": {
             "model_a": rankings["model_a"]["manifest"],
-            "model_b": rankings["model_b"]["manifest"],
+            "model_b": "",
             "orthogonal_feature_package": _rel(yz2_feature_manifest) if yz2_feature_manifest.exists() else "",
             "execution_price_readiness": _rel(yz2r_manifest) if yz2r_manifest.exists() else "",
             "readonly_strategy_snapshot": snapshot.get("manifest") or "",
@@ -283,8 +368,9 @@ def load_current_strategy_context(signal_asof: str | None = None) -> dict[str, A
             "asof_alignment": asof_audit,
             "frontend_guidance": {
                 "primary_context_source": "this endpoint",
-                "use_ltr_for_strategy_snapshot": True,
+                "use_ltr_for_strategy_snapshot": not model_a_only,
                 "use_qlib_top50_for_base_model_views": True,
+                "model_b_reference_only": model_a_only,
                 "legacy_daily_readonly_latest_removed": True,
             },
         },

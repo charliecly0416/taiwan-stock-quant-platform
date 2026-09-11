@@ -2,8 +2,13 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
 import sys
+from types import SimpleNamespace
 from pathlib import Path
+
+import pytest
 
 from scripts.archive_tw_stock_daily import DailyBarRecord
 from scripts.validate_tw_stock_daily import OfficialTwseRow, ValidationResult
@@ -58,6 +63,174 @@ def test_parse_symbols_splits_commas_newlines_normalizes_and_dedupes():
     symbols = update_tw_stock_daily.parse_symbols(["TW2330, 0050.TW", "TWSE:2330\nTPEX:6488", "", " 00878 "])
 
     assert symbols == ["2330", "0050", "6488", "00878"]
+
+
+def test_twii_schema_validator_rejects_ambiguous_rows_and_accepts_schema_only():
+    assert update_tw_stock_daily.validate_twii_response_rows([], target_asof="2026-08-27")["ok"] is False
+    assert update_tw_stock_daily.validate_twii_response_rows([{"日期": "2026-08-27"}], target_asof="2026-08-27")["ok"] is False
+    valid = {"日期": "2026-08-27", "收盤指數": "22000", "指數名稱": "發行量加權股價指數"}
+    result = update_tw_stock_daily.validate_twii_response_rows([valid], target_asof="2026-08-27")
+    assert result["ok"] is True
+    assert "returned_scope" not in result
+    assert "unknown_scope" not in result
+    assert update_tw_stock_daily.validate_twii_response_rows([valid], target_asof="2026-08-26")["ok"] is False
+
+
+def test_twii_schema_validator_normalizes_twse_roc_date():
+    valid = {"日期": "1150828", "收盤指數": "22000", "指數名稱": "發行量加權股價指數"}
+    assert update_tw_stock_daily.validate_twii_response_rows(valid and [valid], target_asof="2026-08-28")["ok"] is True
+    assert update_tw_stock_daily.validate_twii_response_rows([valid], target_asof="2026-08-31")["errors"] == ["target_date_mismatch"]
+
+
+def test_twii_schema_validator_excludes_total_return_index_from_twii_identity():
+    rows = [
+        {"日期": "1150831", "收盤指數": "22000", "指數": "發行量加權股價指數"},
+        {"日期": "1150831", "收盤指數": "23000", "指數": "發行量加權股價報酬指數"},
+    ]
+    assert update_tw_stock_daily.validate_twii_response_rows(rows, target_asof="2026-08-31")["ok"] is True
+
+
+def test_finmind_hsa8_capture_derives_only_explicit_target_date_scope():
+    source = SCRIPT_PATH.read_text(encoding="utf-8")
+    assert '"validator_status": "PASS" if records' not in source
+    assert 'str(record.trade_date) == end' in source
+    assert '"returned_scope": returned_scope' in source
+    assert '"unknown_scope": unknown_scope' in source
+    assert '"validator_status": "PASS" if scope_complete else "BLOCKED_SOURCE_SCOPE_OR_VALIDATOR_UNPROVEN"' in source
+
+
+def test_finmind_hsa8_capture_binds_real_run_id_across_raw_normalized_and_adapter(tmp_path, monkeypatch):
+    run_id = "daily_tw_stock_auto_update_20260827_20260827T163001Z"
+
+    class FakeResponse:
+        status_code = 200
+        content = b'{"status":200,"data":[]}'
+        headers = {}
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"status": 200, "data": []}
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=lambda *args, **kwargs: FakeResponse()))
+    monkeypatch.setattr(update_tw_stock_daily, "parse_finmind_rows", lambda rows, symbol: [])
+
+    _records, capture = update_tw_stock_daily._real_hsa8_finmind_capture(
+        segment="daily_price",
+        symbols=["2330"],
+        start="2026-08-27",
+        end="2026-08-27",
+        output_dir=str(tmp_path),
+        acquisition_run_id=run_id,
+    )
+    assert capture["source_family"] == "adjusted_price"
+
+    adapter = json.loads((tmp_path / "daily_price.adapter_output.json").read_text(encoding="utf-8"))
+    assert capture["acquisition_run_id"] == run_id
+    assert adapter["acquisition_run_id"] == run_id
+    assert capture["raw_paths"] == [str(tmp_path / "daily_price.2330.http.raw")]
+    assert capture["normalized_paths"] == [str(tmp_path / "daily_price.normalized.json")]
+    assert adapter["raw_files"][0]["path"] == capture["raw_paths"][0]
+    assert adapter["normalized_files"][0]["path"] == capture["normalized_paths"][0]
+    assert adapter["raw_files"][0]["sha256"] == update_tw_stock_daily._file_sha256(Path(adapter["raw_files"][0]["path"]))
+    assert adapter["normalized_files"][0]["sha256"] == update_tw_stock_daily._file_sha256(Path(adapter["normalized_files"][0]["path"]))
+
+
+def test_orthogonal_segment_does_not_repeat_twii_capture(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        update_tw_stock_daily,
+        "_real_hsa8_finmind_capture",
+        lambda **kwargs: ([], {"status": "captured", "source_family": kwargs["segment"]}),
+    )
+    monkeypatch.setattr(
+        update_tw_stock_daily,
+        "_real_hsa8_twii_capture",
+        lambda **kwargs: calls.append(kwargs) or {"status": "captured"},
+    )
+
+    report = update_tw_stock_daily.run_workflow(
+        symbols=["2330"],
+        start="2026-09-01",
+        end="2026-09-01",
+        daily_price=False,
+        corporate_actions=False,
+        institutional=True,
+        margin=False,
+        monthly_revenue=False,
+        valuation=False,
+        handoff_output_dir=str(tmp_path),
+    )
+
+    assert calls == []
+    assert report["hsa8_capture"]["twii"] == {"status": "not_requested"}
+
+
+def test_finmind_get_retries_rate_limit_with_bounded_backoff(monkeypatch):
+    class FakeResponse:
+        def __init__(self, status_code):
+            self.status_code = status_code
+            self.content = b"{}"
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise RuntimeError(f"HTTP {self.status_code}")
+
+    responses = iter([FakeResponse(402), FakeResponse(200)])
+    calls = []
+    sleeps = []
+    fake_requests = SimpleNamespace(get=lambda *args, **kwargs: (calls.append(kwargs) or next(responses)))
+    monkeypatch.setenv("FINMIND_MIN_REQUEST_INTERVAL_SECONDS", "0")
+    monkeypatch.setenv("FINMIND_TRANSIENT_RETRIES", "1")
+    monkeypatch.setenv("FINMIND_RETRY_BACKOFF_SECONDS", "0")
+    monkeypatch.setattr(update_tw_stock_daily.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    response, _last_request_at, request_count = update_tw_stock_daily._finmind_get(
+        fake_requests,
+        {"dataset": "test"},
+        last_request_at=0.0,
+    )
+
+    assert response.status_code == 200
+    assert request_count == 2
+    assert len(calls) == 2
+
+
+def test_hsa8_capture_writer_rejects_symlink_and_existing_destination(tmp_path):
+    parent = tmp_path / "capture"
+    parent.mkdir()
+    outside = tmp_path / "outside"
+    outside.write_bytes(b"outside")
+    link = parent / "link"
+    link.symlink_to(outside)
+    with pytest.raises(OSError):
+        update_tw_stock_daily._atomic_bytes(link, b"no")
+    final = parent / "final"
+    final.write_bytes(b"original")
+    with pytest.raises(FileExistsError):
+        update_tw_stock_daily._atomic_bytes(final, b"replace")
+    assert final.read_bytes() == b"original"
+
+
+def test_hsa8_capture_writer_rejects_parent_locator_race(tmp_path, monkeypatch):
+    parent = tmp_path / "capture"
+    parent.mkdir()
+    real_lstat = os.lstat
+    calls = {"parent": 0}
+
+    def racing_lstat(path):
+        info = real_lstat(path)
+        if Path(path) == parent:
+            calls["parent"] += 1
+            if calls["parent"] >= 2:
+                from types import SimpleNamespace
+                return SimpleNamespace(st_mode=info.st_mode, st_dev=info.st_dev, st_ino=info.st_ino + 1)
+        return info
+
+    monkeypatch.setattr(update_tw_stock_daily.os, "lstat", racing_lstat)
+    with pytest.raises(OSError, match="parent locator"):
+        update_tw_stock_daily._atomic_bytes(parent / "artifact", b"race")
 
 
 def test_load_symbols_from_file_skips_blanks_comments_and_dedupes_lines(tmp_path):
@@ -257,6 +430,63 @@ def test_run_workflow_can_skip_corporate_actions(monkeypatch):
 
     assert report["corporate_actions"]["count"] == 0
     assert report["corporate_actions_archived_count"] == 0
+
+
+def test_run_workflow_can_skip_daily_price_and_run_institutional_only(monkeypatch):
+    monkeypatch.setattr(
+        update_tw_stock_daily,
+        "archive_symbols",
+        lambda symbols, start, end: (_ for _ in ()).throw(AssertionError("daily price should not run")),
+    )
+    monkeypatch.setattr(update_tw_stock_daily, "validate_latest", lambda records: [])
+    monkeypatch.setattr(update_tw_stock_daily, "archive_corporate_action_symbols", lambda symbols, start, end: [])
+    monkeypatch.setattr(update_tw_stock_daily, "archive_institutional_symbols", lambda symbols, start, end: [object(), object()])
+    monkeypatch.setattr(update_tw_stock_daily, "summarize_institutional_trades", lambda records: {"count": len(records)})
+    monkeypatch.setattr(update_tw_stock_daily, "archive_margin_symbols", lambda symbols, start, end: [])
+    monkeypatch.setattr(update_tw_stock_daily, "archive_monthly_revenue_symbols", lambda symbols, start, end: [])
+    monkeypatch.setattr(update_tw_stock_daily, "archive_valuation_symbols", lambda symbols, start, end: [])
+
+    report = update_tw_stock_daily.run_workflow(
+        symbols=["2330"],
+        start="2026-05-20",
+        end="2026-05-22",
+        daily_price=False,
+        corporate_actions=False,
+        margin=False,
+        monthly_revenue=False,
+        valuation=False,
+    )
+
+    assert report["archive"]["count"] == 0
+    assert report["institutional_trades"]["count"] == 2
+
+
+def test_main_success_when_daily_price_skipped_but_institutional_has_rows(monkeypatch):
+    def fake_workflow(**kwargs):
+        assert kwargs["daily_price"] is False
+        assert kwargs["institutional"] is True
+        return {
+            "archive": {"count": 0},
+            "validation": {"mismatched": 0, "unchecked": 0},
+            "corporate_actions": {"count": 0},
+            "institutional_trades": {"count": 2},
+            "margin_trading": {"count": 0},
+            "monthly_revenue": {"count": 0},
+            "valuation": {"count": 0},
+        }
+
+    monkeypatch.setattr(update_tw_stock_daily, "run_workflow", fake_workflow)
+
+    assert update_tw_stock_daily.main([
+        "--symbol",
+        "2330",
+        "--no-daily-price",
+        "--no-corporate-actions",
+        "--no-margin",
+        "--no-monthly-revenue",
+        "--no-valuation",
+        "--no-validate",
+    ]) == 0
 
 
 def test_run_workflow_can_skip_institutional_trades(monkeypatch):

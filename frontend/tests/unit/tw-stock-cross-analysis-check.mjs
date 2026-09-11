@@ -5,7 +5,11 @@ import { resolve } from 'node:path'
 const root = resolve(new URL('..', import.meta.url).pathname, '..')
 const read = path => readFileSync(resolve(root, path), 'utf8')
 
-const api = read('src/api/tw-stock.js')
+const api = [
+  read('src/api/tw-stock.js'),
+  read('src/api/tw-stock-readonly.js'),
+  read('src/api/tw-stock-action.js')
+].join('\n')
 const page = read('src/views/tw-stock-monitor/index.vue')
 
 for (const required of [
@@ -130,7 +134,8 @@ assert.doesNotMatch(detailMatch[0], /triggerQlib|DryRun|scheduler|pipeline|autom
 
 const saveReviewMatch = page.match(/async saveCrossAnalysisReview \(\) \{[\s\S]*?\n    \},\n    restoreCrossBacktestValidation/)
 assert.ok(saveReviewMatch, 'missing saveCrossAnalysisReview method')
-assert.match(saveReviewMatch[0], /saveTwStockCrossAnalysisReview/)
+assert.match(saveReviewMatch[0], /当前策略工作台为只读模式，不在前端保存复盘状态。/)
+assert.doesNotMatch(page, /saveTwStockCrossAnalysisReview/)
 assert.doesNotMatch(saveReviewMatch[0], /order|position|target_weight|targetPosition|broker|quick-trade/i)
 
 const historicalSimulationMatch = page.match(/async openCrossAnalysisHistoricalSimulation \(\) \{[\s\S]*?\n    \},\n    crossAnalysisCustomRow/)

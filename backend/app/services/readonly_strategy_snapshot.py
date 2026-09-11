@@ -53,7 +53,20 @@ def _checksum_status(manifest_dir: Path, manifest: dict[str, Any]) -> dict[str, 
     checksum_path = manifest_dir / str(manifest.get("checksum_manifest", ""))
     payload = _load_json(checksum_path)
     rows = []
-    for item in payload.get("files", []):
+    files = payload.get("files", [])
+    if isinstance(files, dict):
+        items = [
+            {"path": str(manifest_dir.relative_to(REPO_ROOT) / str(name)), "sha256": value}
+            for name, value in files.items()
+        ]
+    elif isinstance(files, list):
+        items = files
+    else:
+        raise ReadonlyStrategySnapshotError("invalid_checksum_manifest", "checksum_manifest.files must be a list or object")
+
+    for item in items:
+        if not isinstance(item, dict):
+            raise ReadonlyStrategySnapshotError("invalid_checksum_manifest", "checksum_manifest file entries must be objects")
         path = _resolve_repo_path(str(item.get("path", "")))
         actual = _sha256(path) if path.exists() else ""
         rows.append(
@@ -65,8 +78,25 @@ def _checksum_status(manifest_dir: Path, manifest: dict[str, Any]) -> dict[str, 
     return {
         "ok": all(row["status"] == "pass" for row in rows),
         "checked_file_count": len(rows),
-        "self_included": any(str(item.get("path", "")).endswith("checksum_manifest.json") for item in payload.get("files", [])),
+        "self_included": any(str(item.get("path", "")).endswith("checksum_manifest.json") for item in items),
         "manifest": _rel(checksum_path),
+    }
+
+
+def _forbidden_scope_summary(forbidden_scope_audit: dict[str, Any]) -> dict[str, Any]:
+    flags = forbidden_scope_audit.get("flags") if isinstance(forbidden_scope_audit.get("flags"), dict) else {}
+    return {
+        "status": forbidden_scope_audit.get("status"),
+        "no_provider_publish": forbidden_scope_audit.get("no_provider_publish") is True
+        or flags.get("provider_publish_triggered") is False,
+        "no_accepted_latest_switch": forbidden_scope_audit.get("no_accepted_latest_switch") is True
+        or (
+            flags.get("provider_accepted_latest_switched") is False
+            and flags.get("qlib_accepted_latest_switched") is False
+            and flags.get("legacy_option_c_latest_signal_switched") is False
+        ),
+        "no_monitor_broker_order": forbidden_scope_audit.get("no_monitor_broker_order") is True
+        or flags.get("monitor_broker_order_triggered") is False,
     }
 
 
@@ -123,12 +153,7 @@ def load_readonly_strategy_snapshot(asof: str | None = None) -> dict[str, Any]:
             "manifest": _rel(manifest_dir / str(manifest.get("validation_report", ""))),
         },
         "checksum": checksum,
-        "forbidden_scope_audit": {
-            "status": forbidden_scope_audit.get("status"),
-            "no_provider_publish": forbidden_scope_audit.get("no_provider_publish"),
-            "no_accepted_latest_switch": forbidden_scope_audit.get("no_accepted_latest_switch"),
-            "no_monitor_broker_order": forbidden_scope_audit.get("no_monitor_broker_order"),
-        },
+        "forbidden_scope_audit": _forbidden_scope_summary(forbidden_scope_audit),
         "latest_pointer": latest,
         "sources": {
             "manifest": _rel(manifest_path),

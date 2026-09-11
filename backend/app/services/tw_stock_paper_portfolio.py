@@ -18,6 +18,7 @@ import yaml
 
 from app.services.phase_yz3_productization_status import load_yz3_productization_status
 from app.services.tw_stock_artifact_registry import registry_get
+from scripts.tw_daily_runtime_stages import runtime_truth
 from app.services.tw_stock_sim_account import sim_trading_flags
 from app.utils.db import get_db_connection
 
@@ -26,7 +27,9 @@ PRICE = Decimal("0.0001")
 FEE_RATE = Decimal("0.001425")
 SELL_TAX_RATE = Decimal("0.003")
 LOT_SIZE = 10
-STRATEGY_RULE = str(registry_get("strategies", "default_strategy_rule"))
+_RUNTIME_TRUTH = runtime_truth()
+STRATEGY_RULE = _RUNTIME_TRUTH.strategy_rule
+EXECUTION_PRICE_MODE = _RUNTIME_TRUTH.execution_price_mode
 ARTIFACT_ROOT = Path(__file__).resolve().parents[3] / "data_tw" / "artifacts" / "paper_portfolio"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 REGISTRY_PATH = REPO_ROOT / "configs" / "tw_modular_registry.yaml"
@@ -598,7 +601,7 @@ class TWStockPaperPortfolioService:
                 return self._reject("invalid_artifact", f"{field} must be true")
         model_id = str(intent.get("model_id") or "")
         strategy_rule = str(intent.get("strategy_rule") or "")
-        execution_price_mode = str(intent.get("execution_price_mode") or "next_open")
+        execution_price_mode = str(intent.get("execution_price_mode") or EXECUTION_PRICE_MODE)
         clean = self._clean_policy()
         if model_id not in clean["models"]:
             return self._reject("invalid_artifact", "model_id is not production selectable")
@@ -630,7 +633,7 @@ class TWStockPaperPortfolioService:
         return (
             str(manifest.get("model_id") or "") in clean["models"]
             and str(manifest.get("strategy_rule") or "") in clean["strategies"]
-            and str(manifest.get("execution_price_mode") or "next_open") == "next_open"
+            and str(manifest.get("execution_price_mode") or EXECUTION_PRICE_MODE) == EXECUTION_PRICE_MODE
         )
 
     def _execution_price_gate(self, intent: Dict[str, Any]) -> Optional[Dict[str, Any]]:

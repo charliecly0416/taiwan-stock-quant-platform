@@ -90,8 +90,13 @@ def _apply_proxy_env():
 
 _apply_proxy_env()
 
-# Add project root to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add backend and repository roots to Python path. Some readonly validators live
+# under repo-root scripts/ and are imported by backend services at startup.
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+repo_root = os.path.dirname(backend_dir)
+for path in (repo_root, backend_dir):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 from app import create_app
 from app.config.settings import Config

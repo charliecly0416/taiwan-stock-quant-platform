@@ -2,17 +2,16 @@
   <a-card class="readonly-strategy-snapshot" :bordered="false" data-testid="readonly-strategy-snapshot-panel">
     <template slot="title">
       <div class="card-title-line">
-        <span>策略快照</span>
+        <span>候选名单</span>
         <div class="readonly-tags">
-          <a-tag color="blue">只读候选</a-tag>
-          <a-tag color="cyan">研究排名</a-tag>
-          <a-tag :color="statusColor">审计状态</a-tag>
+          <a-tag color="blue">只读研究</a-tag>
+          <a-tag :color="statusColor">{{ statusText }}</a-tag>
         </div>
       </div>
     </template>
     <div class="readonly-snapshot-toolbar">
       <div class="readonly-snapshot-title-block">
-        <strong>当前展示的最新已发布快照</strong>
+        <strong>根据当前模型排序生成，仅供研究复盘。</strong>
         <span>{{ snapshotFreshnessText }}</span>
       </div>
       <a-button size="small" :loading="loading" @click="$emit('refresh')">
@@ -42,86 +41,68 @@
     />
     <div v-if="loading" class="readonly-snapshot-empty">正在读取策略快照...</div>
     <div v-else-if="payload" class="readonly-snapshot-content">
-      <div class="readonly-snapshot-grid readonly-primary-grid">
-        <div class="readonly-snapshot-metric primary">
-          <span>数据日期</span>
-          <strong>{{ signalDateText }}</strong>
-          <small>排名使用这一天可见的数据</small>
-        </div>
-        <div class="readonly-snapshot-metric">
-          <span>快照发布时间</span>
-          <strong>{{ snapshotDateText }}</strong>
-          <small>{{ snapshotAgeText }}</small>
-        </div>
-        <div class="readonly-snapshot-metric">
-          <span>当前模型</span>
-          <strong>{{ modelLabel }}</strong>
-          <small>{{ modelSubtitle }}</small>
-        </div>
-        <div class="readonly-snapshot-metric">
-          <span>排序口径</span>
-          <strong>{{ rankingLabel }}</strong>
-          <small>{{ strategyLabel }}</small>
-        </div>
-        <div class="readonly-snapshot-metric">
-          <span>覆盖状态</span>
-          <strong>{{ coverageText }}</strong>
-          <small>来自只读快照候选清单</small>
-        </div>
-        <div class="readonly-snapshot-metric">
-          <span>审计状态</span>
-          <strong>{{ statusText }}</strong>
-          <small>{{ auditBriefText }}</small>
-        </div>
-      </div>
-
       <div class="readonly-candidate-layout">
+        <div class="readonly-snapshot-grid readonly-primary-grid">
+          <div class="readonly-snapshot-metric">
+            <span>审计状态</span>
+            <strong>{{ statusText }}</strong>
+            <small>{{ auditBriefText }}</small>
+          </div>
+          <div class="readonly-snapshot-metric">
+            <span>覆盖状态</span>
+            <strong>{{ coverageText }}</strong>
+            <small>{{ snapshotAgeText }}</small>
+          </div>
+        </div>
         <section class="readonly-candidate-section">
           <div class="readonly-section-head">
             <div>
-              <strong>优先观察调入</strong>
+              <strong>候选调入</strong>
               <small>LTR 重排后的前 {{ topCandidates.length }} 名候选</small>
             </div>
-            <a-tag color="blue">候选清单</a-tag>
+            <a-tag color="blue">候选</a-tag>
           </div>
           <div v-if="topCandidates.length" class="readonly-candidate-list">
             <div v-for="item in topCandidates" :key="`readonly-top-${item.symbol}`" class="readonly-candidate-row">
+              <span class="readonly-candidate-rank">#{{ candidateRank(item) }}</span>
               <div class="readonly-candidate-main">
-                <strong>{{ displaySymbol(item) }}</strong>
-                <span>重排 #{{ rankText(item.score_rank) }}</span>
+                <strong>
+                  <span class="readonly-candidate-symbol">{{ displaySymbol(item) }}</span>
+                  <span v-if="displayName(item)" class="readonly-candidate-name">{{ displayName(item) }}</span>
+                </strong>
+                <span>{{ candidateMetaText(item) }}</span>
               </div>
-              <div class="readonly-candidate-meta">
-                <span>Qlib Top50 内 #{{ rankText(item.candidate_rank) }}</span>
-                <span>全量 #{{ rankText(item.full_qlib_rank) }}</span>
-              </div>
+              <a-tag class="readonly-candidate-status" color="blue">待复盘</a-tag>
             </div>
           </div>
-          <div v-else class="readonly-snapshot-empty">暂无调入候选。</div>
+          <div v-else class="readonly-snapshot-empty">暂无候选调入。</div>
         </section>
         <section class="readonly-candidate-section">
           <div class="readonly-section-head">
             <div>
               <strong>调出复核</strong>
-              <small>当前持仓中已跌出候选边界的项目</small>
+              <small>当前组合中需要人工复核的观察项</small>
             </div>
             <a-tag :color="exitCandidates.length ? 'orange' : 'green'">{{ exitCandidates.length }} 项</a-tag>
           </div>
           <div v-if="exitCandidates.length" class="readonly-candidate-list compact">
             <div v-for="item in exitCandidates" :key="`readonly-exit-${item.symbol}`" class="readonly-candidate-row">
+              <span class="readonly-candidate-rank">复核</span>
               <div class="readonly-candidate-main">
-                <strong>{{ displaySymbol(item) }}</strong>
-                <span>{{ item.in_qlib_top50_candidate ? '仍在 Top50' : '已跌出 Top50' }}</span>
+                <strong>
+                  <span class="readonly-candidate-symbol">{{ displaySymbol(item) }}</span>
+                  <span v-if="displayName(item)" class="readonly-candidate-name">{{ displayName(item) }}</span>
+                </strong>
+                <span>{{ exitMetaText(item) }}</span>
               </div>
-              <div class="readonly-candidate-meta">
-                <span>全量 #{{ rankText(item.full_qlib_rank) }}</span>
-              </div>
+              <a-tag class="readonly-candidate-status" color="orange">观察</a-tag>
             </div>
           </div>
-          <div v-else class="readonly-snapshot-empty">暂无调出观察。</div>
+          <div v-else class="readonly-snapshot-empty">暂无调出复核。</div>
         </section>
       </div>
 
-      <replay-audit-detail :rows="auditRows" title="查看策略快照审计详情" />
+      <replay-audit-detail :rows="auditRows" title="查看技术详情" />
     </div>
     <div v-else class="readonly-snapshot-empty">策略快照暂不可用。</div>
   </a-card>
@@ -253,6 +234,13 @@ export default {
     },
     auditRows () {
       return [
+        { label: 'signal date', value: this.signalDateText },
+        { label: 'snapshot date', value: this.snapshotDateText },
+        { label: 'model', value: this.modelLabel },
+        { label: 'base model', value: this.snapshot.base_model_id },
+        { label: 'ranking', value: this.rankingLabel },
+        { label: 'strategy', value: this.strategyLabel },
+        { label: 'coverage', value: this.coverageText },
         { label: 'source manifest', value: this.sourceManifest },
         { label: 'schema version', value: this.manifest.schema_version },
         { label: 'validation', value: this.validation.status || (this.validation.ok === true ? 'pass' : '-') },
@@ -266,6 +254,29 @@ export default {
     displaySymbol (item) {
       if (!item) return '-'
       return item.instrument || item.symbol || '-'
+    },
+    displayName (item) {
+      if (!item) return ''
+      return item.name || item.stock_name || item.symbol_name || item.company_name || ''
+    },
+    candidateRank (item) {
+      if (!item) return '-'
+      return this.rankText(item.score_rank || item.ltr_rank || item.candidate_rank)
+    },
+    candidateMetaText (item) {
+      if (!item) return '-'
+      const parts = [
+        item.score_rank || item.ltr_rank ? `LTR #${this.rankText(item.score_rank || item.ltr_rank)}` : '',
+        item.candidate_rank ? `Qlib Top50 #${this.rankText(item.candidate_rank)}` : '',
+        item.full_qlib_rank ? `全市场 #${this.rankText(item.full_qlib_rank)}` : ''
+      ].filter(Boolean)
+      return parts.length ? parts.join(' · ') : '-'
+    },
+    exitMetaText (item) {
+      if (!item) return '-'
+      const boundary = item.in_qlib_top50_candidate ? '仍在 Qlib Top50，需复核' : '跌出 Qlib Top50'
+      const fullRank = item.full_qlib_rank ? `当前全市场 #${this.rankText(item.full_qlib_rank)}` : ''
+      return [boundary, fullRank].filter(Boolean).join(' · ')
     },
     rankText (value) {
       return value == null ? '-' : value

@@ -1,11 +1,15 @@
 """R14 readonly strategy snapshot API tests."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from flask import Flask
 
 from app.routes.readonly_strategy_snapshot import readonly_strategy_snapshot_bp
+
+
+LATEST_POINTER = Path("data_tw/artifacts/publish/readonly_strategy_snapshot/latest.json")
 
 
 def _client():
@@ -29,12 +33,16 @@ def test_readonly_strategy_snapshot_latest_get_returns_readonly_payload():
     assert data["not_target_position"] is True
     assert data["not_investment_advice"] is True
     assert data["production_trade_enabled"] is False
+    latest = json.loads(LATEST_POINTER.read_text(encoding="utf-8"))
+    assert data["asof"] == latest["asof"]
     assert data["manifest"]["artifact_type"] == "readonly_strategy_snapshot"
     assert data["snapshot"]["display_role"] == "primary_readonly_candidate"
-    assert data["snapshot"]["model_id"] == "e4_frozen_qlib_2023_2025_ltr"
-    assert data["snapshot"]["strategy_rule"] == "top50_exit_one_worst_sell"
+    assert data["snapshot"]["model_id"] == "e4_frozen_qlib_2018_2022"
+    assert data["snapshot"]["strategy_rule"] == "candidate_only_no_strategy_replay"
     assert data["validation"]["ok"] is True
     assert data["checksum"]["ok"] is True
+    assert data["checksum"]["checked_file_count"] == 4
+    assert data["checksum"]["self_included"] is False
     assert data["forbidden_scope_audit"]["no_provider_publish"] is True
     assert data["forbidden_scope_audit"]["no_accepted_latest_switch"] is True
     assert data["forbidden_scope_audit"]["no_monitor_broker_order"] is True
@@ -50,6 +58,8 @@ def test_readonly_strategy_snapshot_asof_get_returns_same_artifact():
     assert payload["code"] == 1
     assert payload["data"]["asof"] == "2026-06-18"
     assert payload["data"]["sources"]["manifest"].endswith("/2026-06-18/manifest.json")
+    assert payload["data"]["checksum"]["ok"] is True
+    assert payload["data"]["checksum"]["checked_file_count"] == 12
 
 
 def test_readonly_strategy_snapshot_routes_have_no_write_methods():

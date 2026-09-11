@@ -37,9 +37,17 @@ class FakeKlineService:
 
 def _client(monkeypatch, data):
     app = Flask(__name__)
+    monkeypatch.setattr(
+        "app.utils.auth.verify_token",
+        lambda token: {"sub": "test-user", "user_id": 1, "role": "user", "token_version": 1},
+    )
     tw_stock_route.trend_service = TWStockTrendService(FakeKlineService(data))
     app.register_blueprint(tw_stock_route.tw_stock_bp, url_prefix="/api/tw-stock")
     return app.test_client()
+
+
+def _auth_headers():
+    return {"Authorization": "Bearer test-token"}
 
 
 def test_trend_service_reports_uptrend_and_read_only_flags():
@@ -329,7 +337,8 @@ def test_monitor_config_api_roundtrip(monkeypatch):
     monkeypatch.setattr(tw_stock_route, "get_db_connection", lambda: _MonitorConn(store))
     client = _client(monkeypatch, {})
 
-    resp = client.post("/api/tw-stock/monitor/config", json={
+    resp = client.post("/api/tw-stock/monitor/config", headers=_auth_headers(), json={
+        "user_id": 999,
         "symbols": ["2330", "0050"],
         "limit_bars": 80,
         "refresh_interval_sec": 300,
@@ -339,6 +348,7 @@ def test_monitor_config_api_roundtrip(monkeypatch):
 
     assert resp.status_code == 200
     data = resp.get_json()["data"]
+    assert data["user_id"] == 1
     assert data["symbols"] == ["2330", "0050"]
     assert data["enabled"] is True
 
@@ -347,12 +357,19 @@ def test_monitor_config_api_roundtrip(monkeypatch):
     assert resp.get_json()["data"]["limit_bars"] == 80
 
 
+def test_monitor_write_routes_require_authentication(monkeypatch):
+    client = _client(monkeypatch, {})
+    resp = client.post("/api/tw-stock/monitor/config", json={"symbols": ["2330"]})
+    assert resp.status_code == 401
+    assert resp.get_json()["msg"] == "Token missing"
+
+
 def test_monitor_alert_api_create_list_and_ack(monkeypatch):
     store = {"configs": {}, "alerts": [], "notifications": []}
     monkeypatch.setattr(tw_stock_route, "get_db_connection", lambda: _MonitorConn(store))
     client = _client(monkeypatch, {})
 
-    resp = client.post("/api/tw-stock/monitor/alerts", json={
+    resp = client.post("/api/tw-stock/monitor/alerts", headers=_auth_headers(), json={
         "symbol": "2330",
         "alert_type": "score_change",
         "message": "2330 分數變化 80 -> 90",
@@ -374,7 +391,7 @@ def test_monitor_alert_api_create_list_and_ack(monkeypatch):
     assert resp.status_code == 200
     assert resp.get_json()["data"]["count"] == 1
 
-    resp = client.put(f"/api/tw-stock/monitor/alerts/{alert_id}", json={"is_read": True, "decision_status": "watch", "user_note": "人工观察"})
+    resp = client.put(f"/api/tw-stock/monitor/alerts/{alert_id}", headers=_auth_headers(), json={"is_read": True, "decision_status": "watch", "user_note": "人工观察"})
     assert resp.status_code == 200
     data = resp.get_json()["data"]
     assert data["is_read"] is True
@@ -388,7 +405,7 @@ def test_monitor_scan_builds_baseline_then_alerts_on_score_change(monkeypatch):
     monkeypatch.setattr(tw_stock_route, "get_db_connection", lambda: _MonitorConn(store))
     client = _client(monkeypatch, {"2330": _bars(144, start=100, step=0.0)})
 
-    resp = client.post("/api/tw-stock/monitor/config", json={
+    resp = client.post("/api/tw-stock/monitor/config", headers=_auth_headers(), json={
         "symbols": ["2330"],
         "limit_bars": 120,
         "score_change_threshold": 5,
@@ -396,7 +413,7 @@ def test_monitor_scan_builds_baseline_then_alerts_on_score_change(monkeypatch):
     })
     assert resp.status_code == 200
 
-    resp = client.post("/api/tw-stock/monitor/scan")
+    resp = client.post("/api/tw-stock/monitor/scan", headers=_auth_headers())
     assert resp.status_code == 200
     data = resp.get_json()["data"]
     assert data["status"] == "scanned"
@@ -407,7 +424,7 @@ def test_monitor_scan_builds_baseline_then_alerts_on_score_change(monkeypatch):
 
     previous_notification_count = len(store["notifications"])
     tw_stock_route.trend_service = TWStockTrendService(FakeKlineService({"2330": _bars(144, start=100, step=3.0)}))
-    resp = client.post("/api/tw-stock/monitor/scan")
+    resp = client.post("/api/tw-stock/monitor/scan", headers=_auth_headers())
     assert resp.status_code == 200
     data = resp.get_json()["data"]
     assert data["alert_count"] >= 1
@@ -442,8 +459,8 @@ def test_monitor_scan_skips_disabled_config(monkeypatch):
     monkeypatch.setattr(tw_stock_route, "get_db_connection", lambda: _MonitorConn(store))
     client = _client(monkeypatch, {"2330": _bars(80, start=100, step=1.0)})
 
-    client.post("/api/tw-stock/monitor/config", json={"symbols": ["2330"], "enabled": False})
-    resp = client.post("/api/tw-stock/monitor/scan")
+    client.post("/api/tw-stock/monitor/config", headers=_auth_headers(), json={"symbols": ["2330"], "enabled": False})
+    resp = client.post("/api/tw-stock/monitor/scan", headers=_auth_headers())
 
     assert resp.status_code == 200
     assert resp.get_json()["data"]["status"] == "skipped"
@@ -456,8 +473,8 @@ def test_monitor_scan_all_writes_scan_log(monkeypatch):
     monkeypatch.setattr(tw_stock_route, "get_db_connection", lambda: _MonitorConn(store))
     client = _client(monkeypatch, {"2330": _bars(144, start=100, step=0.0)})
 
-    client.post("/api/tw-stock/monitor/config", json={"symbols": ["2330"], "enabled": True})
-    resp = client.post("/api/tw-stock/monitor/scan-all")
+    client.post("/api/tw-stock/monitor/config", headers=_auth_headers(), json={"symbols": ["2330"], "enabled": True})
+    resp = client.post("/api/tw-stock/monitor/scan-all", headers=_auth_headers())
 
     assert resp.status_code == 200
     data = resp.get_json()["data"]
@@ -527,4 +544,3 @@ def test_monitor_alert_webhook_sends_research_only_payload(monkeypatch):
     assert payload["symbol"] == "2330"
     assert payload["trend"]["score"] == 82.4
     assert payload["trading"]["orders_enabled"] is False
-

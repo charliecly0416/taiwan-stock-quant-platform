@@ -4,7 +4,7 @@
       <div>
         <h2>台股研究</h2>
         <div class="subline">
-          <span>进入页面先看今日 Top30/50 排名，再按需要查看交叉分析、图表和研究解释。</span>
+          <span>进入页面先看当前 asof 的 Top30/50 排名，再按需要查看交叉分析、图表和研究解释。</span>
         </div>
       </div>
       <div class="top-actions">
@@ -15,8 +15,14 @@
           @change="handleAutoRefreshChange"
         />
         <span class="refresh-status">{{ refreshStatusText }}</span>
+        <a-button @click="copyReadonlyStatusSummary">
+          <a-icon type="copy" /> 复制摘要
+        </a-button>
+        <a-button @click="downloadReadonlyStatusSummary">
+          <a-icon type="download" /> 导出摘要
+        </a-button>
         <a-button @click="openConfigDrawer">
-          <a-icon type="setting" /> 高级配置
+          <a-icon type="setting" /> 查看配置
         </a-button>
         <a-button @click="refreshAll" :loading="loading">
           <a-icon type="reload" /> 刷新
@@ -28,8 +34,21 @@
       class="research-boundary-alert"
       type="info"
       show-icon
-      message="本页面仅用于台股研究信号的人工复盘与历史验证，不连接券商，不提交真实订单，不构成投资建议。"
+      message="本页面仅用于台股研究信号的人工复盘与历史验证，不连接券商，不产生真实交易委托，不构成投资建议。"
     />
+
+    <div class="page-section-rail" data-testid="tw-stock-section-rail">
+      <span class="page-section-rail-label">定位</span>
+      <a-button
+        v-for="item in pageRailItems"
+        :key="item.id"
+        size="small"
+        :class="['page-section-rail-button', `rail-tone-${item.tone}`]"
+        @click="scrollToSection(item.id)"
+      >
+        {{ item.label }}
+      </a-button>
+    </div>
 
     <div class="summary-grid">
       <div class="metric-card">
@@ -54,6 +73,78 @@
       </div>
     </div>
 
+    <div class="data-freshness-overview" id="daov-section-freshness" data-testid="tw-stock-data-freshness-overview">
+      <div class="data-freshness-header">
+        <div>
+          <strong>数据链路状态</strong>
+          <span>{{ freshnessOverviewMessage }}</span>
+        </div>
+        <div class="data-freshness-actions">
+          <a-tag :color="freshnessOverviewStatusColor">{{ freshnessOverviewStatusText }}</a-tag>
+          <a-button
+            size="small"
+            :loading="loadingReadonlyOpsStatus || loadingDailyAutoUpdateStatus || loadingQlibHealth || loadingCurrentStrategyContext || loadingReadonlyStrategySnapshot || loadingAgentContext"
+            @click="refreshFreshnessOverview"
+          >
+            <a-icon type="reload" /> 刷新状态
+          </a-button>
+        </div>
+      </div>
+      <div class="data-freshness-track">
+        <div class="data-freshness-node">
+          <span>Raw / 行情</span>
+          <strong>{{ freshnessRawDateText }}</strong>
+          <small>{{ freshnessRawSourceText }}</small>
+        </div>
+        <div class="data-freshness-node" :class="{ lagging: freshnessAcceptedLagging }">
+          <span>qlib accepted latest</span>
+          <strong>{{ freshnessAcceptedDateText }}</strong>
+          <small>{{ freshnessAcceptedSourceText }}</small>
+        </div>
+        <div class="data-freshness-node" :class="{ lagging: freshnessSnapshotLagging }">
+          <span>readonly strategy snapshot latest</span>
+          <strong>{{ freshnessSnapshotDateText }}</strong>
+          <small>{{ freshnessSnapshotSourceText }}</small>
+        </div>
+        <div class="data-freshness-node" :class="{ lagging: freshnessAgentLagging }">
+          <span>Agent DailyAgentPromptArtifact latest</span>
+          <strong>{{ freshnessAgentDateText }}</strong>
+          <small>{{ freshnessAgentSourceText }}</small>
+        </div>
+      </div>
+      <div class="data-freshness-ops-grid">
+        <div class="data-freshness-ops-item">
+          <span>controlled signal latest</span>
+          <strong>{{ freshnessControlledSignalDateText }}</strong>
+          <small>{{ freshnessControlledSignalSourceText }}</small>
+        </div>
+        <div class="data-freshness-ops-item">
+          <span>latest natural cron job</span>
+          <strong>{{ readonlyOpsNaturalCronText }}</strong>
+          <small>{{ readonlyOpsNaturalCronDetailText }}</small>
+        </div>
+        <div class="data-freshness-ops-item">
+          <span>latest DAPR18 evidence job</span>
+          <strong>{{ readonlyOpsDapr18EvidenceText }}</strong>
+          <small>{{ readonlyOpsDapr18EvidenceDetailText }}</small>
+        </div>
+        <div class="data-freshness-ops-item">
+          <span>DAPR18 dry-run/publish flags</span>
+          <strong>{{ readonlyOpsDapr18FlagsText }}</strong>
+          <small>{{ readonlyOpsDapr18PointerText }}</small>
+        </div>
+      </div>
+      <div class="data-freshness-ops-hint">
+        <a-icon type="info-circle" />
+        <span><strong>blocker</strong> {{ readonlyOpsBlockerText }}</span>
+        <span><strong>next_action_hint</strong> {{ readonlyOpsNextActionHint }}</span>
+      </div>
+      <div class="data-freshness-footnote">
+        <a-icon type="safety-certificate" />
+        <span>只读展示；刷新状态只读取现有接口，不拉取数据、不改 latest、不连接券商。</span>
+      </div>
+    </div>
+
     <a-alert
       v-if="degradedNotice"
       class="monitor-degraded-alert"
@@ -63,156 +154,203 @@
     />
 
     <a-card
-      class="current-strategy-context-card"
+      id="daov-section-strategy"
+      class="strategy-workbench-overview-card"
       :bordered="false"
-      data-testid="current-strategy-context-card"
+      data-testid="strategy-workbench-overview-card"
     >
       <template slot="title">
         <div class="card-title-line">
-          <span>统一策略上下文</span>
+          <div class="workbench-title-block">
+            <span>策略总览</span>
+            <small>按当前只读 snapshot asof 查看信号、目标交易日、候选覆盖和模拟账户状态。</small>
+          </div>
           <div class="readonly-tags">
-            <a-tag color="blue">read-only</a-tag>
-            <a-tag :color="currentStrategyContextTagColor">{{ currentStrategyContextStatusText }}</a-tag>
+            <a-tag color="blue">只读研究</a-tag>
+            <a-tag :color="workbenchOverviewStatusColor">{{ workbenchOverviewStatusText }}</a-tag>
           </div>
         </div>
       </template>
-      <div class="current-context-toolbar">
-        <span>{{ currentStrategyContextBrief }}</span>
-        <a-button size="small" :loading="loadingCurrentStrategyContext" @click="loadCurrentStrategyContext">
-          <a-icon type="reload" /> 刷新统一口径
-        </a-button>
+      <div class="workbench-overview-toolbar">
+        <div class="workbench-status-copy">{{ workbenchOverviewStatusMessage }}</div>
+        <div class="workbench-overview-actions">
+          <a-button size="small" :loading="loadingCurrentStrategyContext" @click="loadCurrentStrategyContext">
+            <a-icon type="reload" /> 刷新策略口径
+          </a-button>
+          <a-button size="small" :loading="loadingPhaseYZProductization" @click="loadPhaseYZProductizationStatus">
+            <a-icon type="reload" /> 刷新模拟状态
+          </a-button>
+        </div>
       </div>
       <a-alert
         v-if="currentStrategyContextError"
-        class="current-context-alert"
+        class="workbench-overview-alert"
         type="warning"
         show-icon
         :message="currentStrategyContextError"
       />
       <a-alert
-        v-if="currentStrategyContextMismatchText"
-        class="current-context-alert"
-        type="info"
-        show-icon
-        :message="currentStrategyContextMismatchText"
-      />
-      <div class="current-context-grid">
-        <div>
-          <span>信号日期</span>
-          <strong>{{ currentContextSignalAsOf }}</strong>
-          <small>用于生成 {{ currentContextTargetDate }} 决策信息</small>
-        </div>
-        <div>
-          <span>默认模型</span>
-          <strong>{{ currentContextModelText }}</strong>
-          <small>{{ currentContextStrategyRule }}</small>
-        </div>
-        <div>
-          <span>LTR 排名</span>
-          <strong>{{ currentContextLTRCoverageText }}</strong>
-          <small>重排 qlib Top50，榜首 {{ currentContextLTRTopSymbol }}</small>
-        </div>
-        <div>
-          <span>Qlib 底座</span>
-          <strong>{{ currentContextQlibCoverageText }}</strong>
-          <small>Top50 与 Top150 同源输出</small>
-        </div>
-      </div>
-    </a-card>
-
-    <a-card
-      class="phase-yz-productization-card"
-      :bordered="false"
-      data-testid="phase-yz-productization-card"
-    >
-      <template slot="title">
-        <div class="card-title-line">
-          <span>YZ Clean E4 产品化</span>
-          <div class="readonly-tags">
-            <a-tag color="green">clean registry</a-tag>
-            <a-tag color="blue">next_open</a-tag>
-            <a-tag :color="phaseYZProductizationTagColor">{{ phaseYZProductizationStateText }}</a-tag>
-          </div>
-        </div>
-      </template>
-      <div class="phase-yz-toolbar">
-        <a-button size="small" :loading="loadingPhaseYZProductization" @click="loadPhaseYZProductizationStatus">
-          <a-icon type="reload" /> 刷新产品化状态
-        </a-button>
-        <a-button
-          size="small"
-          type="primary"
-          data-testid="phase-yz-paper-apply-disabled"
-          :disabled="phaseYZPaperApplyDisabled"
-        >
-          <a-icon type="pause-circle" /> {{ phaseYZPaperApplyText }}
-        </a-button>
-      </div>
-      <a-alert
         v-if="phaseYZProductizationError"
-        class="phase-yz-alert"
+        class="workbench-overview-alert"
         type="warning"
         show-icon
         :message="phaseYZProductizationError"
       />
       <a-alert
-        v-if="phaseYZProductizationPending"
-        class="phase-yz-alert"
+        v-if="currentStrategyContextMismatchText"
+        class="workbench-overview-alert"
         type="info"
         show-icon
-        data-testid="phase-yz-execution-price-pending"
-        :message="phaseYZExecutionPriceMessage"
+        :message="currentStrategyContextMismatchText"
       />
-      <div class="phase-yz-grid">
-        <div>
-          <span>信号日期</span>
-          <strong>{{ phaseYZSignalAsOf }}</strong>
-          <small>execution_price_mode: {{ phaseYZExecutionPriceMode }}</small>
+      <div class="workbench-selection-bar" data-testid="strategy-workbench-selection-controls">
+        <div class="workbench-selection-copy">
+          <span>当前查看口径</span>
+          <strong>{{ workbenchContextModeText }}</strong>
+          <small>{{ workbenchSelectionResultText }}</small>
         </div>
-        <div>
-          <span>生产模型</span>
-          <strong>{{ phaseYZModelNames }}</strong>
-          <small>只展示 Model A / Model B</small>
-        </div>
-        <div>
-          <span>生产策略</span>
-          <strong>{{ phaseYZStrategyNames }}</strong>
-          <small>{{ phaseYZSelectedStrategy }}</small>
-        </div>
-        <div>
-          <span>目标成交日</span>
-          <strong>{{ phaseYZTargetNextTradingDay }}</strong>
-          <small>{{ phaseYZBlockedReasonText }}</small>
+        <div class="workbench-selection-controls">
+          <label>
+            <span>模型</span>
+            <a-select
+              :value="workbenchSelectedModelId"
+              size="small"
+              style="width: 300px; max-width: 100%"
+              @change="handleWorkbenchModelSelect"
+            >
+              <a-select-option
+                v-for="item in workbenchModelOptions"
+                :key="item.model_id"
+                :value="item.model_id"
+              >
+                {{ item.display_name }}
+              </a-select-option>
+            </a-select>
+          </label>
+          <label>
+            <span>策略</span>
+            <a-select
+              :value="workbenchSelectedStrategyId"
+              size="small"
+              style="width: 260px; max-width: 100%"
+              @change="handleWorkbenchStrategySelect"
+            >
+              <a-select-option
+                v-for="item in workbenchStrategyOptions"
+                :key="item.strategy_id"
+                :value="item.strategy_id"
+              >
+                {{ item.display_name }}
+              </a-select-option>
+            </a-select>
+          </label>
+          <label>
+            <span>回放窗口</span>
+            <a-select
+              :value="readonlyReplayWindowSelectedKey"
+              size="small"
+              style="width: 300px; max-width: 100%"
+              @change="handleReadonlyReplayWindowSelect"
+            >
+              <a-select-option
+                v-for="item in readonlyReplayWindowOptions"
+                :key="item.window_key"
+                :value="item.window_key"
+              >
+                {{ item.display_label || item.window_key }}
+              </a-select-option>
+            </a-select>
+          </label>
         </div>
       </div>
+      <div class="workbench-overview-grid">
+        <div>
+          <span>信号日期</span>
+          <strong>{{ currentContextSignalAsOf }}</strong>
+          <small>目标交易日：{{ workbenchTargetTradingDay }}</small>
+        </div>
+        <div>
+          <span>模型与策略</span>
+          <strong>{{ workbenchModelDisplayText }}</strong>
+          <small>{{ workbenchStrategyDisplayText }}</small>
+        </div>
+        <div>
+          <span>候选覆盖</span>
+          <strong>{{ workbenchCandidateCoverageText }}</strong>
+          <small>Model A 榜首：{{ currentContextLTRTopSymbol }}</small>
+        </div>
+        <div>
+          <span>模拟账户</span>
+          <strong>{{ workbenchPaperApplyStatusText }}</strong>
+          <small>{{ workbenchPaperApplyReasonText }}</small>
+        </div>
+      </div>
+      <a-collapse class="workbench-technical-collapse" :bordered="false">
+        <a-collapse-panel key="strategy-overview-tech" header="查看技术详情">
+          <div class="workbench-technical-grid">
+            <span>base_model_id <strong>{{ workbenchBaseModelId }}</strong></span>
+            <span>treatment_model_id <strong>{{ workbenchTreatmentModelId }}</strong></span>
+            <span>strategy_rule <strong>{{ currentContextStrategyRule }}</strong></span>
+            <span>ranking_source <strong>{{ workbenchRankingSource }}</strong></span>
+            <span>candidate_boundary <strong>{{ workbenchCandidateBoundary }}</strong></span>
+            <span>execution_price_mode <strong>{{ phaseYZExecutionPriceMode }}</strong></span>
+            <span>current context status <strong>{{ currentStrategyContextStatusText }}</strong></span>
+            <span>productization state <strong>{{ phaseYZProductizationStateText }}</strong></span>
+          </div>
+        </a-collapse-panel>
+      </a-collapse>
     </a-card>
 
-    <readonly-strategy-snapshot-panel
-      :payload="readonlyStrategySnapshotPayload"
-      :error="readonlyStrategySnapshotError"
-      :loading="loadingReadonlyStrategySnapshot"
-      @refresh="loadReadonlyStrategySnapshot"
+    <section id="daov-section-snapshot" class="monitor-anchor-section">
+      <readonly-strategy-snapshot-panel
+        :payload="readonlyStrategySnapshotPayload"
+        :error="readonlyStrategySnapshotError"
+        :loading="loadingReadonlyStrategySnapshot"
+        @refresh="loadReadonlyStrategySnapshot"
+      />
+    </section>
+
+    <section id="daov-section-replay" class="monitor-anchor-section">
+      <readonly-replay-window-panel
+        :index-payload="readonlyReplayWindowIndexPayload"
+        :payload="readonlyReplayWindowPayload"
+        :index-error="readonlyReplayWindowIndexError"
+        :error="readonlyReplayWindowError"
+        :loading-index="loadingReadonlyReplayWindowIndex"
+        :loading-window="loadingReadonlyReplayWindow"
+        :active-model-id="currentStrategyContext.default_model_id"
+        :selected-key="readonlyReplayWindowSelectedKey"
+        @select-window="handleReadonlyReplayWindowSelect"
+        @refresh-index="loadReadonlyReplayWindowIndex"
+        @query="loadReadonlyReplayWindow"
+      />
+    </section>
+
+    <section class="monitor-anchor-section">
+      <paper-portfolio-panel
+        :phase-yz-status="phaseYZProductizationPayload"
+        @ask-agent="askAgentFromWorkbench"
+      />
+    </section>
+
+    <readonly-shadow-exposure-panel
+      :payload="readonlyShadowExposurePayload"
+      :error="readonlyShadowExposureError"
+      :loading="loadingReadonlyShadowExposure"
+      @refresh="loadReadonlyShadowExposure"
     />
 
-    <readonly-replay-window-panel
-      :index-payload="readonlyReplayWindowIndexPayload"
-      :payload="readonlyReplayWindowPayload"
-      :index-error="readonlyReplayWindowIndexError"
-      :error="readonlyReplayWindowError"
-      :loading-index="loadingReadonlyReplayWindowIndex"
-      :loading-window="loadingReadonlyReplayWindow"
-      :selected-key="readonlyReplayWindowSelectedKey"
-      @select-window="handleReadonlyReplayWindowSelect"
-      @refresh-index="loadReadonlyReplayWindowIndex"
-      @query="loadReadonlyReplayWindow"
+    <trading-agents-readonly-panel
+      :payload="tradingAgentsReadonlyPayload"
+      :error="tradingAgentsReadonlyError"
+      :loading="loadingTradingAgentsReadonly"
+      @refresh="loadTradingAgentsReadonlyAnalysis"
     />
 
-    <paper-portfolio-panel :phase-yz-status="phaseYZProductizationPayload" />
-
-    <a-card class="rank-tech-replay-card" :bordered="false" data-testid="rank-tech-portfolio-replay-readonly">
+    <a-card id="daov-section-research" class="rank-tech-replay-card" :bordered="false" data-testid="rank-tech-portfolio-replay-readonly">
       <template slot="title">
         <div class="card-title-line">
-          <span>今日复盘与历史模拟</span>
+        <span>今日复盘与历史模拟</span>
           <div class="readonly-tags">
             <a-tag color="blue">只读研究</a-tag>
             <a-tag color="green">不连接券商</a-tag>
@@ -258,7 +396,7 @@
             <strong>今天先看什么</strong>
             <a-tag :color="rankTechAccepted ? 'green' : 'orange'">{{ rankTechStatusText }}</a-tag>
           </div>
-          <div v-if="loadingRankTechCross" class="rank-tech-empty">正在读取今日复盘...</div>
+          <div v-if="loadingRankTechCross" class="rank-tech-empty">正在读取当前 asof 复盘...</div>
           <div v-else-if="rankTechPriorityItems.length" class="rank-tech-priority-list">
             <div v-for="item in rankTechPriorityItems" :key="`rank-tech-${item.symbol}`" class="rank-tech-priority-item">
               <div class="rank-tech-symbol-line">
@@ -274,7 +412,7 @@
               </div>
             </div>
           </div>
-          <div v-else class="rank-tech-empty">暂无可展示的今日复盘。</div>
+          <div v-else class="rank-tech-empty">暂无可展示的当前 asof 复盘。</div>
         </section>
         <section class="rank-tech-panel">
           <div class="rank-tech-panel-head">
@@ -291,7 +429,7 @@
               <small>{{ rankTechQualityBrief(item) }}</small>
             </div>
           </div>
-          <div v-else class="rank-tech-empty">等待今日复盘数据。</div>
+          <div v-else class="rank-tech-empty">等待当前 asof 复盘数据。</div>
         </section>
       </div>
 
@@ -334,7 +472,7 @@
 
       <section class="ltr-optional-sim-strategy" data-testid="ltr-optional-sim-strategy-panel">
         <div class="rank-tech-panel-head">
-          <strong>可选模拟策略</strong>
+          <strong>历史研究策略（当前 baseline 仅 Model A）</strong>
           <div>
             <a-tag color="blue">默认主策略</a-tag>
             <a-tag color="cyan">可选模拟</a-tag>
@@ -345,7 +483,7 @@
           class="rank-tech-alert"
           type="info"
           show-icon
-          :message="ltrOptionalSimBoundaryText"
+          :message="`Model B/LTR 仅保留为只读历史研究，不参与当前 Model-A-only baseline。${ltrOptionalSimBoundaryText}`"
         />
         <a-alert
           class="rank-tech-alert"
@@ -582,7 +720,7 @@
     <a-card class="qlib-option-c-card" :bordered="false">
       <template slot="title">
         <div class="card-title-line">
-          <span>今日研究排名</span>
+          <span>当前 asof 研究排名</span>
           <div class="readonly-tags">
             <a-tag color="blue">研究排序</a-tag>
             <a-tag color="green">非交易建议</a-tag>
@@ -601,8 +739,12 @@
           <a-icon type="rollback" /> 回到 latest
         </a-button>
       </div>
-      <a-collapse class="advanced-ops-collapse" :bordered="false">
-        <a-collapse-panel key="ops" header="高级信息与维护工具">
+      <a-collapse class="advanced-ops-collapse advanced-ops-collapse-contained" :bordered="false">
+        <a-collapse-panel key="ops" header="高级只读诊断">
+          <div class="advanced-ops-intro">
+            <strong>低频维护信息</strong>
+            <span>默认折叠；只用于排查数据状态、历史 run 和 dry-run 证据，不触发补数、发布或 latest 切换。</span>
+          </div>
       <div class="qlib-health-panel">
         <div class="qlib-health-header">
           <div>
@@ -640,8 +782,8 @@
       <div class="daily-auto-update-panel" data-testid="tw-stock-daily-auto-update-panel">
         <div class="daily-auto-update-header">
           <div>
-            <strong>每日自動更新狀態</strong>
-            <span class="muted">FinMind raw 與 Yahoo/Scrapling qlib 的只讀資料新鮮度。</span>
+            <strong>每日自動更新觀測</strong>
+            <span class="muted">DAPR18 no-publish / dry-run observation；只讀觀測 FinMind raw 與 Yahoo/Scrapling qlib 新鮮度。</span>
           </div>
           <a-button size="small" @click="loadDailyAutoUpdateStatus" :loading="loadingDailyAutoUpdateStatus">
             <a-icon type="reload" /> 更新狀態
@@ -656,7 +798,7 @@
           <a-tag color="purple">research_signal_not_order=true</a-tag>
         </div>
         <div class="daily-auto-update-grid">
-          <span>latest accepted asof <strong>{{ dailyAutoUpdateData.latest_asof || '-' }}</strong></span>
+          <span>qlib accepted latest asof <strong>{{ dailyAutoUpdateData.latest_asof || 'unknown' }}</strong></span>
           <span>latest status <strong>{{ dailyAutoUpdateData.latest_status || '-' }}</strong></span>
           <span>latest run_id <strong>{{ dailyAutoUpdateData.latest_run_id || '-' }}</strong></span>
           <span>pending asof <strong>{{ dailyAutoUpdateData.pending_asof || '-' }}</strong></span>
@@ -682,6 +824,11 @@
             <small>{{ dailyAutoUpdateCronExplainText }}</small>
           </div>
           <div class="daily-auto-update-source-card">
+            <span>publish gate</span>
+            <strong>no-publish / dry-run observation</strong>
+            <small>未见 TW_DAPR18_PUBLISH_* 授权证据时，不展示自动发布成功。</small>
+          </div>
+          <div class="daily-auto-update-source-card">
             <span>research boundary</span>
             <strong>{{ dailyAutoUpdateNoTradingText }}</strong>
             <small>只读狀態，不觸發資料拉取、產物切換或交易。</small>
@@ -692,7 +839,7 @@
           class="daily-auto-update-alert"
           type="warning"
           show-icon
-          message="FinMind raw 数据已更新，但 Yahoo/Scrapling qlib 复权数据尚未到目标日期。系统会继续按定时任务重试 pending asof。当前 latest 不更新是正确的保护行为。"
+          message="same-day data window wait：FinMind raw 数据已更新，但 Yahoo/Scrapling qlib 复权数据尚未到目标日期。系统会继续按定时任务重试 pending asof；当前 qlib accepted latest 不更新是保护状态，不是失败。"
         />
         <a-alert
           v-if="dailyAutoUpdateError"
@@ -762,7 +909,7 @@
             <a-button v-if="qlibOpsCanTrigger" type="primary" size="small" @click="triggerQlibOpsDryRun" :loading="runningQlibOpsDryRun">
               <a-icon type="play-circle" /> 運行 dry-run
             </a-button>
-            <a-tag v-else color="orange">Admin ops required</a-tag>
+            <a-tag v-else color="orange">{{ readonlyWorkbenchMode ? '前端只读，不手动运行 ops' : 'Admin ops required' }}</a-tag>
           </div>
         </div>
         <div class="qlib-ops-tags">
@@ -873,7 +1020,7 @@
               <a-icon type="eye" /> 加入觀察
             </a-button>
             <a-button size="small" data-testid="qlib-sim-draft" @click.stop="prefillSimDraftFromQlib(row)">
-              <a-icon type="wallet" /> 生成模拟草稿
+              <a-icon type="wallet" /> 模拟账户说明
             </a-button>
             <a-button
               size="small"
@@ -897,7 +1044,7 @@
           </div>
           <div class="qlib-watch-draft-actions">
             <a-button size="small" data-testid="qlib-watch-fill-config" :disabled="!qlibWatchDraft.length" @click="fillMonitorConfigFromQlibDraft">
-              <a-icon type="form" /> 填入監控配置
+              <a-icon type="form" /> 查看配置草稿
             </a-button>
             <a-button size="small" :disabled="!qlibWatchDraft.length" @click="clearQlibWatchDraft">
               <a-icon type="delete" /> 清空草稿
@@ -1066,14 +1213,14 @@
           </div>
         </a-collapse-panel>
       </a-collapse>
-      <div class="tw-stock-agent-panel">
+      <div id="daov-section-agent" class="tw-stock-agent-panel">
         <div class="agent-panel-header">
           <div>
-            <strong>台股研究助手</strong>
-            <span class="muted">只解释当前 qlib accepted latest、交叉分析与趋势上下文。</span>
+            <strong>策略解释助手</strong>
+            <span class="muted">基于 Agent DailyAgentPromptArtifact latest，解释候选、排名、模拟账户状态和数据新鲜度。</span>
           </div>
           <div class="readonly-tags">
-            <a-tag color="blue">research-only</a-tag>
+            <a-tag color="blue">只读解释</a-tag>
             <a-tag :color="agentModeColor">{{ agentModeText }}</a-tag>
             <a-tag v-if="agentBlocked" color="red">blocked</a-tag>
           </div>
@@ -1092,7 +1239,7 @@
             v-model="agentQuestion"
             :rows="2"
             :max-length="500"
-            placeholder="输入台股研究问题，例如：今天 top30 是哪些？"
+            placeholder="输入策略解释问题，例如：为什么模拟账户不能应用？"
             @pressEnter="handleAgentEnter"
           />
           <a-button type="primary" :loading="sendingAgentQuestion" @click="askTwStockAgent()">
@@ -1118,7 +1265,7 @@
           class="agent-state-alert"
           type="warning"
           show-icon
-          message="该问题已被研究边界阻断；本面板只展示研究解释。"
+          message="该问题已被研究边界阻断；本面板只展示策略解释。"
         />
         <div v-if="agentAnswer" class="agent-answer-box">
           <strong>回答</strong>
@@ -1137,10 +1284,10 @@
         <a-collapse v-if="agentResponse" class="agent-detail-collapse" :bordered="false">
           <a-collapse-panel key="agent-detail" header="查看回答来源与边界">
             <div class="agent-context-grid">
-              <span>数据日期 <strong>{{ agentQlibAsof }}</strong></span>
-              <span>上下文状态 <strong>{{ agentFreshnessStatus }}</strong></span>
-              <span>相关标的 <strong>{{ agentItems.length }}</strong></span>
-              <span>回答模式 <strong>{{ agentModeText }}</strong></span>
+              <span>signal_asof <strong>{{ agentSignalAsof }}</strong></span>
+              <span>target_date <strong>{{ agentTargetDate }}</strong></span>
+              <span>checksum <strong>{{ agentChecksumText }}</strong></span>
+              <span>状态 / 模式 <strong>{{ agentFreshnessStatus }} / {{ agentModeText }}</strong></span>
             </div>
             <div v-if="agentCitations.length" class="agent-citations">
               <strong>引用来源</strong>
@@ -1227,7 +1374,7 @@
             :disabled="!canPrefillSimDraftFromCross(row)"
             @click.stop="prefillSimDraftFromCross(row)"
           >
-            <a-icon type="wallet" /> 生成模拟草稿
+            <a-icon type="wallet" /> 模拟账户说明
           </a-button>
         </template>
       </a-table>
@@ -1254,15 +1401,16 @@
             <a-tag color="blue">只读</a-tag>
           </div>
           <div class="cross-review-form">
-            <a-select v-model="crossReviewForm.decision_status" size="small" style="width: 160px">
+            <a-select v-model="crossReviewForm.decision_status" size="small" style="width: 160px" :disabled="readonlyWorkbenchMode">
               <a-select-option value="pending">pending</a-select-option>
               <a-select-option value="watching">watching</a-select-option>
               <a-select-option value="reviewed">reviewed</a-select-option>
               <a-select-option value="ignored">ignored</a-select-option>
               <a-select-option value="data_issue">data_issue</a-select-option>
             </a-select>
-            <a-input v-model="crossReviewForm.user_note" size="small" placeholder="人工复盘备注" />
-            <a-button size="small" type="primary" :loading="savingCrossReview" @click="saveCrossAnalysisReview">保存复盘</a-button>
+            <a-input v-model="crossReviewForm.user_note" size="small" placeholder="人工复盘备注" :disabled="readonlyWorkbenchMode" />
+            <a-tag v-if="readonlyWorkbenchMode" color="blue">只读查看，不保存复盘</a-tag>
+            <a-button v-else size="small" type="primary" :loading="savingCrossReview" @click="saveCrossAnalysisReview">保存复盘</a-button>
             <a-button size="small" @click="openCrossAnalysisHistoricalSimulation" :loading="runningBacktest">查看资金曲线</a-button>
             <a-button size="small" type="primary" ghost :loading="crossBacktestValidation.loading" @click="runCrossHistoricalValidation">
               <a-icon type="experiment" /> 多策略验证
@@ -1297,7 +1445,7 @@
                 <strong>{{ formatSignedPercentFromNumber(crossBacktestValidation.best.maxDrawdown) }}</strong>
               </div>
               <div>
-                <span>今日模拟动作</span>
+                <span>当前 asof 模拟动作</span>
                 <strong>{{ crossBacktestValidation.actionLabel }}</strong>
               </div>
             </div>
@@ -1472,11 +1620,11 @@
       </a-col>
     </a-row>
 
-    <a-collapse class="monitor-tools-collapse" :bordered="false">
-      <a-collapse-panel key="monitor-tools" header="监控工具与提醒记录">
+    <a-collapse id="daov-section-maintenance" class="monitor-tools-collapse" :bordered="false">
+      <a-collapse-panel key="monitor-tools" header="高级维护工具与提醒记录（默认折叠，只读）">
         <div class="monitor-tools-actions">
-          <a-button size="small" @click="runScan" :loading="scanning">
-            <a-icon type="scan" /> 更新监控
+          <a-button size="small" @click="refreshMonitorReadonly" :loading="scanning">
+            <a-icon type="reload" /> 刷新监控状态
           </a-button>
         </div>
     <a-row :gutter="16" class="content-row">
@@ -1548,7 +1696,7 @@
           <a-tag :color="alertCategoryColor(row)">{{ alertCategory(row) }}</a-tag>
         </template>
         <template slot="decision_status" slot-scope="text, row">
-          <a-select :value="row.decision_status || 'pending'" size="small" style="width: 116px" @change="status => updateAlertStatus(row, status)">
+          <a-select :value="row.decision_status || 'pending'" size="small" style="width: 116px" :disabled="readonlyWorkbenchMode" @change="status => updateAlertStatus(row, status)">
             <a-select-option value="pending">pending</a-select-option>
             <a-select-option value="watch">watch</a-select-option>
             <a-select-option value="ignored">ignored</a-select-option>
@@ -1560,33 +1708,34 @@
       </a-collapse-panel>
     </a-collapse>
 
-    <a-drawer title="監控配置" :visible="configDrawerVisible" width="420" data-testid="monitor-config-drawer" @close="configDrawerVisible = false">
+    <a-drawer title="監控配置（只读）" :visible="configDrawerVisible" width="420" data-testid="monitor-config-drawer" @close="configDrawerVisible = false">
       <a-form layout="vertical">
         <a-form-item label="Name">
-          <a-input v-model="configForm.name" />
+          <a-input v-model="configForm.name" :disabled="readonlyWorkbenchMode" />
         </a-form-item>
         <a-form-item label="Symbols">
-          <a-textarea v-model="configForm.symbolsText" data-testid="monitor-config-symbols" :rows="4" />
+          <a-textarea v-model="configForm.symbolsText" data-testid="monitor-config-symbols" :rows="4" :disabled="readonlyWorkbenchMode" />
         </a-form-item>
         <a-form-item label="Limit bars">
-          <a-input-number v-model="configForm.limit_bars" :min="20" :max="500" style="width: 100%" />
+          <a-input-number v-model="configForm.limit_bars" :min="20" :max="500" style="width: 100%" :disabled="readonlyWorkbenchMode" />
         </a-form-item>
         <a-form-item label="Refresh interval sec">
-          <a-input-number v-model="configForm.refresh_interval_sec" :min="0" :max="86400" style="width: 100%" />
+          <a-input-number v-model="configForm.refresh_interval_sec" :min="0" :max="86400" style="width: 100%" :disabled="readonlyWorkbenchMode" />
         </a-form-item>
         <a-form-item label="Score change threshold">
-          <a-input-number v-model="configForm.score_change_threshold" :min="0" :max="100" style="width: 100%" />
+          <a-input-number v-model="configForm.score_change_threshold" :min="0" :max="100" style="width: 100%" :disabled="readonlyWorkbenchMode" />
         </a-form-item>
         <a-form-item label="Enabled">
-          <a-switch v-model="configForm.enabled" />
+          <a-switch v-model="configForm.enabled" :disabled="readonlyWorkbenchMode" />
         </a-form-item>
         <a-form-item label="Notes">
-          <a-textarea v-model="configForm.notes" :rows="3" />
+          <a-textarea v-model="configForm.notes" :rows="3" :disabled="readonlyWorkbenchMode" />
         </a-form-item>
       </a-form>
       <div class="drawer-actions">
-        <a-button @click="configDrawerVisible = false">取消</a-button>
-        <a-button type="primary" @click="saveConfig" :loading="savingConfig">保存</a-button>
+        <a-alert v-if="readonlyWorkbenchMode" type="info" show-icon message="当前策略工作台只读展示配置；不在前端保存监控配置。" />
+        <a-button @click="configDrawerVisible = false">关闭</a-button>
+        <a-button v-if="!readonlyWorkbenchMode" type="primary" @click="saveConfig" :loading="savingConfig">保存</a-button>
       </div>
     </a-drawer>
   </div>
@@ -1597,55 +1746,59 @@ import moment from 'moment'
 import ReadonlyStrategySnapshotPanel from './components/ReadonlyStrategySnapshotPanel.vue'
 import ReadonlyReplayWindowPanel from './components/ReadonlyReplayWindowPanel.vue'
 import PaperPortfolioPanel from './components/PaperPortfolioPanel.vue'
+import ReadonlyShadowExposurePanel from './components/ReadonlyShadowExposurePanel.vue'
+import TradingAgentsReadonlyPanel from './components/TradingAgentsReadonlyPanel.vue'
 import {
   getTwStockTrends,
   getTwStockLTRReadonlyExplanation,
   getTwStockReadonlyStrategySnapshot,
+  getTwStockReadonlyShadowExposure,
+  getTwStockTradingAgentsReadonlyAnalysisLatest,
   getTwStockPhaseYZProductizationStatus,
   getTwStockCurrentStrategyContext,
   getTwStockReadonlyReplayWindowIndex,
   getTwStockReadonlyReplayWindow,
   getTwStockLTROptionalSimStrategies,
   getTwStockMonitorConfig,
-  saveTwStockMonitorConfig,
   getTwStockAlerts,
-  updateTwStockAlert,
-  scanTwStockMonitor,
   getTwStockScanLogs,
   getTwStockHistory,
   getTwStockKline,
   getTwStockBacktestTemplates,
-  runTwStockReadonlyBacktest,
   getLatestQlibOptionCSignals,
   getQlibOptionCHealth,
   getQlibOptionCRuns,
   getQlibOptionCRunDetail,
   getQlibOptionCRankChanges,
-  triggerQlibOptionCDryRun,
   getQlibOptionCJob,
   getQlibOptionCJobLog,
   getQlibOptionCLatestJob,
   getTwStockDailyAutoUpdateStatus,
+  getTwStockReadonlyOpsStatus,
   getQlibOptionCScheduler,
   getTwStockCrossAnalysisLatest,
   getTwStockCrossAnalysisSymbol,
   getTwStockRankTechCrossLatest,
   getTwStockObservationReplay,
-  runTwStockPortfolioReplay,
   getTwStockCrossAnalysisReviews,
-  saveTwStockCrossAnalysisReview,
   getTwStockAgentContext,
-  chatTwStockAgent,
+  simpleChatTwStockAgent,
   getTwStockSimAccounts,
   getTwStockSimTrades
-} from '@/api/tw-stock'
+} from '@/api/tw-stock-readonly'
+import {
+  runTwStockReadonlyBacktest,
+  runTwStockPortfolioReplay
+} from '@/api/tw-stock-action'
 
 export default {
   name: 'TWStockMonitor',
   components: {
     ReadonlyStrategySnapshotPanel,
     ReadonlyReplayWindowPanel,
-    PaperPortfolioPanel
+    PaperPortfolioPanel,
+    ReadonlyShadowExposurePanel,
+    TradingAgentsReadonlyPanel
   },
   data () {
     return {
@@ -1663,10 +1816,13 @@ export default {
       runningQlibOpsDryRun: false,
       loadingQlibOpsLog: false,
       loadingDailyAutoUpdateStatus: false,
+      loadingReadonlyOpsStatus: false,
       loadingCrossAnalysis: false,
       loadingCrossAnalysisDetail: false,
       loadingRankTechCross: false,
       loadingReadonlyStrategySnapshot: false,
+      loadingReadonlyShadowExposure: false,
+      loadingTradingAgentsReadonly: false,
       loadingCurrentStrategyContext: false,
       loadingPhaseYZProductization: false,
       loadingReadonlyReplayWindowIndex: false,
@@ -1734,6 +1890,8 @@ export default {
       qlibOpsError: '',
       dailyAutoUpdateStatus: null,
       dailyAutoUpdateError: '',
+      readonlyOpsStatus: null,
+      readonlyOpsStatusError: '',
       qlibOpsForm: {
         asof: moment('2026-06-01', 'YYYY-MM-DD')
       },
@@ -1758,6 +1916,10 @@ export default {
       rankTechLatestError: '',
       readonlyStrategySnapshotPayload: null,
       readonlyStrategySnapshotError: '',
+      readonlyShadowExposurePayload: null,
+      readonlyShadowExposureError: '',
+      tradingAgentsReadonlyPayload: null,
+      tradingAgentsReadonlyError: '',
       currentStrategyContextPayload: null,
       currentStrategyContextError: '',
       phaseYZProductizationPayload: null,
@@ -1786,7 +1948,7 @@ export default {
       agentResponse: null,
       agentError: '',
       agentSuggestedQuestions: [
-        '今天 top30 是哪些？',
+        '当前 asof top30 是哪些？',
         '当前数据新鲜度和口径是什么？'
       ],
       configDrawerVisible: false,
@@ -1866,6 +2028,20 @@ export default {
     }
   },
   computed: {
+    readonlyWorkbenchMode () {
+      return true
+    },
+    pageRailItems () {
+      return [
+        { id: 'daov-section-freshness', label: '状态', tone: 'status' },
+        { id: 'daov-section-strategy', label: '策略', tone: 'primary' },
+        { id: 'daov-section-snapshot', label: '候选', tone: 'primary' },
+        { id: 'daov-section-replay', label: '回放', tone: 'primary' },
+        { id: 'daov-section-research', label: '排名', tone: 'research' },
+        { id: 'daov-section-agent', label: 'Agent', tone: 'agent' },
+        { id: 'daov-section-maintenance', label: '诊断', tone: 'muted' }
+      ]
+    },
     currentStrategyContext () {
       return (this.currentStrategyContextPayload && this.currentStrategyContextPayload.context) || {}
     },
@@ -1890,8 +2066,8 @@ export default {
       return this.currentStrategyAsofAudit.status === 'pass' ? 'green' : 'orange'
     },
     currentStrategyContextBrief () {
-      if (!this.currentStrategyContextPayload) return '统一读取 E4 Qlib 与正交 LTR 产物，供策略快照、决策和回放共用。'
-      return `当前以 ${this.currentContextSignalAsOf} 信号生成 ${this.currentContextTargetDate} 的只读策略信息。`
+      if (!this.currentStrategyContextPayload) return '统一读取 Model A（E4 Qlib）信号，供候选观察、策略快照和只读回放共用。'
+      return `当前只读 strategy snapshot latest asof ${this.freshnessSnapshotDateText}，目标交易日 ${this.currentContextTargetDate}。`
     },
     currentStrategyContextMismatchText () {
       const audit = this.currentStrategyAsofAudit
@@ -1915,7 +2091,10 @@ export default {
       return this.currentStrategyContext.strategy_rule || '-'
     },
     currentContextLTRCoverageText () {
-      const rows = Array.isArray(this.currentStrategyRankings.ltr_top50) ? this.currentStrategyRankings.ltr_top50 : []
+      return '未启用'
+    },
+    currentContextSnapshotCoverageText () {
+      const rows = Array.isArray(this.currentStrategyRankings.qlib_top50) ? this.currentStrategyRankings.qlib_top50 : []
       return `${rows.length}/50`
     },
     currentContextQlibCoverageText () {
@@ -1924,8 +2103,46 @@ export default {
       return `${top50}/50 · ${top150}/150`
     },
     currentContextLTRTopSymbol () {
-      const rows = Array.isArray(this.currentStrategyRankings.ltr_top10) ? this.currentStrategyRankings.ltr_top10 : []
-      return rows.length ? (rows[0].instrument || rows[0].symbol || '-') : '-'
+      const qlibRows = Array.isArray(this.currentStrategyRankings.qlib_top50) ? this.currentStrategyRankings.qlib_top50 : []
+      return qlibRows.length ? (qlibRows[0].instrument || qlibRows[0].symbol || '-') : '-'
+    },
+    currentContextMode () {
+      return this.currentStrategyContext.context_mode || 'model_a_only'
+    },
+    workbenchContextModeText () {
+      if (this.currentContextMode === 'model_a_only') return 'Model-A-only 候选模式'
+      if (this.currentContextMode === 'candidate_only_snapshot') return 'Model-A-only 候选快照'
+      return '历史 LTR 参考模式'
+    },
+    workbenchModelOptions () {
+      const map = new Map()
+      const add = (id, label) => {
+        if (!id || map.has(id)) return
+        map.set(id, { model_id: id, display_name: label || this.shortModelLabel(id) })
+      }
+      add(this.currentStrategyContext.default_model_id, this.shortModelLabel(this.currentStrategyContext.default_model_id))
+      return Array.from(map.values())
+    },
+    workbenchSelectedModelId () {
+      const preset = this.readonlyReplayWindowSelectedPreset || {}
+      return preset.model_id || this.currentStrategyContext.default_model_id || ''
+    },
+    workbenchStrategyOptions () {
+      const map = new Map()
+      const add = (id, label) => {
+        if (!id || map.has(id)) return
+        map.set(id, { strategy_id: id, display_name: label || this.strategyDisplayName(id) })
+      }
+      add(this.currentContextStrategyRule, this.strategyDisplayName(this.currentContextStrategyRule))
+      return Array.from(map.values())
+    },
+    workbenchSelectedStrategyId () {
+      return this.currentContextStrategyRule
+    },
+    workbenchSelectionResultText () {
+      const optional = this.ltrOptionalSimSelectedStrategy || {}
+      const optionalReturn = optional.metrics && optional.metrics.fee_tax_adjusted_net_return != null ? this.formatReplayPercent(optional.metrics.fee_tax_adjusted_net_return) : '-'
+      return `回放净收益 ${this.readonlyReplayWindowNetReturnText}；可选策略历史模拟 ${optionalReturn}。`
     },
     phaseYZProductizationPending () {
       const payload = this.phaseYZProductizationPayload || {}
@@ -1946,7 +2163,7 @@ export default {
     },
     phaseYZModelNames () {
       const models = (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.models) || []
-      return models.map(item => item.model_id).join(' / ') || 'e4_frozen_qlib_2018_2022 / e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025'
+      return (models[0] && models[0].model_id) || 'e4_frozen_qlib_2018_2022 (Model A)'
     },
     phaseYZStrategyNames () {
       const strategies = (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.production_strategies) || []
@@ -1955,6 +2172,64 @@ export default {
     phaseYZSelectedStrategy () { return (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.selected_strategy_rule_id) || 'top50_exit_one_worst_sell' },
     phaseYZPaperApplyText () { return this.phaseYZPaperApplyDisabled ? '等待 next_open 成交价' : '可应用到模拟账户' },
     phaseYZBlockedReasonText () { return (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.paper_apply_blocked_reason) || '-' },
+    workbenchOverviewStatusText () {
+      if (this.currentStrategyContextError || this.phaseYZProductizationError) return '需复核'
+      if (!this.currentStrategyContextPayload && !this.phaseYZProductizationPayload) return '待读取'
+      return this.phaseYZPaperApplyDisabled ? '等待开盘价' : '可用于模拟账户'
+    },
+    workbenchOverviewStatusColor () {
+      if (this.currentStrategyContextError || this.phaseYZProductizationError) return 'red'
+      if (!this.currentStrategyContextPayload && !this.phaseYZProductizationPayload) return 'default'
+      return this.phaseYZPaperApplyDisabled ? 'orange' : 'green'
+    },
+    workbenchTargetTradingDay () {
+      return this.phaseYZTargetNextTradingDay !== '-' ? this.phaseYZTargetNextTradingDay : this.currentContextTargetDate
+    },
+    workbenchOverviewStatusMessage () {
+      if (this.currentStrategyContextError) return this.currentStrategyContextError
+      if (this.phaseYZProductizationError) return this.phaseYZProductizationError
+      if (this.phaseYZPaperApplyDisabled) return '等待目标交易日开盘价，暂不能应用到模拟账户。'
+      return `只读策略信息已就绪，snapshot asof ${this.freshnessSnapshotDateText}，可用于人工复盘和模拟账户流程。`
+    },
+    workbenchBaseModelId () {
+      const models = (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.models) || []
+      return (models[0] && models[0].model_id) || this.currentStrategyContext.default_model_id || '-'
+    },
+    workbenchTreatmentModelId () {
+      return '- (Model B 仅历史参考)'
+    },
+    workbenchModelDisplayText () {
+      const text = this.currentContextModelText || ''
+      if (!text || text === '-') return 'E4 Qlib Model A'
+      return text.toLowerCase().includes('e4_frozen_qlib') ? 'E4 Qlib Model A' : text
+    },
+    workbenchStrategyDisplayText () {
+      const rule = this.currentContextStrategyRule || this.phaseYZSelectedStrategy || ''
+      if (rule === 'candidate_only_no_strategy_replay') return '候选快照，无同日策略回放'
+      if (rule === 'top50_exit_one_worst_sell') return '跌出 Top50 后最多替换一支'
+      return rule || '-'
+    },
+    workbenchCandidateCoverageText () {
+      if (this.currentContextMode === 'candidate_only_snapshot') return `Model A Snapshot ${this.currentContextSnapshotCoverageText}`
+      return `Model A Qlib ${this.currentContextQlibCoverageText}`
+    },
+    workbenchPaperApplyStatusText () {
+      return this.phaseYZPaperApplyDisabled ? '暂不能应用' : '可应用'
+    },
+    workbenchPaperApplyReasonText () {
+      if (!this.phaseYZPaperApplyDisabled) return '仅影响模拟账户，不连接券商。'
+      const reason = this.phaseYZBlockedReasonText
+      if (!reason || reason === '-' || reason === 'execution_price_unavailable' || reason === 'execution_price_pending' || reason === 'next_open_unavailable') {
+        return '等待目标交易日开盘价'
+      }
+      return reason
+    },
+    workbenchRankingSource () {
+      return this.currentStrategyContext.ranking_source || '-'
+    },
+    workbenchCandidateBoundary () {
+      return this.currentStrategyContext.candidate_boundary || '-'
+    },
 
     unreadCount () {
       return this.alertItems.filter(item => !item.is_read).length
@@ -2163,27 +2438,113 @@ export default {
     dailyAutoUpdateData () {
       return this.dailyAutoUpdateStatus || {}
     },
+    readonlyOpsData () {
+      return this.readonlyOpsStatus || {}
+    },
+    readonlyOpsProviderRawLatest () {
+      return this.readonlyOpsData.provider_raw_latest || {}
+    },
+    readonlyOpsQlibAcceptedLatest () {
+      return this.readonlyOpsData.qlib_accepted_latest || {}
+    },
+    readonlyOpsControlledSignalLatest () {
+      return this.readonlyOpsData.controlled_signal_latest || {}
+    },
+    readonlyOpsSnapshotLatest () {
+      return this.readonlyOpsData.readonly_strategy_snapshot_latest || {}
+    },
+    readonlyOpsAgentPromptLatest () {
+      return this.readonlyOpsData.agent_prompt_latest || {}
+    },
+    readonlyOpsNaturalCronJob () {
+      return this.readonlyOpsData.latest_natural_cron_job || {}
+    },
+    readonlyOpsDapr18EvidenceJob () {
+      return this.readonlyOpsData.latest_dapr18_evidence_job || {}
+    },
+    readonlyOpsDapr18Controls () {
+      return this.readonlyOpsData.dapr18_controls || {}
+    },
+    readonlyOpsProtectedPointers () {
+      return this.readonlyOpsData.protected_pointers || {}
+    },
+    readonlyOpsNaturalCronText () {
+      const job = this.readonlyOpsNaturalCronJob
+      const status = job.status || job.daily_chain_state || this.dailyAutoUpdateData.last_job_status || 'no-job'
+      const asof = job.asof || this.dailyAutoUpdateData.pending_asof || this.dailyAutoUpdateData.latest_asof || '-'
+      return `${status} · asof ${asof}`
+    },
+    readonlyOpsNaturalCronDetailText () {
+      const job = this.readonlyOpsNaturalCronJob
+      const jobId = job.job_id || '-'
+      const state = job.daily_chain_state || '-'
+      return `job_id=${jobId} / chain=${state}`
+    },
+    readonlyOpsDapr18EvidenceText () {
+      const job = this.readonlyOpsDapr18EvidenceJob
+      const status = job.dapr18_status || job.readiness_state || job.job_status || 'missing'
+      const asof = job.asof || '-'
+      return `${status} · asof ${asof}`
+    },
+    readonlyOpsDapr18EvidenceDetailText () {
+      const job = this.readonlyOpsDapr18EvidenceJob
+      return `job_id=${job.job_id || '-'} / evidence_dir=${job.evidence_dir || '-'}`
+    },
+    readonlyOpsDapr18FlagsText () {
+      const controls = this.readonlyOpsDapr18Controls
+      const dryRun = controls.dry_run === true ? 'dry-run on' : controls.dry_run === false ? 'dry-run off' : 'dry-run unknown'
+      const publishFlags = [
+        controls.publish_controlled_signal_latest,
+        controls.publish_readonly_snapshot_latest,
+        controls.publish_agent_prompt_latest
+      ]
+      const publishAllOff = publishFlags.every(value => value === false)
+      const publishAnyOn = publishFlags.some(value => value === true)
+      const publish = publishAllOff ? 'publish off' : publishAnyOn ? 'publish partially on' : 'publish unknown'
+      return `${dryRun} / ${publish}`
+    },
+    readonlyOpsDapr18PointerText () {
+      const controls = this.readonlyOpsDapr18Controls
+      const protectedPointers = this.readonlyOpsProtectedPointers
+      return `latest_pointer_write_performed=${String(controls.latest_pointer_write_performed === true)} / protected_pointers_all_unchanged=${String(protectedPointers.all_unchanged)}`
+    },
+    readonlyOpsBlockerText () {
+      const blocker = (this.readonlyOpsNaturalCronJob.blocker || {})
+      const status = blocker.status || this.readonlyOpsDapr18EvidenceJob.readiness_state || this.readonlyOpsNaturalCronJob.daily_chain_state || '-'
+      const reason = blocker.reason || (Array.isArray(blocker.blockers) && blocker.blockers.length ? blocker.blockers.join(', ') : '')
+      return reason ? `${status}: ${reason}` : status
+    },
+    readonlyOpsNextActionHint () {
+      return this.readonlyOpsData.next_action_hint || this.dailyAutoUpdateData.next_retry_hint || '当前只读状态可查看；无需从前端执行写入动作。'
+    },
     dailyAutoUpdateFreshWait () {
-      return this.dailyAutoUpdateData.fresh_data_wait === true
+      const status = this.readonlyOpsNaturalCronJob.status || this.readonlyOpsNaturalCronJob.daily_chain_state
+      return this.dailyAutoUpdateData.fresh_data_wait === true || status === 'today_data_window_wait' || status === 'fresh_data_wait'
     },
     dailyAutoUpdateWarnings () {
       const warnings = this.dailyAutoUpdateData.warnings
-      return Array.isArray(warnings) ? warnings : []
+      const readonlyWarnings = this.readonlyOpsData.warnings
+      return Array.from(new Set([]
+        .concat(Array.isArray(readonlyWarnings) ? readonlyWarnings : [])
+        .concat(Array.isArray(warnings) ? warnings : [])
+        .filter(Boolean)))
     },
     dailyAutoUpdateTradingFlags () {
-      return this.dailyAutoUpdateData.trading || {}
+      return this.readonlyOpsData.trading || this.dailyAutoUpdateData.trading || {}
     },
     dailyAutoUpdateStatusColor () {
-      const status = this.dailyAutoUpdateData.last_job_status || this.dailyAutoUpdateData.latest_status
+      const status = this.readonlyOpsNaturalCronJob.status || this.readonlyOpsNaturalCronJob.daily_chain_state || this.dailyAutoUpdateData.last_job_status || this.dailyAutoUpdateData.latest_status
       if (status === 'daily_auto_update_passed' || status === 'already_up_to_date' || status === 'accepted') return 'green'
-      if (status === 'fresh_data_wait') return 'orange'
+      if (status === 'fresh_data_wait' || status === 'today_data_window_wait') return 'orange'
       if (status === 'provider_publish_failed' || status === 'accepted_latest_failed') return 'red'
       return 'default'
     },
     dailyAutoUpdateCronHintText () {
+      if (this.readonlyOpsNaturalCronJob.job_id) return 'natural cron evidence'
       return this.dailyAutoUpdateData.cron_installed_hint ? 'auto schedule hint detected' : 'no schedule hint'
     },
     dailyAutoUpdateCronExplainText () {
+      if (this.readonlyOpsNaturalCronJob.job_id) return '最近自然 cron job 来自 DAOV1 readonly-status；只展示 evidence，不手动运行。'
       return this.dailyAutoUpdateData.cron_installed_hint
         ? '检测到自动更新计划配置或日志，系统会继续按配置重试。'
         : '未检测到自动更新计划配置或日志，请检查 cron/systemd 安装。'
@@ -2191,6 +2552,131 @@ export default {
     dailyAutoUpdateNoTradingText () {
       const flags = this.dailyAutoUpdateTradingFlags
       return `orders_enabled=${String(flags.orders_enabled === true)} / connects_to_broker=${String(flags.connects_to_broker === true)} / research_signal_not_order=${String(flags.research_signal_not_order === true)}`
+    },
+    freshnessRawDateText () {
+      const raw = this.readonlyOpsProviderRawLatest
+      if (raw.source_max_date) return raw.source_max_date
+      if (raw.asof) return raw.asof
+      const data = this.dailyAutoUpdateData || {}
+      if (data.raw_latest_asof) return data.raw_latest_asof
+      if (data.provider_raw_latest_asof) return data.provider_raw_latest_asof
+      if (data.yahoo_date_max) return data.yahoo_date_max
+      if (data.finmind_latest_asof) return data.finmind_latest_asof
+      const rawMax = this.crossFreshnessQuant && this.crossFreshnessQuant.latest_date_max
+      if (rawMax) return rawMax
+      const healthData = this.qlibHealth && this.qlibHealth.dataAvailability
+      if (healthData && (healthData.latest_date_max || healthData.raw_latest_asof)) return healthData.latest_date_max || healthData.raw_latest_asof
+      if (this.rankingRawDateText && this.rankingRawDateText !== '-') {
+        const parts = String(this.rankingRawDateText).split('~').map(item => item.trim()).filter(Boolean)
+        return parts.length ? parts[parts.length - 1] : this.rankingRawDateText
+      }
+      return 'unknown'
+    },
+    freshnessRawSourceText () {
+      const raw = this.readonlyOpsProviderRawLatest
+      if (raw.source || raw.raw_status) return `${raw.source || 'provider/raw evidence'} · ${raw.raw_status || 'readonly'}`
+      const data = this.dailyAutoUpdateData || {}
+      if (data.raw_latest_asof || data.provider_raw_latest_asof || data.yahoo_date_max || data.finmind_latest_asof) return 'provider/raw evidence'
+      if (this.crossFreshnessQuant && this.crossFreshnessQuant.source) return this.crossFreshnessQuant.source
+      const healthData = this.qlibHealth && this.qlibHealth.dataAvailability
+      if (healthData && (healthData.latest_date_max || healthData.raw_latest_asof)) return 'qlib health raw/trading data'
+      if (this.rankingRawDateText && this.rankingRawDateText !== '-') return '本地日线行情'
+      return 'unknown provider/raw latest'
+    },
+    freshnessAcceptedDateText () {
+      return this.readonlyOpsQlibAcceptedLatest.asof || this.dailyAutoUpdateData.latest_asof || (this.qlibPayload && this.qlibPayload.asof) || (this.qlibHealthLatest && this.qlibHealthLatest.asof) || 'unknown'
+    },
+    freshnessAcceptedSourceText () {
+      const accepted = this.readonlyOpsQlibAcceptedLatest
+      const status = accepted.status || this.dailyAutoUpdateData.latest_status || (this.qlibPayload && this.qlibPayload.status) || this.qlibHealthStatusText || 'unknown'
+      const run = accepted.run_id || this.dailyAutoUpdateData.latest_run_id || (this.qlibHealthLatest && this.qlibHealthLatest.run_id) || ''
+      if (accepted.asof) return run ? `${status} · ${run}` : status
+      if (this.dailyAutoUpdateData.latest_asof) return run ? `${status} · ${run}` : status
+      if (this.qlibPayload && this.qlibPayload.asof) return run ? `qlib signal payload · ${run}` : 'qlib signal payload'
+      if (this.qlibHealthLatest && this.qlibHealthLatest.asof) return run ? `qlib health fallback · ${run}` : 'qlib health fallback'
+      return 'unknown qlib accepted latest'
+    },
+    freshnessControlledSignalDateText () {
+      const controlled = this.readonlyOpsControlledSignalLatest
+      return controlled.signal_asof || controlled.asof || 'unknown'
+    },
+    freshnessControlledSignalSourceText () {
+      const controlled = this.readonlyOpsControlledSignalLatest
+      if (controlled.run_id || controlled.evidence_path) return `run_id=${controlled.run_id || '-'} / evidence_path=${controlled.evidence_path || '-'}`
+      return 'unknown controlled signal latest'
+    },
+    freshnessSnapshotDateText () {
+      const readonlyLatest = this.readonlyOpsSnapshotLatest
+      if (readonlyLatest.signal_asof || readonlyLatest.target_date) return readonlyLatest.signal_asof || readonlyLatest.target_date
+      const snapshot = this.readonlyStrategySnapshot || {}
+      const manifest = this.readonlyStrategyManifest || {}
+      const context = this.currentStrategyContext || {}
+      const source = this.currentStrategyContextPayload || {}
+      return snapshot.signal_asof || snapshot.asof || manifest.signal_asof || manifest.asof || context.snapshot_signal_asof || context.readonly_snapshot_asof || source.snapshot_asof || source.signal_asof || (this.currentContextSignalAsOf !== '-' ? this.currentContextSignalAsOf : '') || 'unknown'
+    },
+    freshnessSnapshotSourceText () {
+      const readonlyLatest = this.readonlyOpsSnapshotLatest
+      if (readonlyLatest.evidence_path || readonlyLatest.checksum) return `readonly-status · ${readonlyLatest.evidence_path || readonlyLatest.checksum}`
+      const snapshot = this.readonlyStrategySnapshot || {}
+      const manifest = this.readonlyStrategyManifest || {}
+      if (snapshot.signal_asof || snapshot.asof || manifest.signal_asof || manifest.asof) return '候选名单/只读策略快照'
+      if (this.currentContextSignalAsOf !== '-') return 'derived/fallback from current-strategy-context'
+      return 'unknown readonly snapshot latest'
+    },
+    freshnessAgentDateText () {
+      const agentLatest = this.readonlyOpsAgentPromptLatest
+      if (agentLatest.signal_asof || agentLatest.target_date) return agentLatest.signal_asof || agentLatest.target_date
+      return this.agentSignalAsof && this.agentSignalAsof !== '-' ? this.agentSignalAsof : 'unknown'
+    },
+    freshnessAgentSourceText () {
+      const agentLatest = this.readonlyOpsAgentPromptLatest
+      if (agentLatest.evidence_path || agentLatest.checksum) return `readonly-status · ${agentLatest.evidence_path || agentLatest.checksum}`
+      if (this.agentResponseDigest.signal_asof || this.agentResponseDigest.qlib_asof) return 'simple-chat context_digest'
+      if (this.agentContextQlib.asof) return 'Agent prompt context'
+      if (this.crossAnalysisQlib && this.crossAnalysisQlib.asof) return 'derived/fallback from cross-analysis'
+      return 'unknown Agent prompt latest'
+    },
+    freshnessAcceptedLagging () {
+      return this.dateLooksAhead(this.freshnessRawDateText, this.freshnessAcceptedDateText)
+    },
+    freshnessSnapshotLagging () {
+      return this.dateLooksAhead(this.freshnessAcceptedDateText, this.freshnessSnapshotDateText)
+    },
+    freshnessAgentLagging () {
+      return this.dateLooksAhead(this.freshnessAcceptedDateText, this.freshnessAgentDateText)
+    },
+    freshnessAnyLagging () {
+      return this.freshnessAcceptedLagging || this.freshnessSnapshotLagging || this.freshnessAgentLagging
+    },
+    freshnessOverviewStatusText () {
+      if (this.readonlyOpsStatusError || this.dailyAutoUpdateError || this.qlibHealthError || this.currentStrategyContextError || this.readonlyStrategySnapshotError || this.agentContextError) return '需复核'
+      if (this.readonlyOpsData.status === 'readonly_status_available' && (this.dailyAutoUpdateFreshWait || this.readonlyOpsBlockerText !== '-')) return '等待或阻塞'
+      if (this.qlibHealthFreshness && this.qlibHealthFreshness.stale) return '策略待推进'
+      if (this.freshnessAnyLagging) return '日期不一致'
+      if (this.freshnessAcceptedDateText === 'unknown' && this.freshnessRawDateText === 'unknown') return 'degraded'
+      return '链路一致'
+    },
+    freshnessOverviewStatusColor () {
+      if (this.freshnessOverviewStatusText === '链路一致') return 'green'
+      if (this.freshnessOverviewStatusText === 'degraded') return 'default'
+      if (this.freshnessOverviewStatusText === '需复核') return 'red'
+      return 'orange'
+    },
+    freshnessOverviewMessage () {
+      if (this.readonlyOpsStatusError) return this.readonlyOpsStatusError
+      if (this.dailyAutoUpdateError) return this.dailyAutoUpdateError
+      if (this.qlibHealthError) return this.qlibHealthError
+      if (this.readonlyOpsData.status === 'readonly_status_available') return this.readonlyOpsNextActionHint
+      if (this.freshnessAcceptedLagging) {
+        return `provider/raw latest 已到 ${this.freshnessRawDateText}，qlib accepted latest 仍为 ${this.freshnessAcceptedDateText}；等待桥接验证通过后才会推进。`
+      }
+      if (this.freshnessSnapshotLagging || this.freshnessAgentLagging) {
+        return `qlib accepted latest 为 ${this.freshnessAcceptedDateText}，readonly snapshot 或 Agent prompt latest 尚未对齐。`
+      }
+      if (this.qlibHealthFreshness && this.qlibHealthFreshness.stale) {
+        return `qlib accepted latest 已标记 stale：${this.qlibHealthFreshness.stale_reason || 'asof_age_gt_threshold'}。`
+      }
+      return `首屏使用 readonly snapshot latest ${this.freshnessSnapshotDateText}；qlib accepted latest ${this.freshnessAcceptedDateText} 与 Agent prompt latest ${this.freshnessAgentDateText} 分开展示。`
     },
     qlibOpsStatusColor () {
       const status = this.qlibOpsJob && this.qlibOpsJob.status
@@ -2210,7 +2696,7 @@ export default {
     qlibSchedulerStatusColor () {
       return this.qlibScheduler && this.qlibScheduler.enabled === true ? 'gold' : 'default'
     },
-    qlibOpsCanTrigger () {
+    qlibOpsPermissionAllowed () {
       const user = this.readLocalJson('User-Info') || {}
       const role = user.role && typeof user.role === 'object' ? user.role : { id: user.role }
       const roleId = role.id || user.role || user.role_id || user.roleId
@@ -2219,6 +2705,9 @@ export default {
         .concat(Array.isArray(role.permissions) ? role.permissions : [])
         .concat(Array.isArray(role.permissionList) ? role.permissionList : [])
       return roleId === 'admin' || permissions.includes('tw_stock_qlib_ops') || permissions.includes('tw_stock_ops')
+    },
+    qlibOpsCanTrigger () {
+      return !this.readonlyWorkbenchMode && this.qlibOpsPermissionAllowed
     },
     qlibOpsLatestChangedText () {
       if (!this.qlibOpsJob) return '-'
@@ -2441,7 +2930,12 @@ export default {
 
     readonlyReplayWindowOptions () {
       const items = this.readonlyReplayWindowIndexPayload && this.readonlyReplayWindowIndexPayload.windows
-      return Array.isArray(items) ? items : []
+      if (!Array.isArray(items)) return []
+      // The active runtime is Model-A-only. Keep Model B replay artifacts
+      // available in the backend as research references, but do not expose
+      // them as the primary workbench selection.
+      const modelA = this.currentStrategyContext.default_model_id || 'e4_frozen_qlib_2018_2022'
+      return items.filter(item => !item || !item.model_id || item.model_id === modelA)
     },
     readonlyReplayWindowSelectedPreset () {
       return this.readonlyReplayWindowOptions.find(item => item && item.window_key === this.readonlyReplayWindowSelectedKey) || this.readonlyReplayWindowOptions[0] || null
@@ -2464,6 +2958,10 @@ export default {
     readonlyReplayWindowText () {
       const window = (this.readonlyReplayWindowPayload && this.readonlyReplayWindowPayload.window) || {}
       return window.start && window.end ? `${window.start}..${window.end}` : '-'
+    },
+    readonlyReplayWindowNetReturnText () {
+      const summary = this.readonlyReplayWindowSummary || {}
+      return summary.fee_tax_adjusted_net_return == null ? '-' : this.formatReplayPercent(summary.fee_tax_adjusted_net_return)
     },
     readonlyReplayWindowChecksumText () {
       const checksum = (this.readonlyReplayWindowPayload && this.readonlyReplayWindowPayload.checksum) || {}
@@ -2525,8 +3023,8 @@ export default {
         loading: '检查中',
         running: '正在更新',
         triggerable: '可更新',
-        no_data_after_trigger: '最新数据暂不可用',
-        success_after_trigger: '更新成功',
+        no_data_after_trigger: 'current-asof 数据暂不可用',
+        success_after_trigger: '只读 dry-run 完成',
         provider_failed_after_trigger: '数据源暂不可用',
         failed_after_trigger: '更新失败'
       }
@@ -2547,11 +3045,11 @@ export default {
     },
     readonlyDailyTriggerMessage () {
       const run = this.readonlyDailyUpdateLatestRun || {}
-      if (this.readonlyDailyTriggerStatus === 'loading') return '正在检查数据是否已有最新结果。'
-      if (this.readonlyDailyTriggerStatus === 'running') return `正在更新 / ${run.run_id || '-'}`
-      if (this.readonlyDailyTriggerStatus === 'already_latest') return '已是最新，继续展示当前只读结果。'
-      if (this.readonlyDailyTriggerStatus === 'no_data_after_trigger') return '最新数据暂不可用，保留旧结果，等待自动重试。'
-      if (this.readonlyDailyTriggerStatus === 'success_after_trigger') return `更新成功，latest_asof ${run.target_asof || this.readonlyDailyDataAsOf || '-'}`
+      if (this.readonlyDailyTriggerStatus === 'loading') return '正在检查当前 asof 是否已有只读结果。'
+      if (this.readonlyDailyTriggerStatus === 'running') return `正在执行只读 dry-run 观察 / ${run.run_id || '-'}`
+      if (this.readonlyDailyTriggerStatus === 'already_latest') return '当前 asof 已有只读结果，继续展示现有只读口径。'
+      if (this.readonlyDailyTriggerStatus === 'no_data_after_trigger') return 'current-asof 数据暂不可用，保留旧结果，等待自动重试。'
+      if (this.readonlyDailyTriggerStatus === 'success_after_trigger') return `只读 dry-run 观察完成，current asof ${run.target_asof || this.readonlyDailyDataAsOf || '-'}；不表示 latest pointer 已自动推进。`
       if (this.readonlyDailyTriggerStatus === 'provider_failed_after_trigger') {
         if (run.user_message) return run.user_message
         const provider = run.provider_user_status || {}
@@ -2561,7 +3059,7 @@ export default {
         if (run.user_message) return run.user_message
         return '旧结果已保留，可稍后重试。'
       }
-      return `数据就绪状态 ${this.readonlyProviderReadinessStatus}，成功后展示最新只读策略；失败或没数据时保留旧结果。`
+      return `数据就绪状态 ${this.readonlyProviderReadinessStatus}；只读 dry-run 完成后展示 current-asof 观察结果，失败或没数据时保留旧结果。`
     },
     readonlyReplayWindowSourceManifest () {
       const sources = (this.readonlyReplayWindowPayload && this.readonlyReplayWindowPayload.sources) || {}
@@ -2781,7 +3279,17 @@ export default {
       return (this.agentContext && this.agentContext.qlib) || {}
     },
     agentQlibAsof () {
-      return this.agentResponseDigest.qlib_asof || this.agentContextQlib.asof || this.crossAnalysisQlib.asof || '-'
+      return this.agentSignalAsof
+    },
+    agentSignalAsof () {
+      return this.agentResponseDigest.signal_asof || this.agentResponseDigest.qlib_asof || this.agentContextQlib.asof || this.crossAnalysisQlib.asof || '-'
+    },
+    agentTargetDate () {
+      return this.agentResponseDigest.target_date || '-'
+    },
+    agentChecksumText () {
+      const checksum = this.agentResponseDigest.checksum || ''
+      return checksum ? checksum.slice(0, 18) + '...' : '-'
     },
     agentQlibRunId () {
       return this.agentResponseDigest.qlib_run_id || this.agentContextQlib.run_id || this.crossAnalysisQlib.run_id || '-'
@@ -2843,10 +3351,12 @@ export default {
     this.loadQlibRuns()
     this.loadQlibScheduler()
     this.loadQlibOpsLatest()
+    this.loadReadonlyOpsStatus()
     this.loadDailyAutoUpdateStatus()
     this.loadCrossAnalysis()
     this.loadCurrentStrategyContext()
     this.loadReadonlyStrategySnapshot()
+    this.loadReadonlyShadowExposure()
     this.loadReadonlyReplayWindowIndex()
     this.loadRankTechCrossLatest()
     this.loadLtrReadonlyExplanation()
@@ -2882,6 +3392,17 @@ export default {
       }
       return Object.prototype.hasOwnProperty.call(labels, key) ? labels[key] : key
     },
+    dateLooksAhead (left, right) {
+      const a = this.parseDateOnly(left)
+      const b = this.parseDateOnly(right)
+      return !!(a && b && a > b)
+    },
+    parseDateOnly (value) {
+      const match = String(value || '').match(/\d{4}-\d{2}-\d{2}/)
+      if (!match) return 0
+      const parsed = new Date(`${match[0]}T00:00:00Z`).getTime()
+      return Number.isFinite(parsed) ? parsed : 0
+    },
     displayInstrument (row) {
       const instrument = row && row.instrument ? String(row.instrument).trim().toUpperCase() : ''
       if (instrument) return instrument
@@ -2916,6 +3437,126 @@ export default {
       } catch (error) {
         return null
       }
+    },
+    scrollToSection (sectionId) {
+      if (!sectionId || typeof document === 'undefined') return
+      const element = document.getElementById(sectionId)
+      if (!element || typeof element.scrollIntoView !== 'function') return
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    },
+    buildReadonlyStatusSummaryPayload () {
+      return {
+        exported_at: new Date().toISOString(),
+        page: 'tw-stock-monitor',
+        freshness: {
+          overview_status: this.freshnessOverviewStatusText,
+          overview_message: this.freshnessOverviewMessage,
+          raw_latest: {
+            asof: this.freshnessRawDateText,
+            source: this.freshnessRawSourceText
+          },
+          qlib_accepted_latest: {
+            asof: this.freshnessAcceptedDateText,
+            source: this.freshnessAcceptedSourceText
+          },
+          controlled_signal_latest: {
+            asof: this.freshnessControlledSignalDateText,
+            source: this.freshnessControlledSignalSourceText
+          },
+          readonly_strategy_snapshot_latest: {
+            asof: this.freshnessSnapshotDateText,
+            source: this.freshnessSnapshotSourceText
+          },
+          agent_prompt_latest: {
+            asof: this.freshnessAgentDateText,
+            source: this.freshnessAgentSourceText
+          }
+        },
+        readonly_ops: {
+          status: this.readonlyOpsData.status || 'unknown',
+          blocker: this.readonlyOpsBlockerText,
+          next_action_hint: this.readonlyOpsNextActionHint,
+          natural_cron_job: {
+            job_id: this.readonlyOpsNaturalCronJob.job_id || null,
+            asof: this.readonlyOpsNaturalCronJob.asof || null,
+            status: this.readonlyOpsNaturalCronJob.status || null,
+            daily_chain_state: this.readonlyOpsNaturalCronJob.daily_chain_state || null
+          },
+          dapr18_controls: {
+            enabled: this.readonlyOpsDapr18Controls.enabled,
+            dry_run: this.readonlyOpsDapr18Controls.dry_run,
+            build_candidates: this.readonlyOpsDapr18Controls.build_candidates,
+            publish_controlled_signal_latest: this.readonlyOpsDapr18Controls.publish_controlled_signal_latest,
+            publish_readonly_snapshot_latest: this.readonlyOpsDapr18Controls.publish_readonly_snapshot_latest,
+            publish_agent_prompt_latest: this.readonlyOpsDapr18Controls.publish_agent_prompt_latest
+          },
+          protected_pointers: this.readonlyOpsProtectedPointers
+        },
+        strategy_context: {
+          signal_asof: this.currentContextSignalAsOf,
+          target_trading_day: this.workbenchTargetTradingDay,
+          model: this.workbenchModelDisplayText,
+          strategy: this.workbenchStrategyDisplayText
+        },
+        ui_status: {
+          workbench_status: this.workbenchOverviewStatusText,
+          agent_mode: this.agentModeText
+        }
+      }
+    },
+    readonlyStatusSummaryText () {
+      const payload = this.buildReadonlyStatusSummaryPayload()
+      return [
+        '台股研究工作台只读摘要',
+        `导出时间: ${payload.exported_at}`,
+        `数据状态: ${payload.freshness.overview_status}`,
+        `状态说明: ${payload.freshness.overview_message}`,
+        `Raw/行情: ${payload.freshness.raw_latest.asof}`,
+        `qlib accepted latest: ${payload.freshness.qlib_accepted_latest.asof}`,
+        `readonly snapshot latest: ${payload.freshness.readonly_strategy_snapshot_latest.asof}`,
+        `Agent prompt latest: ${payload.freshness.agent_prompt_latest.asof}`,
+        `信号日期: ${payload.strategy_context.signal_asof}`,
+        `目标交易日: ${payload.strategy_context.target_trading_day}`,
+        `模型: ${payload.strategy_context.model}`,
+        `策略: ${payload.strategy_context.strategy}`,
+        `blocker: ${payload.readonly_ops.blocker}`,
+        `next_action_hint: ${payload.readonly_ops.next_action_hint}`,
+        '边界: 只读展示；不拉取数据、不发布 provider、不切换 latest、不连接券商、不产生订单。'
+      ].join('\n')
+    },
+    copyTextToClipboard (text) {
+      if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        return navigator.clipboard.writeText(text)
+      }
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.setAttribute('readonly', 'readonly')
+      textarea.style.position = 'fixed'
+      textarea.style.left = '-9999px'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      return Promise.resolve()
+    },
+    async copyReadonlyStatusSummary () {
+      try {
+        await this.copyTextToClipboard(this.readonlyStatusSummaryText())
+        this.$message.success('已复制当前只读摘要')
+      } catch (error) {
+        this.$message.warning('复制失败，请改用导出摘要')
+      }
+    },
+    downloadReadonlyStatusSummary () {
+      const payload = this.buildReadonlyStatusSummaryPayload()
+      const fileDate = payload.exported_at.slice(0, 10)
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `tw-stock-monitor-status-${fileDate}.json`
+      link.click()
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1500)
     },
     initializeBacktestDates () {
       const end = new Date()
@@ -2962,6 +3603,30 @@ export default {
       } finally {
         this.loadingDailyAutoUpdateStatus = false
       }
+    },
+    async loadReadonlyOpsStatus () {
+      this.loadingReadonlyOpsStatus = true
+      this.readonlyOpsStatusError = ''
+      try {
+        const data = this.unwrap(await getTwStockReadonlyOpsStatus())
+        this.readonlyOpsStatus = data || null
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.readonlyOpsStatus = response && response.data ? response.data : null
+        this.readonlyOpsStatusError = (response && response.msg) || error.message || 'DAOV1 readonly-status 读取失败。'
+      } finally {
+        this.loadingReadonlyOpsStatus = false
+      }
+    },
+    refreshFreshnessOverview () {
+      return Promise.all([
+        this.loadReadonlyOpsStatus(),
+        this.loadDailyAutoUpdateStatus(),
+        this.loadQlibHealth(),
+        this.loadCurrentStrategyContext(),
+        this.loadReadonlyStrategySnapshot(),
+        this.loadTwStockAgentContext()
+      ])
     },
     async loadQlibSignals () {
       this.loadingQlibSignals = true
@@ -3058,9 +3723,25 @@ export default {
       } catch (error) {
         const response = error && error.response && error.response.data
         this.agentContext = response && response.data ? response.data : null
-        this.agentContextError = (response && response.msg) || error.message || '台股研究助手上下文读取失败。'
+        this.agentContextError = (response && response.msg) || error.message || '策略解释助手上下文读取失败。'
       } finally {
         this.loadingAgentContext = false
+      }
+    },
+    async loadTradingAgentsReadonlyAnalysis () {
+      this.loadingTradingAgentsReadonly = true
+      this.tradingAgentsReadonlyError = ''
+      try {
+        const data = this.unwrap(await getTwStockTradingAgentsReadonlyAnalysisLatest())
+        this.tradingAgentsReadonlyPayload = data && data.ok === true ? data : null
+        if (!this.tradingAgentsReadonlyPayload) this.tradingAgentsReadonlyError = '外部研究摘要暂不可用。'
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        const data = response && response.data
+        this.tradingAgentsReadonlyPayload = data && data.ok === true ? data : null
+        this.tradingAgentsReadonlyError = (response && response.msg) || error.message || '外部研究摘要暂不可用。'
+      } finally {
+        this.loadingTradingAgentsReadonly = false
       }
     },
     handleAgentEnter (event) {
@@ -3068,37 +3749,25 @@ export default {
       if (event && typeof event.preventDefault === 'function') event.preventDefault()
       this.askTwStockAgent()
     },
-    refreshAgentSuggestedQuestions (context) {
-      const source = context || this.agentContext || {}
-      const summary = (source.cross_analysis && source.cross_analysis.summary) || {}
-      const counts = summary.category_counts || {}
-      const top30 = Array.isArray(source.top30_preview) ? source.top30_preview : []
-      const focus = Array.isArray(source.focus_watch_preview) ? source.focus_watch_preview : []
-      const divergence = Array.isArray(source.divergence_preview) ? source.divergence_preview : []
-      const dataReview = Array.isArray(source.data_review_preview) ? source.data_review_preview : []
-      const questions = ['今天 top30 是哪些？']
-      if (focus.length || Number(counts.focus_watch || 0) > 0) {
-        questions.push('今天模型和趋势都支持的股票有哪些？')
-      }
-      if (divergence.length || Number(counts.model_trend_divergence || 0) > 0) {
-        questions.push('今天模型和趋势分歧的股票有哪些？')
-      }
-      if (dataReview.length || Number(counts.data_review_required || 0) > 0) {
-        questions.push('今天需要数据复核或人工复盘的股票有哪些？')
-      }
-      if (Number(counts.model_watch_trend_neutral || 0) > 0 && questions.length === 1) {
-        questions.push('今天 top30 中性观察名单有哪些？')
-      }
-      const firstSymbol = top30.find(item => item && item.symbol)
-      if (firstSymbol && firstSymbol.symbol) {
-        questions.push(String(firstSymbol.symbol) + ' 的指标是多少？')
-      }
-      questions.push('当前数据新鲜度和口径是什么？')
-      this.agentSuggestedQuestions = Array.from(new Set(questions)).slice(0, 5)
+    refreshAgentSuggestedQuestions () {
+      this.agentSuggestedQuestions = [
+        '当前 asof 策略是什么？',
+        '排名第一是谁？',
+        '当前 asof 有哪些候选调入？',
+        '当前 asof 有哪些调出复核？',
+        '2330 当前状态如何？',
+        '为什么模拟账户不能应用？',
+        '数据新鲜度如何？'
+      ].slice(0, 7)
     },
     useAgentSuggestion (question) {
       this.agentQuestion = question
       this.askTwStockAgent(question)
+    },
+    askAgentFromWorkbench (question) {
+      const text = String(question || '为什么模拟账户不能应用？').trim()
+      this.agentQuestion = text
+      this.askTwStockAgent(text)
     },
     async askTwStockAgent (question) {
       const text = String(question || this.agentQuestion || '').trim().slice(0, 500)
@@ -3110,20 +3779,20 @@ export default {
       this.sendingAgentQuestion = true
       this.agentError = ''
       try {
-        const data = this.unwrap(await chatTwStockAgent({
+        const data = this.unwrap(await simpleChatTwStockAgent({
           question: text,
           symbol: this.chartSymbol || '',
           maxItems: 10
         }))
         this.agentResponse = data || null
         if (data && data.context_digest && !this.agentContext) {
-          this.agentContext = { qlib: { asof: data.context_digest.qlib_asof, run_id: data.context_digest.qlib_run_id }, freshness: { status: data.context_digest.freshness_status } }
+          this.agentContext = { qlib: { asof: data.context_digest.signal_asof || data.context_digest.qlib_asof, run_id: data.context_digest.qlib_run_id }, freshness: { status: data.context_digest.freshness_status } }
           this.refreshAgentSuggestedQuestions(this.agentContext)
         }
       } catch (error) {
         const response = error && error.response && error.response.data
         this.agentResponse = response && response.data ? response.data : null
-        this.agentError = (response && response.msg) || error.message || '台股研究助手回答失败。'
+        this.agentError = (response && response.msg) || error.message || '策略解释助手回答失败。'
       } finally {
         this.sendingAgentQuestion = false
       }
@@ -3162,7 +3831,7 @@ export default {
       } catch (error) {
         const response = error && error.response && error.response.data
         this.rankTechLatestPayload = response && response.data ? response.data : null
-        this.rankTechLatestError = (response && response.msg) || error.message || '今日复盘读取失败；历史模拟区仍保持只读。'
+        this.rankTechLatestError = (response && response.msg) || error.message || '当前 asof 复盘读取失败；历史模拟区仍保持只读。'
       } finally {
         this.loadingRankTechCross = false
       }
@@ -3206,9 +3875,34 @@ export default {
       } catch (error) {
         const response = error && error.response && error.response.data
         this.currentStrategyContextPayload = response && response.data ? response.data : null
-        this.currentStrategyContextError = (response && response.msg) || error.message || '统一策略上下文读取失败。'
+        this.currentStrategyContextError = (response && response.msg) || error.message || '当前只读策略口径读取失败。'
       } finally {
         this.loadingCurrentStrategyContext = false
+      }
+    },
+    shortModelLabel (modelId) {
+      const id = String(modelId || '')
+      if (!id) return '-'
+      if (id.includes('orthogonal_ltr')) return 'Model B/LTR 历史参考'
+      if (id === 'e4_frozen_qlib_2018_2022') return 'E4 Qlib baseline'
+      return id
+    },
+    strategyDisplayName (strategyId) {
+      const id = String(strategyId || '')
+      if (!id) return '-'
+      if (id === 'top50_exit_one_worst_sell') return '跌出 Top50 后最多替换一支'
+      if (id === 'candidate_only_no_strategy_replay') return '候选快照，无同日策略回放'
+      return id
+    },
+    handleWorkbenchModelSelect (modelId) {
+      const match = this.readonlyReplayWindowOptions.find(item => item && item.model_id === modelId)
+      if (match) {
+        this.handleReadonlyReplayWindowSelect(match.window_key)
+      }
+    },
+    handleWorkbenchStrategySelect (strategyId) {
+      if (this.ltrOptionalSimStrategies.find(item => item.method_key === strategyId)) {
+        this.ltrOptionalSimSelected = strategyId
       }
     },
     async loadReadonlyReplayWindowIndex () {
@@ -3262,6 +3956,23 @@ export default {
         this.readonlyStrategySnapshotError = (response && response.msg) || error.message || '策略快照读取失败。'
       } finally {
         this.loadingReadonlyStrategySnapshot = false
+      }
+    },
+    async loadReadonlyShadowExposure () {
+      this.loadingReadonlyShadowExposure = true
+      this.readonlyShadowExposureError = ''
+      try {
+        const data = this.unwrap(await getTwStockReadonlyShadowExposure({
+          strategy_rule: 'top50_hold_rank_buffer_100',
+          include_rows: true
+        }))
+        this.readonlyShadowExposurePayload = data || null
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.readonlyShadowExposurePayload = response && response.data ? response.data : null
+        this.readonlyShadowExposureError = (response && response.msg) || error.message || '影子观察读取失败。'
+      } finally {
+        this.loadingReadonlyShadowExposure = false
       }
     },
     async loadReadonlyReplayWindow () {
@@ -3333,7 +4044,7 @@ export default {
       } catch (error) {
         const response = error && error.response && error.response.data
         this.portfolioReplayPayload = response && response.data ? response.data : null
-        this.portfolioReplayError = (response && response.msg) || error.message || '过去表现暂不可用；今日复盘可继续查看。'
+        this.portfolioReplayError = (response && response.msg) || error.message || '过去表现暂不可用；当前 asof 复盘可继续查看。'
       } finally {
         this.runningPortfolioReplay = false
       }
@@ -3606,31 +4317,8 @@ export default {
       }
     },
     async saveCrossAnalysisReview () {
-      const detail = this.selectedCrossAnalysisDetail
-      const item = detail && detail.item
-      const runId = (detail && detail.qlib && detail.qlib.run_id) || (this.crossAnalysisQlib && this.crossAnalysisQlib.run_id)
-      const asof = (detail && detail.qlib && detail.qlib.asof) || (this.crossAnalysisQlib && this.crossAnalysisQlib.asof)
-      if (!item || !detail.symbol || !runId || !asof) return
-      this.savingCrossReview = true
       this.crossReviewError = ''
-      this.crossReviewNotice = ''
-      try {
-        const data = this.unwrap(await saveTwStockCrossAnalysisReview({
-          asof,
-          run_id: runId,
-          symbol: detail.symbol,
-          cross_category: item.cross && item.cross.category,
-          decision_status: this.crossReviewForm.decision_status,
-          user_note: this.crossReviewForm.user_note
-        }))
-        if (data && data.ok === false) throw new Error(data.message || data.status || 'save failed')
-        this.crossReviewNotice = '复盘状态已保存，仅记录人工状态和备注。'
-      } catch (error) {
-        const response = error && error.response && error.response.data
-        this.crossReviewError = (response && response.msg) || error.message || '复盘状态保存失败。'
-      } finally {
-        this.savingCrossReview = false
-      }
+      this.crossReviewNotice = '当前策略工作台为只读模式，不在前端保存复盘状态。'
     },
     restoreCrossBacktestValidation (symbol) {
       const normalized = this.normalizeTwSymbol(symbol)
@@ -3902,7 +4590,7 @@ export default {
       if (!item) return '-'
       if (item.rank_delta == null) {
         if (item.change_type === 'entered') return `昨日未入 ${this.rankingBucketText}`
-        if (item.change_type === 'exited') return `今日未入 ${this.rankingBucketText}`
+        if (item.change_type === 'exited') return `当前 asof 未入 ${this.rankingBucketText}`
         if (this.rankChangesActiveTab === 'candidates') return '昨日不在 Top50'
         return '无可比排名'
       }
@@ -3936,32 +4624,7 @@ export default {
       }
     },
     async triggerQlibOpsDryRun () {
-      if (!this.qlibOpsCanTrigger) {
-        this.qlibOpsError = 'Option C ops admin or tw_stock_qlib_ops permission required'
-        return
-      }
-      const asof = this.formatPickerDate(this.qlibOpsForm.asof) || String(this.qlibOpsForm.asof || '').trim()
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(asof)) {
-        this.qlibOpsError = 'asof must match YYYY-MM-DD'
-        return
-      }
-      this.runningQlibOpsDryRun = true
-      this.qlibOpsError = ''
-      try {
-        const data = this.unwrap(await triggerQlibOptionCDryRun(asof))
-        this.qlibOpsJob = this.normalizeQlibOpsJob(data)
-        if (this.qlibOpsJob && this.qlibOpsJob.job_id) {
-          await this.refreshQlibOpsJob()
-          await this.loadQlibOpsLog(this.qlibOpsLogStream)
-        }
-      } catch (error) {
-        const response = error && error.response && error.response.data
-        const data = response && response.data
-        this.qlibOpsJob = this.normalizeQlibOpsJob(data) || this.qlibOpsJob
-        this.qlibOpsError = (response && response.msg) || error.message || 'Option C ops dry-run 執行失敗'
-      } finally {
-        this.runningQlibOpsDryRun = false
-      }
+      this.qlibOpsError = '当前策略工作台为只读模式，不在前端手动运行 qlib ops。'
     },
     async refreshQlibOpsJob () {
       if (!this.qlibOpsJob || !this.qlibOpsJob.job_id) return
@@ -4027,24 +4690,7 @@ export default {
     },
     prefillSimDraftFromQlib (row) {
       if (!row || !row.symbol) return
-      const trend = row.trend || {}
-      const context = {
-        symbol: String(row.symbol).trim().toUpperCase(),
-        asof: (this.qlibPayload && this.qlibPayload.asof) || '',
-        run_id: (this.qlibPayload && this.qlibPayload.run_id) || '',
-        qlib_rank: row.rank,
-        qlib_score: row.qlib_score,
-        trend_label: trend.trend_label || '',
-        bucket: this.qlibBucket || 'top30',
-        source_label: '研究排名'
-      }
-      this.writeSimDraftContext({
-        source_type: 'qlib_rank',
-        symbol: context.symbol,
-        side: 'buy',
-        quantity: 1000,
-        source_context: context
-      })
+      this.writeSimDraftContext({ source_type: 'qlib_rank', symbol: String(row.symbol).trim().toUpperCase() })
     },
     canPrefillSimDraftFromCross (row) {
       const category = row && row.cross && row.cross.category
@@ -4053,36 +4699,11 @@ export default {
     },
     prefillSimDraftFromCross (row) {
       if (!this.canPrefillSimDraftFromCross(row) || !row || !row.symbol) return
-      const qlib = row.qlib || {}
-      const quant = row.quantdinger || {}
-      const cross = row.cross || {}
-      const context = {
-        symbol: String(row.symbol).trim().toUpperCase(),
-        asof: qlib.asof || (this.crossAnalysisQlib && this.crossAnalysisQlib.asof) || '',
-        run_id: qlib.run_id || (this.crossAnalysisQlib && this.crossAnalysisQlib.run_id) || '',
-        qlib_rank: qlib.rank,
-        qlib_score: qlib.score,
-        trend_label: quant.trend_label || '',
-        cross_category: cross.category || '',
-        cross_alignment: cross.alignment || '',
-        bucket: qlib.bucket || this.crossAnalysisBucket || 'top30',
-        source_label: '交叉分析'
-      }
-      this.writeSimDraftContext({
-        source_type: 'cross_analysis',
-        symbol: context.symbol,
-        side: 'buy',
-        quantity: 1000,
-        source_context: context
-      })
+      this.writeSimDraftContext({ source_type: 'cross_analysis', symbol: String(row.symbol).trim().toUpperCase() })
     },
     writeSimDraftContext (draft) {
-      try {
-        window.localStorage.setItem(this.simDraftContextStorageKey(), JSON.stringify(draft))
-        this.$router.push('/tw-stock-sim-account')
-      } catch (error) {
-        this.degradedNotice = '模拟草稿预填失败，请打开台股模拟账户页面手动填写。'
-      }
+      const symbol = draft && draft.symbol ? `：${draft.symbol}` : ''
+      this.degradedNotice = `当前策略工作台为只读模式，不生成模拟交易草稿${symbol}；需要模拟账户时请单独进入模拟账户页面。`
     },
     removeQlibWatchDraft (symbol) {
       const normalized = String(symbol || '').trim().toUpperCase()
@@ -4245,7 +4866,7 @@ export default {
       try {
         this.phaseYZProductizationPayload = this.unwrap(await getTwStockPhaseYZProductizationStatus())
       } catch (error) {
-        this.phaseYZProductizationError = (error && error.message) || 'YZ Clean E4 产品化状态暂不可读。'
+        this.phaseYZProductizationError = (error && error.message) || '模拟账户应用状态暂不可读。'
       } finally {
         this.loadingPhaseYZProductization = false
       }
@@ -4254,7 +4875,7 @@ export default {
       this.loading = true
       try {
         await this.loadConfig()
-        await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs(), this.loadQlibHealth(), this.loadQlibSignals(), this.loadRankChanges(), this.loadDailyAutoUpdateStatus(), this.loadQlibOpsLatest(), this.loadCrossAnalysis(), this.loadCurrentStrategyContext(), this.loadPhaseYZProductizationStatus(), this.loadReadonlyStrategySnapshot(), this.loadReadonlyReplayWindowIndex(), this.loadRankTechCrossLatest(), this.loadLtrReadonlyExplanation(), this.loadLtrOptionalSimStrategies(), this.loadTwStockAgentContext(), this.loadChartSymbolOptions()])
+        await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs(), this.loadReadonlyOpsStatus(), this.loadQlibHealth(), this.loadQlibSignals(), this.loadRankChanges(), this.loadDailyAutoUpdateStatus(), this.loadQlibOpsLatest(), this.loadCrossAnalysis(), this.loadCurrentStrategyContext(), this.loadPhaseYZProductizationStatus(), this.loadReadonlyStrategySnapshot(), this.loadReadonlyShadowExposure(), this.loadReadonlyReplayWindowIndex(), this.loadRankTechCrossLatest(), this.loadLtrReadonlyExplanation(), this.loadLtrOptionalSimStrategies(), this.loadTwStockAgentContext(), this.loadChartSymbolOptions()])
         this.lastRefreshedAt = new Date().toLocaleTimeString()
         this.syncAutoRefreshTimer()
       } finally {
@@ -4265,7 +4886,7 @@ export default {
       const data = this.unwrap(await getTwStockMonitorConfig({ name: this.config.name || 'default' }))
       this.config = Object.assign({}, this.config, data || {})
       if (data && data.degraded) {
-        this.degradedNotice = '資料庫暫不可用：已載入預設台股清單，可查看趨勢與執行一次性研究掃描，但提醒與歷史不會持久保存。'
+        this.degradedNotice = '資料庫暫不可用：已載入預設台股清單，可查看趨勢；提醒與歷史不會持久保存。'
       }
     },
     async loadTrends () {
@@ -4354,27 +4975,12 @@ export default {
       }
     },
     async runScan () {
+      await this.refreshMonitorReadonly()
+    },
+    async refreshMonitorReadonly () {
       this.scanning = true
       try {
-        const scanData = this.unwrap(await scanTwStockMonitor({ name: this.config.name || 'default', force: true }))
-        if (scanData && scanData.degraded) {
-          this.trendItems = scanData.items || []
-          this.scanHealth = {
-            status: 'degraded',
-            success_count: 1,
-            failed_count: 0,
-            total_scanned_count: scanData.scanned_count || 0,
-            total_alert_count: scanData.alert_count || 0,
-            success_rate: 1,
-            orders_enabled: false
-          }
-          this.degradedNotice = '資料庫暫不可用：本次為一次性研究掃描，結果未寫入提醒或歷史。'
-          this.syncChartSymbol()
-          await Promise.all([this.loadKline(), this.loadHistory().catch(() => { this.historyItems = [] })])
-          this.$nextTick(this.redrawCharts)
-        } else {
-          await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs()])
-        }
+        await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs()])
         this.lastRefreshedAt = new Date().toLocaleTimeString()
       } finally {
         this.scanning = false
@@ -4387,28 +4993,11 @@ export default {
       this.configDrawerVisible = true
     },
     async saveConfig () {
-      this.savingConfig = true
-      try {
-        const payload = Object.assign({}, this.configForm, {
-          symbols: String(this.configForm.symbolsText || '').split(',').map(item => item.trim()).filter(Boolean)
-        })
-        delete payload.symbolsText
-        const data = this.unwrap(await saveTwStockMonitorConfig(payload))
-        this.config = Object.assign({}, this.config, data || {})
-        this.configDrawerVisible = false
-        await this.loadTrends()
-        this.syncAutoRefreshTimer()
-      } finally {
-        this.savingConfig = false
-      }
+      this.degradedNotice = '当前策略工作台为只读模式，不在前端保存监控配置。'
+      this.configDrawerVisible = false
     },
     async updateAlertStatus (row, status) {
-      await updateTwStockAlert(row.id, {
-        is_read: true,
-        decision_status: status,
-        user_note: row.user_note || ''
-      })
-      await this.loadAlerts()
+      this.degradedNotice = '当前策略工作台为只读模式，不在前端写入提醒状态。'
     },
     alertCategory (row) {
       const snapshot = row.snapshot || {}
@@ -4868,6 +5457,229 @@ export default {
   margin-bottom: 16px;
 }
 
+.page-section-rail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0 14px;
+  padding: 8px 10px;
+  border: 1px solid #dbe7f3;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.page-section-rail-label {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.page-section-rail-button {
+  border-radius: 6px;
+  color: #344054;
+  border-color: #d0d5dd;
+  background: #fff;
+}
+
+.page-section-rail-button.rail-tone-status {
+  color: #075985;
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
+.page-section-rail-button.rail-tone-primary {
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.page-section-rail-button.rail-tone-research {
+  color: #047857;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.page-section-rail-button.rail-tone-agent {
+  color: #7c3aed;
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+}
+
+.page-section-rail-button.rail-tone-muted {
+  color: #667085;
+  border-color: #e4e7ec;
+  background: #ffffff;
+}
+
+.monitor-anchor-section {
+  margin-bottom: 16px;
+}
+
+.strategy-workbench-overview-card {
+  margin-bottom: 16px;
+}
+.workbench-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.workbench-title-block > span {
+  color: #111827;
+  font-weight: 650;
+}
+.workbench-title-block small {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 400;
+}
+.workbench-overview-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.workbench-status-copy {
+  flex: 1;
+  min-width: 220px;
+  padding: 10px 12px;
+  border: 1px solid #dbe7f3;
+  border-left: 4px solid #2563eb;
+  border-radius: 8px;
+  background: #f8fbff;
+  color: #1f2937;
+  line-height: 1.5;
+}
+.workbench-overview-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.advanced-ops-collapse-contained {
+  margin-top: 10px;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.advanced-ops-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.advanced-ops-intro strong {
+  color: #111827;
+}
+
+.advanced-ops-intro span {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.workbench-overview-alert {
+  margin-bottom: 12px;
+}
+.workbench-selection-bar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(0, 2.4fr);
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+.workbench-selection-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.workbench-selection-copy span,
+.workbench-selection-controls label > span {
+  color: #667085;
+  font-size: 12px;
+}
+.workbench-selection-copy strong {
+  color: #111827;
+  font-size: 15px;
+}
+.workbench-selection-copy small {
+  color: #475467;
+  line-height: 1.45;
+}
+.workbench-selection-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+.workbench-selection-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.workbench-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.workbench-overview-grid > div {
+  min-height: 88px;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #fff;
+}
+.workbench-overview-grid span,
+.workbench-overview-grid small {
+  color: #667085;
+  font-size: 12px;
+}
+.workbench-overview-grid strong {
+  color: #111827;
+  font-size: 18px;
+  line-height: 1.25;
+  word-break: break-word;
+}
+.workbench-technical-collapse {
+  margin-top: 10px;
+  background: #fff;
+}
+.workbench-technical-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.workbench-technical-grid span {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #eef2f7;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #667085;
+  font-size: 12px;
+}
+.workbench-technical-grid strong {
+  display: block;
+  margin-top: 3px;
+  color: #111827;
+  word-break: break-word;
+}
+
 .phase-yz-productization-card { margin-bottom: 16px; }
 .phase-yz-toolbar,
 .phase-yz-grid {
@@ -4922,6 +5734,143 @@ export default {
 .metric-label,
 .muted {
   color: #667085;
+}
+
+.data-freshness-overview {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid #dbe7f3;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.monitor-anchor-section,
+#daov-section-freshness,
+#daov-section-strategy,
+#daov-section-snapshot,
+#daov-section-replay,
+#daov-section-research,
+#daov-section-agent,
+#daov-section-maintenance {
+  scroll-margin-top: 84px;
+}
+
+.data-freshness-header,
+.data-freshness-actions,
+.data-freshness-footnote {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.data-freshness-header {
+  margin-bottom: 12px;
+}
+
+.data-freshness-header strong {
+  display: block;
+  color: #111827;
+  font-size: 15px;
+  margin-bottom: 3px;
+}
+
+.data-freshness-header span,
+.data-freshness-footnote {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.data-freshness-actions {
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.data-freshness-track {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.data-freshness-ops-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.data-freshness-node,
+.data-freshness-ops-item {
+  min-width: 0;
+  min-height: 92px;
+  padding: 10px 12px;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.data-freshness-ops-item {
+  min-height: 78px;
+  background: #ffffff;
+}
+
+.data-freshness-node.lagging {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.data-freshness-node span,
+.data-freshness-node small,
+.data-freshness-ops-item span,
+.data-freshness-ops-item small {
+  color: #667085;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.data-freshness-node strong,
+.data-freshness-ops-item strong {
+  color: #111827;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.data-freshness-node strong {
+  font-size: 18px;
+}
+
+.data-freshness-ops-item strong {
+  font-size: 13px;
+}
+
+.data-freshness-ops-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.data-freshness-ops-hint span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.data-freshness-ops-hint strong {
+  margin-right: 4px;
+  color: #111827;
+}
+
+.data-freshness-footnote {
+  justify-content: flex-start;
+  margin-top: 10px;
 }
 
 .muted {
@@ -5102,6 +6051,12 @@ export default {
 
 .qlib-option-c-card {
   margin-top: 16px;
+}
+
+.qlib-option-c-card .ant-table-wrapper,
+.qlib-option-c-card .ant-table-content {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .qlib-toolbar,
@@ -5663,8 +6618,16 @@ export default {
 }
 
 @media (max-width: 1100px) {
-  .summary-grid {
+  .summary-grid,
+  .workbench-overview-grid,
+  .data-freshness-track,
+  .data-freshness-ops-grid,
+  .workbench-selection-bar,
+  .workbench-technical-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workbench-selection-controls {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -5673,11 +6636,22 @@ export default {
     padding: 12px;
   }
 
-  .topbar {
+  .topbar,
+  .workbench-overview-toolbar {
     flex-direction: column;
   }
 
+  .workbench-overview-actions {
+    justify-content: flex-start;
+  }
+
   .summary-grid,
+  .workbench-overview-grid,
+  .data-freshness-track,
+  .data-freshness-ops-grid,
+  .workbench-selection-bar,
+  .workbench-selection-controls,
+  .workbench-technical-grid,
   .selected-symbol-panel,
   .backtest-metrics,
   .cross-validation-best,
@@ -5686,8 +6660,24 @@ export default {
   .cross-analysis-summary,
   .cross-detail-grid,
   .rank-tech-grid,
-  .portfolio-replay-grid {
+  .portfolio-replay-grid,
+  .readonly-candidate-layout,
+  .readonly-replay-track {
     grid-template-columns: 1fr;
+  }
+
+  .readonly-candidate-row {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .readonly-candidate-status {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .readonly-replay-window,
+  .paper-portfolio-panel {
+    max-width: 100%;
   }
 }
 
@@ -5880,12 +6870,22 @@ export default {
 }
 
 .readonly-candidate-row {
-  justify-content: space-between;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
   padding: 10px;
   border: 1px solid #eef2f7;
   border-radius: 6px;
   background: #fff;
+}
+
+.readonly-candidate-rank {
+  color: #1d4ed8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
 }
 
 .readonly-candidate-main,
@@ -5897,7 +6897,27 @@ export default {
 }
 
 .readonly-candidate-main strong {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
   font-size: 14px;
+}
+
+.readonly-candidate-symbol {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 15px;
+}
+
+.readonly-candidate-name {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.readonly-candidate-status {
+  margin-right: 0;
 }
 
 .readonly-candidate-meta {
@@ -5906,6 +6926,29 @@ export default {
 
 .readonly-candidate-row.compact {
   justify-content: flex-start;
+}
+
+.readonly-window-note {
+  color: #475467;
+  font-size: 12px;
+}
+
+.readonly-replay-track {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.readonly-replay-track span {
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+  background: #f8fbff;
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
 }
 
 .readonly-snapshot-empty {
