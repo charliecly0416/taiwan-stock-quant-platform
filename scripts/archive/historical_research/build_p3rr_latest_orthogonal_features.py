@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import json
 import sys
+import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 BACKEND = ROOT / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
@@ -66,11 +67,16 @@ def norm(raw: Any) -> str:
     return text if text.startswith("TW") else f"TW{text}"
 
 
-def latest_top50() -> tuple[str, list[str]]:
+def latest_top50(asof_override: str = "", symbols_file: Path | None = None) -> tuple[str, list[str]]:
     latest = read_json(LATEST_SIGNAL)
-    asof = str(latest.get("asof") or "")[:10]
-    run_dir = ROOT / "qlib_pipeline" / str(latest.get("run_dir", ""))
-    top50 = pd.read_csv(run_dir / "top50_signals.csv")
+    asof = str(asof_override or latest.get("asof") or "")[:10]
+    if symbols_file is not None:
+        top50 = pd.read_csv(symbols_file)
+    else:
+        run_dir = ROOT / "qlib_pipeline" / str(latest.get("run_dir", ""))
+        top50 = pd.read_csv(run_dir / "top50_signals.csv")
+    if "instrument" not in top50.columns:
+        raise RuntimeError(f"symbols file must contain instrument column: {symbols_file}")
     symbols = sorted({norm(x) for x in top50["instrument"].astype(str).tolist()})
     return asof, symbols
 
@@ -79,6 +85,13 @@ def calendar_next_map() -> dict[pd.Timestamp, pd.Timestamp]:
     days = [pd.Timestamp(x.strip()).normalize() for x in CALENDAR.read_text(encoding="utf-8").splitlines() if x.strip()]
     days = sorted(set(days))
     return {days[i]: days[i + 1] for i in range(len(days) - 1)}
+
+
+def next_weekday(day: pd.Timestamp) -> pd.Timestamp:
+    available = day + pd.Timedelta(days=1)
+    while available.weekday() >= 5:
+        available += pd.Timedelta(days=1)
+    return available
 
 
 def db_rows(family: str, symbols: list[str], start: str, end: str) -> tuple[pd.DataFrame, str, str]:
@@ -126,6 +139,14 @@ def add_available_at(df: pd.DataFrame, nxt: dict[pd.Timestamp, pd.Timestamp], so
         out["available_at"] = pd.to_datetime(out["available_at"], errors="coerce").dt.normalize()
     else:
         out["available_at"] = out["trade_date"].map(nxt)
+    missing_available = out["available_at"].isna() & out["trade_date"].notna()
+    out.loc[missing_available, "available_at"] = out.loc[missing_available, "trade_date"].map(next_weekday)
+    if "quality_flags" not in out:
+        out["quality_flags"] = ""
+    out.loc[missing_available, "quality_flags"] = (
+        out.loc[missing_available, "quality_flags"].fillna("").astype(str)
+        + ";calendar_fallback_next_weekday_after_qlib_calendar_end"
+    ).str.strip(";")
     out["raw_snapshot_id"] = out.get("raw_snapshot_id", source)
     out["raw_snapshot_path"] = out.get("raw_snapshot_path", "")
     out["lineage_source"] = source
@@ -186,14 +207,37 @@ def build_margin(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build isolated latest orthogonal features from local raw archives.")
+    parser.add_argument("--asof", default="", help="Artifact asof label. Defaults to accepted latest_signal asof.")
+    parser.add_argument(
+        "--start-date",
+        default="2022-01-01",
+        help="Database query start date; local archive fallback still uses all locally available rows.",
+    )
+    parser.add_argument(
+        "--symbols-file",
+        type=Path,
+        default=None,
+        help="Optional CSV with instrument column. Defaults to accepted latest top50_signals.csv.",
+    )
+    parser.add_argument(
+        "--no-write-latest-pointer",
+        action="store_true",
+        help="Do not write latest_orthogonal_features_latest.json.",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     created_at = now()
-    asof, symbols = latest_top50()
+    asof, symbols = latest_top50(args.asof, args.symbols_file)
     if not asof:
         raise RuntimeError("missing latest accepted asof")
     nxt = calendar_next_map()
-    start = "2022-01-01"
+    start = args.start_date
     family_frames = []
     raw_status_rows = []
     failed_symbols: list[str] = []
@@ -252,7 +296,8 @@ def main() -> None:
         "no_training": True,
     }
     write_json(OUT / f"latest_orthogonal_features_{asof}_refresh_status.json", refresh_status)
-    write_json(OUT / "latest_orthogonal_features_latest.json", refresh_status)
+    if not args.no_write_latest_pointer:
+        write_json(OUT / "latest_orthogonal_features_latest.json", refresh_status)
     print(json.dumps({"ok": True, "status": refresh_status["status"], "latest_feature_table": rel(latest_table), "refresh_status": rel(OUT / f"latest_orthogonal_features_{asof}_refresh_status.json")}, ensure_ascii=False, indent=2))
 
 

@@ -182,6 +182,53 @@ TW_DAILY_AUTO_FINMIND_LOOKBACK_DAYS=260
 
 目的：保留足够历史 bar，避免趋势、复盘和候选解释缺少 120 日样本。
 
+产品定时任务默认采用双频 scope：
+
+```text
+高频：TW_DAILY_AUTO_FINMIND_SCOPE=daily
+低频：TW_DAILY_AUTO_FINMIND_SCOPE=full
+```
+
+高频 `daily` 负责价格基础日更，避免每两小时重复抓取 quota-heavy 正交数据。
+
+低频 `full` 负责归档：
+
+- daily price；
+- corporate actions；
+- institutional trades；
+- margin trading；
+- monthly revenue；
+- valuation。
+
+不得只保留 daily scope 而完全取消 full scope：
+
+```text
+TW_DAILY_AUTO_FINMIND_SCOPE=daily
+```
+
+因为 `daily` scope 会追加：
+
+```text
+--no-corporate-actions --no-institutional --no-margin --no-monthly-revenue --no-valuation
+```
+
+这会主动跳过法人、融资融券等后续研究需要的正交数据。若为了 quota 或 402 blocker 做降级，必须保留一条低频 full scope cron，或在 job report 中说明 full scope 暂停原因。
+
+当前推荐 cron 形态：
+
+```cron
+# Daily price / base freshness, every 2 hours.
+30 */2 * * * ... TW_DAILY_AUTO_FINMIND_SCOPE=daily ... scripts/run_daily_tw_stock_auto_update.py
+
+# Orthogonal full scope, once per weekday at Asia/Taipei 22:45.
+# It is staggered away from the every-2h daily job to avoid non-blocking flock collision.
+45 14 * * 1-5 ... TW_DAILY_AUTO_FINMIND_SCOPE=full TW_DAILY_AUTO_FINMIND_PROVIDER_ERROR_COOLDOWN_HOURS=12 ... scripts/run_daily_tw_stock_auto_update.py
+```
+
+R11 后 full scope 具备 segment cache/cooldown：已成功覆盖 asof 的 segment 可复用，402/rate-limit segment 会冷却，避免高频重复打 provider。
+
+R13_R 后 cache 复用还必须通过 origin gate：cache 中的 stdout/stderr 必须存在、位于 repo 的 `data_tw/ops/daily_auto_update/` 下，且不得来自 `/tmp/pytest` 或测试临时目录。若 origin 不合法，自动任务必须忽略该 cache 并重新执行该 segment，不能把空 stdout 当作成功。
+
 ### 5.4 legacy qlib/provider path
 
 默认：
@@ -219,7 +266,42 @@ validator ok
 data_tw/artifacts/publish/readonly_strategy_snapshot/latest.json
 ```
 
-latest pointer 只是只读前端快照入口，不是 provider accepted latest，也不是交易目标。
+
+### 5.6 strict E4 readonly price/TWII bridge
+
+strict E4 readonly chain 仍然是显式非默认 gate：
+
+```text
+--enable-strict-e4-readonly-chain
+TW_DAILY_AUTO_ENABLE_STRICT_E4_READONLY_CHAIN=true
+```
+
+R3_W 后新增的 price/TWII bridge 也是显式参数，默认必须为空：
+
+```text
+--strict-e4-readonly-price-bridge-dir <path>
+--strict-e4-readonly-twii-bridge <path>
+TW_DAILY_AUTO_STRICT_E4_READONLY_PRICE_BRIDGE_DIR=<path>
+TW_DAILY_AUTO_STRICT_E4_READONLY_TWII_BRIDGE=<path>
+```
+
+合同边界：
+
+- 只有 `--enable-strict-e4-readonly-chain` 开启时，bridge 参数才会传给 YZ2/YZ2R。
+- 两个 bridge 参数必须同时提供或同时为空；只提供其中一个时 strict E4 chain `STOP/FAIL`。
+- bridge 缺失或覆盖不足时 YZ2/YZ2R 必须失败，不得 fallback 到 stale formal `normalized_nonempty` 伪装成功。
+- YZ2 会把 `readonly_price_bridge_used`、`readonly_twii_bridge_used`、source trace、freshness audit 写入产物。
+- YZ2R 会把 `readonly_price_bridge_used` 和 source trace 写入产物。
+- 该 bridge 不触发 provider publish、accepted latest switch、formal latest write，也不写 `daily_ltr_rerank_latest` 或 `latest_orthogonal_features_latest`。
+- 该 bridge 产物仍是 readonly / diagnostic / research signal，不是 production publish。
+
+合同验证器：
+
+```bash
+python scripts/validate_tw_daily_strict_e4_readonly_bridge_contract.py \
+  --job-json data_tw/ops/daily_auto_update/{job_id}/job.json \
+  --json
+```
 
 ## 6. 推荐产品化日更链路
 
@@ -251,6 +333,8 @@ DataSource refresh
 | status | 语义 | 处理 |
 | --- | --- | --- |
 | `already_up_to_date` | latest 已是目标 asof。 | 无需动作。 |
+| `full_orthogonal_refresh_passed` | 产品 latest 已是目标 asof；完整 segmented acquisition 成功，normalized payload 在目标日观察到 150/150 研究范围且 protected latest 不变。该 observed coverage 不是 authoritative scope/PIT 证明，strict HSA8/Model B gate 可继续保持 blocked。不会追加 quota-aware batch，也不会进入 provider、模型评分或产品 latest 发布。 | 无需处理研究刷新；strict HSA8 状态按 evidence 独立判断。 |
+| `full_orthogonal_refresh_incomplete` | 独立 full cron 已运行，但命令、target-asof observed coverage、150 支研究范围或 protected latest unchanged 任一未通过。产品 latest 不回退。 | 检查该 job 的 `full_orthogonal_refresh_evidence.json`，修复明确失败项后重试。 |
 | `today_data_window_wait` | 当天数据窗口未到。 | 等下一轮。 |
 | `weekend_no_pending_wait` | 周末且无 pending。 | 无需动作。 |
 | `fresh_data_wait` | legacy refresh 未齐。 | 保留 pending，下轮重试。 |

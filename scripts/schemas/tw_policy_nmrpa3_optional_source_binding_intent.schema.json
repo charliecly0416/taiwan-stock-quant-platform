@@ -1,0 +1,865 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tw_policy_nmrpa3_optional_source_binding_intent.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_kind",
+    "schema_version",
+    "mode",
+    "transaction_id",
+    "binding_id",
+    "decision_date",
+    "decision_time",
+    "descriptor_sha256",
+    "expected_previous_head",
+    "authorization",
+    "five_root_parent_binding_ref",
+    "request_scope",
+    "ordered_components",
+    "issuer",
+    "signature",
+    "prepared_at",
+    "committed_at",
+    "intent_sha256"
+  ],
+  "properties": {
+    "artifact_kind": {
+      "const": "optional_source_binding_intent"
+    },
+    "schema_version": {
+      "const": "nmrpa.optional_source_binding_intent.synthetic.v1"
+    },
+    "mode": {
+      "const": "synthetic_metadata_only_no_payload_read"
+    },
+    "transaction_id": {
+      "type": "string",
+      "pattern": "^txn_synthetic_[a-z0-9._-]{8,96}$"
+    },
+    "binding_id": {
+      "type": "string",
+      "pattern": "^synthetic_[a-z0-9_.-]{2,117}$"
+    },
+    "decision_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "decision_time": {
+      "$ref": "#/$defs/time"
+    },
+    "descriptor_sha256": {
+      "$ref": "#/$defs/sha"
+    },
+    "expected_previous_head": {"$ref":"#/$defs/head"},
+    "authorization": {
+      "$ref": "#/$defs/authorization"
+    },
+    "five_root_parent_binding_ref": {
+      "$ref": "#/$defs/parent"
+    },
+    "request_scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "ordered_components": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/institutionalComponent"
+        },
+        {
+          "$ref": "#/$defs/marginComponent"
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "issuer_identity_id",
+        "issuer_credential_id",
+        "registry_head_sha256"
+      ],
+      "properties": {
+        "issuer_identity_id": {
+          "type": "string",
+          "pattern": "^synthetic_"
+        },
+        "issuer_credential_id": {
+          "type": "string",
+          "pattern": "^synthetic_"
+        },
+        "registry_head_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "credential_id",
+        "signed_digest",
+        "signature_base64"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "ed25519"
+        },
+        "credential_id": {
+          "type": "string",
+          "pattern": "^synthetic_"
+        },
+        "signed_digest": {
+          "$ref": "#/$defs/sha"
+        },
+        "signature_base64": {
+          "type": "string",
+          "contentEncoding": "base64"
+        }
+      }
+    },
+    "prepared_at": {
+      "$ref": "#/$defs/time"
+    },
+    "committed_at": {
+      "$ref": "#/$defs/time"
+    },
+    "intent_sha256": {
+      "$ref": "#/$defs/sha"
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sha256",
+        "head_sha256"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "head_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "simpleRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sha256"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "parent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding_id",
+        "binding_record_sha256",
+        "head_sha256"
+      ],
+      "properties": {
+        "binding_id": {
+          "type": "string"
+        },
+        "binding_record_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "head_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization_id",
+        "allowed_binding_id",
+        "allowed_decision_date",
+        "expected_previous_head_sha256",
+        "max_consumptions",
+        "consumption_count",
+        "terminal",
+        "authorization_sha256"
+      ],
+      "properties": {
+        "authorization_id": {
+          "type": "string",
+          "pattern": "^synthetic_"
+        },
+        "allowed_binding_id": {
+          "type": "string",
+          "pattern": "^synthetic_"
+        },
+        "allowed_decision_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "expected_previous_head_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "max_consumptions": {"const":"1"},
+        "consumption_count": {"const":"0"},
+        "terminal": {
+          "const": false
+        },
+        "authorization_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "profile_id",
+        "request_scope_id",
+        "decision_date",
+        "decision_time",
+        "calendar_binding_id",
+        "calendar_binding_sha256",
+        "formal_instruments_binding_id",
+        "formal_instruments_binding_sha256",
+        "trading_date_grid_10",
+        "trading_date_grid_10_sha256",
+        "ordered_active_instruments",
+        "active_instrument_set_sha256",
+        "ordered_source_kinds",
+        "requested_source_asof",
+        "cutoff_policy_id",
+        "request_scope_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "nmrpa.optional_source_request_scope.v1"
+        },
+        "profile_id": {
+          "const": "nmrpa.institutional_margin.optional_daily.v1"
+        },
+        "request_scope_id": {
+          "type": "string",
+          "pattern": "^synthetic_"
+        },
+        "decision_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "decision_time": {
+          "$ref": "#/$defs/time"
+        },
+        "calendar_binding_id": {
+          "type": "string"
+        },
+        "calendar_binding_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "formal_instruments_binding_id": {
+          "type": "string"
+        },
+        "formal_instruments_binding_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "trading_date_grid_10": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "date"
+          },
+          "minItems": 10,
+          "maxItems": 10
+        },
+        "trading_date_grid_10_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "ordered_active_instruments": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^TW[0-9A-Z]{4,10}$"
+          },
+          "minItems": 150,
+          "maxItems": 150,
+          "uniqueItems": true
+        },
+        "active_instrument_set_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "ordered_source_kinds": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "institutional"
+            },
+            {
+              "const": "margin"
+            }
+          ],
+          "items": false
+        },
+        "requested_source_asof": {
+          "type": "string",
+          "format": "date"
+        },
+        "cutoff_policy_id": {
+          "const": "nmrpa.optional_source.pit_cutoff.asia_taipei.v1"
+        },
+        "request_scope_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "response_evidence_id",
+        "source_kind",
+        "request_scope_id",
+        "request_scope_sha256",
+        "decision_date",
+        "requested_source_asof",
+        "source_asof",
+        "available_at",
+        "result_class",
+        "sealed_response_object_id",
+        "sealed_response_raw_sha256",
+        "normalized_inventory_sha256",
+        "payload_sha256",
+        "payload_byte_size",
+        "returned_instrument_count",
+        "ordered_returned_instruments",
+        "returned_instrument_set_sha256",
+        "ordered_absent_instruments",
+        "absent_instrument_set_sha256",
+        "capture_attempt_chain_sha256",
+        "trusted_time_evidence_ref",
+        "issuer_registration_ref",
+        "capture_recorder_registration_ref",
+        "authorization_ref",
+        "response_anchor_ref",
+        "response_evidence_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "nmrpa.optional_source_response_evidence.v1"
+        },
+        "response_evidence_id": {
+          "type": "string",
+          "pattern": "^synthetic_"
+        },
+        "source_kind": {
+          "enum": [
+            "institutional",
+            "margin"
+          ]
+        },
+        "request_scope_id": {
+          "type": "string"
+        },
+        "request_scope_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "decision_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "requested_source_asof": {
+          "type": "string",
+          "format": "date"
+        },
+        "source_asof": {
+          "type": "string",
+          "format": "date"
+        },
+        "available_at": {
+          "$ref": "#/$defs/time"
+        },
+        "result_class": {
+          "enum": [
+            "authoritative_complete_all_rows",
+            "authoritative_complete_partial_rows",
+            "authoritative_complete_zero_rows"
+          ]
+        },
+        "sealed_response_object_id": {
+          "type": "string",
+          "pattern": "^synthetic_"
+        },
+        "sealed_response_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "normalized_inventory_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "payload_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "payload_byte_size": {"$ref":"#/$defs/canonicalUint"},
+        "returned_instrument_count": {"type":"string","pattern":"^(0|[1-9][0-9]?|1[0-4][0-9]|150)$"},
+        "ordered_returned_instruments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "returned_instrument_set_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "ordered_absent_instruments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "absent_instrument_set_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "capture_attempt_chain_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "trusted_time_evidence_ref": {
+          "$ref": "#/$defs/simpleRef"
+        },
+        "issuer_registration_ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "capture_recorder_registration_ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "authorization_ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "response_anchor_ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "response_evidence_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "rowInstitutional": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "date",
+        "source_asof",
+        "available_at",
+        "foreign_net_buy",
+        "investment_trust_net_buy",
+        "dealer_net_buy",
+        "normalized_row_sha256"
+      ],
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "source_asof": {
+          "type": "string",
+          "format": "date"
+        },
+        "available_at": {
+          "$ref": "#/$defs/time"
+        },
+        "foreign_net_buy": {
+          "type": "number"
+        },
+        "investment_trust_net_buy": {
+          "type": "number"
+        },
+        "dealer_net_buy": {
+          "type": "number"
+        },
+        "normalized_row_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "rowMargin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "date",
+        "source_asof",
+        "available_at",
+        "margin_balance",
+        "margin_balance_change",
+        "short_balance",
+        "short_balance_change",
+        "normalized_row_sha256"
+      ],
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "source_asof": {
+          "type": "string",
+          "format": "date"
+        },
+        "available_at": {
+          "$ref": "#/$defs/time"
+        },
+        "margin_balance": {
+          "type": "number"
+        },
+        "margin_balance_change": {
+          "type": "number"
+        },
+        "short_balance": {
+          "type": "number"
+        },
+        "short_balance_change": {
+          "type": "number"
+        },
+        "normalized_row_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "evidence_state",
+        "source_kind",
+        "instrument",
+        "decision_date",
+        "request_scope_ref",
+        "response_evidence_ref",
+        "source_asof",
+        "available_at",
+        "payload_inventory_sha256",
+        "capture_attempt_chain_sha256",
+        "trusted_time_ref",
+        "issuer_ref",
+        "head_ref",
+        "anchor_ref",
+        "instrument_evidence_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "nmrpa.optional_source_instrument_evidence.v1"
+        },
+        "evidence_state": {
+          "enum": [
+            "present",
+            "confirmed_absent"
+          ]
+        },
+        "source_kind": {
+          "enum": [
+            "institutional",
+            "margin"
+          ]
+        },
+        "instrument": {
+          "type": "string",
+          "pattern": "^TW[0-9A-Z]{4,10}$"
+        },
+        "decision_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "request_scope_ref": {
+          "$ref": "#/$defs/simpleRef"
+        },
+        "response_evidence_ref": {
+          "$ref": "#/$defs/simpleRef"
+        },
+        "source_asof": {
+          "type": "string",
+          "format": "date"
+        },
+        "available_at": {
+          "$ref": "#/$defs/time"
+        },
+        "checked_at": {
+          "$ref": "#/$defs/time"
+        },
+        "absence_reason": {
+          "const": "authoritative_complete_scope_no_rows_for_instrument"
+        },
+        "ordered_rows": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/rowInstitutional"
+              },
+              {
+                "$ref": "#/$defs/rowMargin"
+              }
+            ]
+          },
+          "minItems": 10,
+          "maxItems": 10
+        },
+        "row_key_set_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "normalized_row_set_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "returned_instrument_set_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "absent_instrument_set_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "sealed_response_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "payload_inventory_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "capture_attempt_chain_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "trusted_time_ref": {
+          "$ref": "#/$defs/simpleRef"
+        },
+        "issuer_ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "head_ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "anchor_ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "instrument_evidence_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "evidence_state": {"const": "present"}
+          },
+          "required": [
+            "ordered_rows",
+            "row_key_set_sha256",
+            "normalized_row_set_sha256"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "checked_at"
+                ]
+              },
+              {
+                "required": [
+                  "absence_reason"
+                ]
+              },
+              {
+                "required": [
+                  "returned_instrument_set_sha256"
+                ]
+              },
+              {
+                "required": [
+                  "absent_instrument_set_sha256"
+                ]
+              },
+              {
+                "required": [
+                  "sealed_response_raw_sha256"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "evidence_state": {"const": "confirmed_absent"}
+          },
+          "required": [
+            "checked_at",
+            "absence_reason",
+            "returned_instrument_set_sha256",
+            "absent_instrument_set_sha256",
+            "sealed_response_raw_sha256"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "ordered_rows"
+                ]
+              },
+              {
+                "required": [
+                  "row_key_set_sha256"
+                ]
+              },
+              {
+                "required": [
+                  "normalized_row_set_sha256"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {"properties": {"source_kind": {"const": "institutional"}, "evidence_state": {"const": "present"}}, "required": ["source_kind", "evidence_state"]},
+          "then": {"properties": {"ordered_rows": {"type": "array", "items": {"$ref": "#/$defs/rowInstitutional"}}}}
+        },
+        {
+          "if": {"properties": {"source_kind": {"const": "margin"}, "evidence_state": {"const": "present"}}, "required": ["source_kind", "evidence_state"]},
+          "then": {"properties": {"ordered_rows": {"type": "array", "items": {"$ref": "#/$defs/rowMargin"}}}}
+        }
+      ]
+    },
+    "simpleCommittedRef": {"type":"object","additionalProperties":false,"required":["id","sha256"],"properties":{"id":{"type":"string","pattern":"^synthetic_"},"sha256":{"$ref":"#/$defs/sha"}}},
+    "canonicalUint": {"type":"string","pattern":"^(0|[1-9][0-9]*)$"},
+    "genesisHead": {"type":"object","additionalProperties":false,"required":["schema_version","log_id","sequence","previous_head_sha256","record_sha256","head_sha256"],"properties":{"schema_version":{"const":"nmrpa.optional_source.binding_log_head.v1"},"log_id":{"const":"nmrpa.optional_source_binding_log.v1"},"sequence":{"const":"0"},"previous_head_sha256":{"type":"null"},"record_sha256":{"$ref":"#/$defs/sha"},"head_sha256":{"$ref":"#/$defs/sha"}}},
+    "committedHead": {"type":"object","additionalProperties":false,"required":["schema_version","log_id","sequence","transaction_id","previous_head_sha256","commit_sha256","committed_at","head_sha256"],"properties":{"schema_version":{"const":"nmrpa.optional_source.binding_log_committed_head.v1"},"log_id":{"const":"nmrpa.optional_source_binding_log.v1"},"sequence":{"type":"string","pattern":"^[1-9][0-9]*$"},"transaction_id":{"type":"string","pattern":"^txn_synthetic_"},"previous_head_sha256":{"$ref":"#/$defs/sha"},"commit_sha256":{"$ref":"#/$defs/sha"},"committed_at":{"$ref":"#/$defs/time"},"head_sha256":{"$ref":"#/$defs/sha"}}},
+    "head": {"oneOf":[{"$ref":"#/$defs/genesisHead"},{"$ref":"#/$defs/committedHead"}]},
+    "captureAttempt": {
+      "type":"object","additionalProperties":false,
+      "required":["schema_version","capture_run_id","attempt_id","source_kind","request_scope_id","request_scope_sha256","sequence","request_identity_sha256","started_at","completed_at","result_class","http_status_or_null","sealed_response_object_id_or_null","sealed_response_raw_sha256_or_null","issuer_registration_ref","capture_recorder_head_ref","attempt_sha256"],
+      "properties":{"schema_version":{"const":"nmrpa.optional_source_capture_attempt.v1"},"capture_run_id":{"type":"string","pattern":"^synthetic_"},"attempt_id":{"type":"string","pattern":"^synthetic_"},"source_kind":{"enum":["institutional","margin"]},"request_scope_id":{"type":"string","pattern":"^synthetic_"},"request_scope_sha256":{"$ref":"#/$defs/sha"},"sequence":{"$ref":"#/$defs/canonicalUint"},"request_identity_sha256":{"$ref":"#/$defs/sha"},"started_at":{"$ref":"#/$defs/time"},"completed_at":{"$ref":"#/$defs/time"},"result_class":{"enum":["authoritative_success","access_failed","auth_failed","rate_limited","timeout","transport_failed","parse_failed","scope_incomplete"]},"http_status_or_null":{"oneOf":[{"type":"null"},{"$ref":"#/$defs/canonicalUint"}]},"sealed_response_object_id_or_null":{"type":["string","null"]},"sealed_response_raw_sha256_or_null":{"oneOf":[{"type":"null"},{"$ref":"#/$defs/sha"}]},"issuer_registration_ref":{"$ref":"#/$defs/simpleCommittedRef"},"capture_recorder_head_ref":{"$ref":"#/$defs/simpleCommittedRef"},"attempt_sha256":{"$ref":"#/$defs/sha"}}
+    },
+    "trustedTimeEvidence": {
+      "type":"object","additionalProperties":false,
+      "required":["schema_version","evidence_type","source_kind","request_scope_id","source_asof","available_at","publication_record_ref_or_null","first_success_attempt_ref_or_null","trusted_time_issuer_ref","trusted_time_head_ref","trusted_time_anchor_ref","trusted_time_evidence_sha256"],
+      "properties":{"schema_version":{"const":"nmrpa.optional_source_trusted_time.v1"},"evidence_type":{"enum":["trusted_publication","first_successful_capture"]},"source_kind":{"enum":["institutional","margin"]},"request_scope_id":{"type":"string"},"source_asof":{"type":"string","format":"date"},"available_at":{"$ref":"#/$defs/time"},"publication_record_ref_or_null":{"oneOf":[{"type":"null"},{"$ref":"#/$defs/simpleCommittedRef"}]},"first_success_attempt_ref_or_null":{"oneOf":[{"type":"null"},{"$ref":"#/$defs/simpleCommittedRef"}]},"trusted_time_issuer_ref":{"$ref":"#/$defs/simpleCommittedRef"},"trusted_time_head_ref":{"$ref":"#/$defs/simpleCommittedRef"},"trusted_time_anchor_ref":{"$ref":"#/$defs/simpleCommittedRef"},"trusted_time_evidence_sha256":{"$ref":"#/$defs/sha"}},
+      "oneOf":[{"properties":{"evidence_type":{"const":"trusted_publication"},"first_success_attempt_ref_or_null":{"type":"null"}},"required":["publication_record_ref_or_null"],"not":{"properties":{"publication_record_ref_or_null":{"type":"null"}}}},{"properties":{"evidence_type":{"const":"first_successful_capture"},"publication_record_ref_or_null":{"type":"null"}},"required":["first_success_attempt_ref_or_null"],"not":{"properties":{"first_success_attempt_ref_or_null":{"type":"null"}}}}]
+    },
+    "publicationRecord": {"type":"object","additionalProperties":false,"required":["schema_version","store_kind","publication_record_id","source_kind","request_scope_id","source_asof","published_at","issuer_registration_ref","publication_head_ref","publication_anchor_ref","publication_record_sha256"],"properties":{"schema_version":{"const":"nmrpa.optional_source_publication_record.v1"},"store_kind":{"const":"response_evidence_store"},"publication_record_id":{"type":"string","pattern":"^synthetic_"},"source_kind":{"enum":["institutional","margin"]},"request_scope_id":{"type":"string"},"source_asof":{"type":"string","format":"date"},"published_at":{"$ref":"#/$defs/time"},"issuer_registration_ref":{"$ref":"#/$defs/simpleCommittedRef"},"publication_head_ref":{"$ref":"#/$defs/simpleCommittedRef"},"publication_anchor_ref":{"$ref":"#/$defs/simpleCommittedRef"},"publication_record_sha256":{"$ref":"#/$defs/sha"}}},
+    "authoritativePayload": {
+      "oneOf": [
+        {"type":"object","additionalProperties":false,"required":["source_kind","decision_date","request_scope_sha256","registration_id","principal_registration_id","identity_binding_id","credential_activation_id","trusted_service_registration_id","identity_id","status","committed_at","valid_from","valid_until_or_null"],"properties":{"source_kind":{"enum":["institutional","margin"]},"decision_date":{"type":"string","format":"date"},"request_scope_sha256":{"$ref":"#/$defs/sha"},"registration_id":{"type":"string"},"principal_registration_id":{"type":"string"},"identity_binding_id":{"type":"string"},"credential_activation_id":{"type":"string"},"trusted_service_registration_id":{"type":"string"},"identity_id":{"type":"string"},"status":{"const":"active"},"committed_at":{"$ref":"#/$defs/time"},"valid_from":{"$ref":"#/$defs/time"},"valid_until_or_null":{"oneOf":[{"type":"null"},{"$ref":"#/$defs/time"}]}}},
+        {"type":"object","additionalProperties":false,"required":["source_kind","decision_date","request_scope_sha256","registration_id","recorder_id","issuer_registration_id","status","committed_at","valid_from","valid_until_or_null"],"properties":{"source_kind":{"enum":["institutional","margin"]},"decision_date":{"type":"string","format":"date"},"request_scope_sha256":{"$ref":"#/$defs/sha"},"registration_id":{"type":"string"},"recorder_id":{"type":"string"},"issuer_registration_id":{"type":"string"},"status":{"const":"active"},"committed_at":{"$ref":"#/$defs/time"},"valid_from":{"$ref":"#/$defs/time"},"valid_until_or_null":{"oneOf":[{"type":"null"},{"$ref":"#/$defs/time"}]}}},
+        {"type":"object","additionalProperties":false,"required":["source_kind","decision_date","request_scope_sha256","registration_id","profile_id","issuer_registration_id","recorder_registration_id","status","committed_at","valid_from","valid_until_or_null"],"properties":{"source_kind":{"enum":["institutional","margin"]},"decision_date":{"type":"string","format":"date"},"request_scope_sha256":{"$ref":"#/$defs/sha"},"registration_id":{"type":"string"},"profile_id":{"const":"nmrpa.institutional_margin.optional_daily.v1"},"issuer_registration_id":{"type":"string"},"recorder_registration_id":{"type":"string"},"status":{"const":"active"},"committed_at":{"$ref":"#/$defs/time"},"valid_from":{"$ref":"#/$defs/time"},"valid_until_or_null":{"oneOf":[{"type":"null"},{"$ref":"#/$defs/time"}]}}},
+        {"type":"object","additionalProperties":false,"required":["source_kind","decision_date","request_scope_sha256","authorization_id","allowed_sealed_response_object_id","issuer_registration_id","recorder_registration_id","profile_registration_id","issued_at","committed_at","committed_under_head_sha256","max_consumptions","consumption_count","terminal"],"properties":{"source_kind":{"enum":["institutional","margin"]},"decision_date":{"type":"string","format":"date"},"request_scope_sha256":{"$ref":"#/$defs/sha"},"authorization_id":{"type":"string"},"allowed_sealed_response_object_id":{"type":"string"},"issuer_registration_id":{"type":"string"},"recorder_registration_id":{"type":"string"},"profile_registration_id":{"type":"string"},"issued_at":{"$ref":"#/$defs/time"},"committed_at":{"$ref":"#/$defs/time"},"committed_under_head_sha256":{"$ref":"#/$defs/sha"},"max_consumptions":{"const":"1"},"consumption_count":{"const":"0"},"terminal":{"const":false}}},
+        {"type":"object","additionalProperties":false,"required":["source_kind","decision_date","request_scope_sha256","capture_run_id","ordered_attempts","capture_attempt_chain_sha256"],"properties":{"source_kind":{"enum":["institutional","margin"]},"decision_date":{"type":"string","format":"date"},"request_scope_sha256":{"$ref":"#/$defs/sha"},"capture_run_id":{"type":"string"},"ordered_attempts":{"type":"array","items":{"$ref":"#/$defs/captureAttempt"},"minItems":1},"capture_attempt_chain_sha256":{"$ref":"#/$defs/sha"}}},
+        {"type":"object","additionalProperties":false,"required":["source_kind","decision_date","request_scope_sha256","object_id","raw_sha256","payload_sha256","payload_byte_size","inventory_id","attempt_id"],"properties":{"source_kind":{"enum":["institutional","margin"]},"decision_date":{"type":"string","format":"date"},"request_scope_sha256":{"$ref":"#/$defs/sha"},"object_id":{"type":"string"},"raw_sha256":{"$ref":"#/$defs/sha"},"payload_sha256":{"$ref":"#/$defs/sha"},"payload_byte_size":{"$ref":"#/$defs/canonicalUint"},"inventory_id":{"type":"string"},"attempt_id":{"type":"string"}}},
+        {"type":"object","additionalProperties":false,"required":["source_kind","decision_date","request_scope_sha256","inventory_id","normalized_inventory_sha256","ordered_returned_instruments","ordered_absent_instruments","sealed_response_object_id"],"properties":{"source_kind":{"enum":["institutional","margin"]},"decision_date":{"type":"string","format":"date"},"request_scope_sha256":{"$ref":"#/$defs/sha"},"inventory_id":{"type":"string"},"normalized_inventory_sha256":{"$ref":"#/$defs/sha"},"ordered_returned_instruments":{"type":"array","items":{"type":"string"}},"ordered_absent_instruments":{"type":"array","items":{"type":"string"}},"sealed_response_object_id":{"type":"string"}}},
+        {"type":"object","additionalProperties":false,"required":["source_kind","decision_date","request_scope_sha256","trusted_time_evidence","publication_record_or_null"],"properties":{"source_kind":{"enum":["institutional","margin"]},"decision_date":{"type":"string","format":"date"},"request_scope_sha256":{"$ref":"#/$defs/sha"},"trusted_time_evidence":{"$ref":"#/$defs/trustedTimeEvidence"},"publication_record_or_null":{"oneOf":[{"type":"null"},{"$ref":"#/$defs/publicationRecord"}]}}},
+        {"type":"object","additionalProperties":false,"required":["source_kind","decision_date","request_scope_sha256","anchor_id","sealed_response_record_sha256","inventory_record_sha256","authorization_record_sha256","historical_head_id"],"properties":{"source_kind":{"enum":["institutional","margin"]},"decision_date":{"type":"string","format":"date"},"request_scope_sha256":{"$ref":"#/$defs/sha"},"anchor_id":{"type":"string"},"sealed_response_record_sha256":{"$ref":"#/$defs/sha"},"inventory_record_sha256":{"$ref":"#/$defs/sha"},"authorization_record_sha256":{"$ref":"#/$defs/sha"},"historical_head_id":{"type":"string"}}},
+        {"type":"object","additionalProperties":false,"required":["source_kind","decision_date","request_scope_sha256","head_id","state","last_authoritative_record_sha256","ordered_record_sha256"],"properties":{"source_kind":{"enum":["institutional","margin"]},"decision_date":{"type":"string","format":"date"},"request_scope_sha256":{"$ref":"#/$defs/sha"},"head_id":{"type":"string"},"state":{"const":"committed"},"last_authoritative_record_sha256":{"$ref":"#/$defs/sha"},"ordered_record_sha256":{"type":"array","items":{"$ref":"#/$defs/sha"}}}}
+      ]
+    },
+    "authoritativeRecord": {
+      "type":"object","additionalProperties":false,
+      "required":["schema_version","record_kind","store_kind","source_kind","object_id","sequence","previous_record_sha256","payload","record_sha256"],
+      "properties":{"schema_version":{"const":"nmrpa.optional_source_authoritative_record.v1"},"record_kind":{"enum":["issuer_registration","recorder_registration","profile_registration","authorization","capture_attempt","sealed_response","inventory","trusted_time","response_anchor","historical_head"]},"store_kind":{"enum":["capture_attempt_store","sealed_object_store","response_evidence_store","optional_source_profile_registry","authorization_ledger","anchor_ledger"]},"source_kind":{"enum":["institutional","margin"]},"object_id":{"type":"string"},"sequence":{"type":"string","pattern":"^([1-9]|10)$"},"previous_record_sha256":{"$ref":"#/$defs/sha"},"payload":{"$ref":"#/$defs/authoritativePayload"},"record_sha256":{"$ref":"#/$defs/sha"}}
+    },
+    "authoritativeHead": {
+      "type":"object","additionalProperties":false,"required":["schema_version","closure_id","source_kind","sequence","last_record_sha256","history_sha256","head_sha256"],
+      "properties":{"schema_version":{"const":"nmrpa.optional_source_authoritative_head.v1"},"closure_id":{"type":"string"},"source_kind":{"enum":["institutional","margin"]},"sequence":{"const":"10"},"last_record_sha256":{"$ref":"#/$defs/sha"},"history_sha256":{"$ref":"#/$defs/sha"},"head_sha256":{"$ref":"#/$defs/sha"}}
+    },
+    "authoritativeClosure": {
+      "type":"object","additionalProperties":false,"required":["schema_version","closure_id","source_kind","genesis_sha256","ordered_records","current_head","closure_sha256"],
+      "properties":{"schema_version":{"const":"nmrpa.optional_source_authoritative_closure.v1"},"closure_id":{"type":"string"},"source_kind":{"enum":["institutional","margin"]},"genesis_sha256":{"$ref":"#/$defs/sha"},"ordered_records":{"type":"array","items":{"$ref":"#/$defs/authoritativeRecord"},"minItems":10,"maxItems":10},"current_head":{"$ref":"#/$defs/authoritativeHead"},"closure_sha256":{"$ref":"#/$defs/sha"}}
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_kind",
+        "authoritative_closure",
+        "response_evidence",
+        "ordered_instrument_evidence",
+        "component_inventory_sha256",
+        "component_sha256"
+      ],
+      "properties": {
+        "source_kind": {
+          "enum": [
+            "institutional",
+            "margin"
+          ]
+        },
+        "authoritative_closure": {
+          "$ref": "#/$defs/authoritativeClosure"
+        },
+        "response_evidence": {
+          "$ref": "#/$defs/response"
+        },
+        "ordered_instrument_evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          },
+          "minItems": 150,
+          "maxItems": 150
+        },
+        "component_inventory_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "component_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "institutionalComponent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/component"
+        },
+        {
+          "properties": {
+            "source_kind": {
+              "const": "institutional"
+            }
+          }
+        }
+      ]
+    },
+    "marginComponent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/component"
+        },
+        {
+          "properties": {
+            "source_kind": {
+              "const": "margin"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

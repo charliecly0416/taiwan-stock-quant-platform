@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "nmrpa.pricestore_twii_isolated.v1",
+  "x-runtime-exact-schema-registry": {
+    "validator": "tw_policy_nmrpa3_source_adapter.validate_package",
+    "recursive": true,
+    "closed_domains": [
+      "bootstrap", "governance_logs", "source_roots", "pit_bindings",
+      "calendar", "formal_instruments", "modela_rows", "price_rows",
+      "twii_rows", "binding", "authorization", "anchor"
+    ]
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "fixture_mode", "target_asof", "runtime_overrides",
+    "bootstrap", "governance_logs", "source_roots", "pit_bindings",
+    "calendar", "formal_instruments", "modela_rows", "price_rows",
+    "twii_rows", "binding", "authorization", "anchor"
+  ],
+  "properties": {
+    "schema_version": {"const": "nmrpa.pricestore_twii_isolated.v1"},
+    "fixture_mode": {"const": "synthetic_injected_only"},
+    "target_asof": {"type": "string", "format": "date"},
+    "runtime_overrides": {"type": "object", "maxProperties": 0},
+    "bootstrap": {"type": "object"},
+    "governance_logs": {"type": "object"},
+    "source_roots": {"type": "array", "minItems": 5, "maxItems": 5},
+    "pit_bindings": {"type": "array", "minItems": 5},
+    "calendar": {"type": "object"},
+    "formal_instruments": {"type": "array", "minItems": 1},
+    "modela_rows": {"type": "array", "minItems": 1},
+    "price_rows": {"type": "array", "minItems": 1},
+    "twii_rows": {"type": "array", "minItems": 60},
+    "binding": {"type": "object"},
+    "authorization": {"type": "object"},
+    "anchor": {"type": "object"}
+  }
+}

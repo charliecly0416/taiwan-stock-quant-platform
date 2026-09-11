@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "runtime_physical_slimming_manifest.schema.json",
+  "title": "Runtime Physical Slimming Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "observed_at",
+    "repository_root",
+    "worktree_dirty",
+    "cron_parity",
+    "dapr_targets",
+    "protected_fingerprints",
+    "closure_summary",
+    "records",
+    "git_status_entries"
+  ],
+  "properties": {
+    "schema_version": {"const": "runtime_physical_slimming_manifest.v1"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "repository_root": {"type": "string", "minLength": 1},
+    "worktree_dirty": {"type": "boolean"},
+    "cron_parity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "installed_path",
+        "installed_sha256",
+        "actual_evidence_path",
+        "actual_sha256",
+        "installed_daily_commands",
+        "actual_daily_commands"
+      ],
+      "properties": {
+        "installed_path": {"type": "string", "minLength": 1},
+        "installed_sha256": {"$ref": "#/$defs/sha256"},
+        "actual_evidence_path": {"type": "string", "minLength": 1},
+        "actual_sha256": {"$ref": "#/$defs/sha256"},
+        "installed_daily_commands": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "actual_daily_commands": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "dapr_targets": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "prefixItems": [
+        {"const": "scripts/build_tw_dapr9_controlled_latest_publish_preflight_or_stop.py"},
+        {"const": "scripts/build_tw_dapr10_actual_controlled_signal_latest_publish.py"},
+        {"const": "scripts/build_tw_dapr11_downstream_readonly_snapshot_agent_preflight_or_stop.py"},
+        {"const": "scripts/build_tw_dapr12_candidate_only_readonly_snapshot_dry_run_no_publish.py"},
+        {"const": "scripts/build_tw_dapr13_actual_readonly_snapshot_publish.py"},
+        {"const": "scripts/build_tw_dapr14_agent_prompt_latest_preflight_or_stop.py"},
+        {"const": "scripts/build_tw_dapr15_candidate_only_agent_prompt_dry_run_no_publish.py"},
+        {"const": "scripts/build_tw_dapr16_controlled_agent_prompt_publish_preflight_or_stop.py"},
+        {"const": "scripts/build_tw_dapr17_actual_controlled_agent_prompt_publish.py"}
+      ],
+      "items": false
+    },
+    "protected_fingerprints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "configs/active_baseline_descriptor.yaml",
+        "qlib_pipeline/data_tw/experiments/option_c_daily_signal/latest_signal.json",
+        "data_tw/artifacts/signals/e4_frozen_qlib_2018_2022/latest.json",
+        "data_tw/artifacts/publish/readonly_strategy_snapshot/latest.json",
+        "data_tw/artifacts/agent_daily_prompt/latest.json",
+        "data_tw/experiments/option_c_daily_signal/latest_signal.json",
+        "data_tw/ops/daily_auto_update/tw-daily-auto-update.installed.cron"
+      ],
+      "properties": {
+        "configs/active_baseline_descriptor.yaml": {"$ref": "#/$defs/fingerprint"},
+        "qlib_pipeline/data_tw/experiments/option_c_daily_signal/latest_signal.json": {"$ref": "#/$defs/fingerprint"},
+        "data_tw/artifacts/signals/e4_frozen_qlib_2018_2022/latest.json": {"$ref": "#/$defs/fingerprint"},
+        "data_tw/artifacts/publish/readonly_strategy_snapshot/latest.json": {"$ref": "#/$defs/fingerprint"},
+        "data_tw/artifacts/agent_daily_prompt/latest.json": {"$ref": "#/$defs/fingerprint"},
+        "data_tw/experiments/option_c_daily_signal/latest_signal.json": {"$ref": "#/$defs/fingerprint"},
+        "data_tw/ops/daily_auto_update/tw-daily-auto-update.installed.cron": {"$ref": "#/$defs/fingerprint"}
+      }
+    },
+    "git_status_entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "state"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "state": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "closure_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_count",
+        "production_record_count",
+        "test_harness_record_count",
+        "manifest_control_record_count",
+        "dynamic_exception_count",
+        "archive_record_count",
+        "move_eligible_count"
+      ],
+      "properties": {
+        "record_count": {"type": "integer", "minimum": 1},
+        "production_record_count": {"type": "integer", "minimum": 0},
+        "test_harness_record_count": {"type": "integer", "minimum": 0},
+        "manifest_control_record_count": {"type": "integer", "minimum": 0},
+        "dynamic_exception_count": {"type": "integer", "minimum": 0},
+        "archive_record_count": {"type": "integer", "minimum": 0},
+        "move_eligible_count": {"const": 0}
+      }
+    },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/record"}
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exists", "sha256"],
+      "properties": {
+        "exists": {"const": true},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "dynamicException": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "references", "quarantine"],
+      "properties": {
+        "status": {"const": "unresolved_static_path"},
+        "quarantine": {"const": "unknown_do_not_move"},
+        "references": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_kind",
+        "source_path",
+        "target_path",
+        "resolved_path",
+        "reference_type",
+        "runtime_scope",
+        "classification",
+        "exists",
+        "sha256",
+        "git_state",
+        "move_eligible",
+        "evidence",
+        "dynamic_exception"
+      ],
+      "properties": {
+        "source_kind": {
+          "enum": [
+            "runtime_root",
+            "config",
+            "protected_pointer",
+            "daily_runner",
+            "manifest_control",
+            "python",
+            "frontend",
+            "literal_path",
+            "dynamic"
+          ]
+        },
+          "source_path": {"type": "string", "minLength": 1},
+        "target_path": {"type": "string"},
+        "resolved_path": {"type": "string"},
+        "reference_type": {
+          "enum": [
+            "required_runtime_root",
+            "required_registry_or_descriptor",
+            "protected_latest_or_descriptor",
+            "dapr_subprocess",
+            "manifest_control",
+            "python_ast_import",
+            "frontend_static_or_dynamic_import",
+            "literal_repo_path",
+            "dynamic_exception"
+          ]
+        },
+        "runtime_scope": {
+          "enum": ["production_runtime", "test_harness", "manifest_control"]
+        },
+        "classification": {
+          "enum": ["active_keep", "unknown_do_not_move", "archive_keep_immutable"]
+        },
+        "exists": {"type": "boolean"},
+        "sha256": {"type": "string"},
+        "git_state": {"type": "string"},
+        "move_eligible": {"const": false},
+        "evidence": {"type": "object"},
+        "dynamic_exception": {"type": ["object", "null"]}
+      },
+          "allOf": [
+        {
+          "if": {
+            "properties": {"reference_type": {"const": "dynamic_exception"}},
+            "required": ["reference_type"]
+          },
+          "then": {
+            "properties": {
+              "source_path": {
+                "type": "string",
+                "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+              },
+              "target_path": {"const": ""},
+              "resolved_path": {"const": ""},
+              "classification": {"const": "unknown_do_not_move"},
+              "exists": {"const": false},
+              "sha256": {"const": ""},
+              "dynamic_exception": {"$ref": "#/$defs/dynamicException"}
+            }
+          },
+          "else": {
+            "properties": {
+              "target_path": {"type": "string", "minLength": 1},
+              "resolved_path": {"type": "string", "minLength": 1},
+              "exists": {"const": true},
+              "sha256": {"$ref": "#/$defs/sha256"},
+              "dynamic_exception": {"type": "null"}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

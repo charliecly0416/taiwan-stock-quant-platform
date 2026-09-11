@@ -6,6 +6,7 @@ import json
 import math
 import os
 import time
+import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -13,7 +14,7 @@ from typing import Any
 import pandas as pd
 import requests
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / "data_tw/experiments/ltr_orthogonal_features_controlled/daily_ltr_rerank"
 RAW = OUT / "source_freshness_raw_archive"
 LATEST_SIGNAL = ROOT / "qlib_pipeline/data_tw/experiments/option_c_daily_signal/latest_signal.json"
@@ -63,11 +64,16 @@ def norm(raw: Any) -> str:
     return text if text.startswith("TW") else f"TW{text}"
 
 
-def latest_top50() -> tuple[str, list[str]]:
+def latest_top50(asof_override: str = "", symbols_file: Path | None = None) -> tuple[str, list[str]]:
     latest = read_json(LATEST_SIGNAL)
-    asof = str(latest.get("asof") or "")[:10]
-    run_dir = ROOT / "qlib_pipeline" / str(latest.get("run_dir", ""))
-    top50 = pd.read_csv(run_dir / "top50_signals.csv")
+    asof = str(asof_override or latest.get("asof") or "")[:10]
+    if symbols_file is not None:
+        top50 = pd.read_csv(symbols_file)
+    else:
+        run_dir = ROOT / "qlib_pipeline" / str(latest.get("run_dir", ""))
+        top50 = pd.read_csv(run_dir / "top50_signals.csv")
+    if "instrument" not in top50.columns:
+        raise RuntimeError(f"symbols file must contain instrument column: {symbols_file}")
     symbols = sorted({norm(x) for x in top50["instrument"].astype(str).tolist()})
     return asof, symbols
 
@@ -116,6 +122,15 @@ def to_day(value: Any) -> pd.Timestamp | None:
     return pd.Timestamp(ts).normalize()
 
 
+def next_weekday(day: pd.Timestamp | None) -> pd.Timestamp | None:
+    if day is None:
+        return None
+    available = day + pd.Timedelta(days=1)
+    while available.weekday() >= 5:
+        available += pd.Timedelta(days=1)
+    return available
+
+
 def num(row: pd.Series, col: str) -> float:
     val = pd.to_numeric(row.get(col), errors="coerce")
     return float(val) if pd.notna(val) else float("nan")
@@ -145,7 +160,8 @@ def institutional_normalize(raw_rows: list[dict[str, Any]], symbol: str, fetched
             elif "dealer" in name:
                 dealer += net
         if available is None:
-            flags.append("missing_calendar")
+            available = next_weekday(trade)
+            flags.append("calendar_fallback_next_weekday_after_qlib_calendar_end")
         out.append({
             "symbol": symbol,
             "stock_id": symbol.replace("TW", ""),
@@ -176,7 +192,8 @@ def margin_normalize(raw_rows: list[dict[str, Any]], symbol: str, fetched_at: st
         st = num(row, "ShortSaleTodayBalance"); sy = num(row, "ShortSaleYesterdayBalance")
         flags = []
         if available is None:
-            flags.append("missing_calendar")
+            available = next_weekday(trade)
+            flags.append("calendar_fallback_next_weekday_after_qlib_calendar_end")
         out.append({
             "symbol": symbol,
             "stock_id": symbol.replace("TW", ""),
@@ -195,13 +212,28 @@ def margin_normalize(raw_rows: list[dict[str, Any]], symbol: str, fetched_at: st
     return out
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Fetch isolated P3RRR orthogonal source freshness raw archive.")
+    parser.add_argument("--asof", default="", help="Artifact asof/end date label. Defaults to accepted latest_signal asof.")
+    parser.add_argument("--start-date", default="2026-06-11", help="FinMind request start_date.")
+    parser.add_argument("--end-date", default="", help="FinMind request end_date. Defaults to --asof/latest asof.")
+    parser.add_argument(
+        "--symbols-file",
+        type=Path,
+        default=None,
+        help="Optional CSV with instrument column. Defaults to accepted latest top50_signals.csv.",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
     created_at = now()
-    asof, symbols = latest_top50()
+    asof, symbols = latest_top50(args.asof, args.symbols_file)
     if not asof:
         raise RuntimeError("missing latest asof")
-    start = "2026-06-11"
-    end = asof
+    start = args.start_date
+    end = args.end_date or asof
     nxt = calendar_next_map()
     token_value = token()
     attempts = []

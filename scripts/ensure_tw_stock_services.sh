@@ -2,7 +2,7 @@
 set -u
 
 ROOT=${TW_STOCK_PLATFORM_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
-PY=${TW_STOCK_PYTHON:-python}
+PY=${TW_STOCK_PYTHON:-/home/chuliyang/software/miniconda3/bin/python}
 NGROK=${NGROK_BIN:-ngrok}
 LOG_DIR="$ROOT/logs"
 mkdir -p "$LOG_DIR"
@@ -22,6 +22,11 @@ start_backend() {
     ENABLE_PENDING_ORDER_WORKER=false \
     ENABLE_PORTFOLIO_MONITOR=false \
     ENABLE_TW_STOCK_MONITOR_WORKER=false \
+    DISABLE_RESTORE_RUNNING_STRATEGIES=true \
+    POSITION_SYNC_ENABLED=false \
+    ENABLE_REFLECTION_WORKER=false \
+    ENABLE_OFFLINE_AI_CALIBRATION=false \
+    USDT_PAY_ENABLED=false \
     PYTHON_API_HOST=0.0.0.0 \
     PYTHON_API_PORT=5000 \
     PYTHONUNBUFFERED=1 \

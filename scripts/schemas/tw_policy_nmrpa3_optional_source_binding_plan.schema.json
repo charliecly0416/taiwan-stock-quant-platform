@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tw_policy_nmrpa3_optional_source_binding_plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_kind",
+    "schema_version",
+    "mode",
+    "transaction_id",
+    "binding_id",
+    "authorization_id",
+    "descriptor_sha256",
+    "expected_previous_head",
+    "request_scope",
+    "response_evidence",
+    "binding_record",
+    "anchor_record",
+    "signed_record",
+    "journal",
+    "commit_marker",
+    "new_head",
+    "paths",
+    "staging_paths",
+    "commit_order",
+    "plan_sha256"
+  ],
+  "properties": {
+    "artifact_kind": {
+      "const": "optional_source_binding_plan"
+    },
+    "schema_version": {
+      "const": "nmrpa.optional_source_binding_plan.synthetic.v1"
+    },
+    "mode": {
+      "const": "synthetic_metadata_only_no_payload_read"
+    },
+    "transaction_id": {
+      "type": "string",
+      "pattern": "^txn_synthetic_[a-z0-9._-]{8,96}$"
+    },
+    "binding_id": {
+      "type": "string",
+      "pattern": "^synthetic_"
+    },
+    "authorization_id": {
+      "type": "string",
+      "pattern": "^synthetic_"
+    },
+    "descriptor_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "expected_previous_head": {
+      "$ref": "#/$defs/head"
+    },
+    "request_scope": {
+      "$ref": "tw_policy_nmrpa3_optional_source_binding_intent.schema.json#/$defs/scope"
+    },
+    "response_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "institutional",
+        "margin"
+      ],
+      "properties": {
+        "institutional": {
+          "$ref": "tw_policy_nmrpa3_optional_source_binding_intent.schema.json#/$defs/institutionalComponent"
+        },
+        "margin": {
+          "$ref": "tw_policy_nmrpa3_optional_source_binding_intent.schema.json#/$defs/marginComponent"
+        }
+      }
+    },
+    "binding_record": {
+      "$ref": "#/$defs/binding"
+    },
+    "anchor_record": {
+      "$ref": "#/$defs/anchor"
+    },
+    "signed_record": {
+      "$ref": "#/$defs/signed"
+    },
+    "journal": {
+      "$ref": "#/$defs/journal"
+    },
+    "commit_marker": {
+      "$ref": "#/$defs/marker"
+    },
+    "new_head": {
+      "$ref": "#/$defs/committedHead"
+    },
+    "paths": {
+      "$ref": "#/$defs/paths"
+    },
+    "staging_paths": {
+      "$ref": "#/$defs/paths"
+    },
+    "commit_order": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "request_scope"
+        },
+        {
+          "const": "response_evidence"
+        },
+        {
+          "const": "binding"
+        },
+        {
+          "const": "anchor"
+        },
+        {
+          "const": "signed_record"
+        },
+        {
+          "const": "journal"
+        },
+        {
+          "const": "marker"
+        },
+        {
+          "const": "history"
+        },
+        {
+          "const": "head"
+        }
+      ],
+      "items": false,
+      "minItems": 9,
+      "maxItems": 9
+    },
+    "plan_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "sha": {"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "time": {"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "simpleRef": {"type":"object","additionalProperties":false,"required":["id","sha256"],"properties":{"id":{"type":"string"},"sha256":{"$ref":"#/$defs/sha"}}},
+    "parent": {"type":"object","additionalProperties":false,"required":["binding_id","binding_record_sha256","head_sha256"],"properties":{"binding_id":{"type":"string"},"binding_record_sha256":{"$ref":"#/$defs/sha"},"head_sha256":{"$ref":"#/$defs/sha"}}},
+    "genesisHead": {"type":"object","additionalProperties":false,"required":["schema_version","log_id","sequence","previous_head_sha256","record_sha256","head_sha256"],"properties":{"schema_version":{"const":"nmrpa.optional_source.binding_log_head.v1"},"log_id":{"const":"nmrpa.optional_source_binding_log.v1"},"sequence":{"const":"0"},"previous_head_sha256":{"type":"null"},"record_sha256":{"$ref":"#/$defs/sha"},"head_sha256":{"$ref":"#/$defs/sha"}}},
+    "committedHead": {"type":"object","additionalProperties":false,"required":["schema_version","log_id","sequence","transaction_id","previous_head_sha256","commit_sha256","committed_at","head_sha256"],"properties":{"schema_version":{"const":"nmrpa.optional_source.binding_log_committed_head.v1"},"log_id":{"const":"nmrpa.optional_source_binding_log.v1"},"sequence":{"type":"string","pattern":"^[1-9][0-9]*$"},"transaction_id":{"type":"string","pattern":"^txn_synthetic_"},"previous_head_sha256":{"$ref":"#/$defs/sha"},"commit_sha256":{"$ref":"#/$defs/sha"},"committed_at":{"$ref":"#/$defs/time"},"head_sha256":{"$ref":"#/$defs/sha"}}},
+    "head": {"oneOf":[{"$ref":"#/$defs/genesisHead"},{"$ref":"#/$defs/committedHead"}]},
+    "instrumentEvidenceRef": {"type":"object","additionalProperties":false,"required":["instrument","state","sha256"],"properties":{"instrument":{"type":"string","pattern":"^TW[0-9A-Z]{4,10}$"},"state":{"enum":["present","confirmed_absent"]},"sha256":{"$ref":"#/$defs/sha"}}},
+    "bindingComponent": {"type":"object","additionalProperties":false,"required":["source_kind","response_evidence_ref","result_class","source_asof","available_at","active_instrument_set_sha256","trading_date_grid_10_sha256","ordered_instrument_evidence_refs","present_instrument_set_sha256","confirmed_absent_instrument_set_sha256","component_inventory_sha256","component_sha256"],"properties":{"source_kind":{"enum":["institutional","margin"]},"response_evidence_ref":{"$ref":"#/$defs/simpleRef"},"result_class":{"enum":["authoritative_complete_all_rows","authoritative_complete_partial_rows","authoritative_complete_zero_rows"]},"source_asof":{"type":"string","format":"date"},"available_at":{"$ref":"#/$defs/time"},"active_instrument_set_sha256":{"$ref":"#/$defs/sha"},"trading_date_grid_10_sha256":{"$ref":"#/$defs/sha"},"ordered_instrument_evidence_refs":{"type":"array","items":{"$ref":"#/$defs/instrumentEvidenceRef"},"minItems":150,"maxItems":150},"present_instrument_set_sha256":{"$ref":"#/$defs/sha"},"confirmed_absent_instrument_set_sha256":{"$ref":"#/$defs/sha"},"component_inventory_sha256":{"$ref":"#/$defs/sha"},"component_sha256":{"$ref":"#/$defs/sha"}}},
+    "binding": {"type":"object","additionalProperties":false,"required":["schema_version","profile_id","binding_id","transaction_id","decision_date","decision_time","five_root_parent_binding_ref","request_scope_ref","ordered_components","authorization_ref","registry_ref","descriptor_sha256","binding_record_sha256"],"properties":{"schema_version":{"const":"nmrpa.optional_source_daily_binding.v1"},"profile_id":{"const":"nmrpa.institutional_margin.optional_daily.v1"},"binding_id":{"type":"string","pattern":"^synthetic_"},"transaction_id":{"type":"string","pattern":"^txn_synthetic_"},"decision_date":{"type":"string","format":"date"},"decision_time":{"$ref":"#/$defs/time"},"five_root_parent_binding_ref":{"$ref":"#/$defs/parent"},"request_scope_ref":{"type":"object","additionalProperties":false,"required":["request_scope_id","request_scope_sha256"],"properties":{"request_scope_id":{"type":"string"},"request_scope_sha256":{"$ref":"#/$defs/sha"}}},"ordered_components":{"type":"array","prefixItems":[{"allOf":[{"$ref":"#/$defs/bindingComponent"},{"properties":{"source_kind":{"const":"institutional"}}}]},{"allOf":[{"$ref":"#/$defs/bindingComponent"},{"properties":{"source_kind":{"const":"margin"}}}]}],"items":false},"authorization_ref":{"$ref":"#/$defs/simpleRef"},"registry_ref":{"$ref":"#/$defs/simpleRef"},"descriptor_sha256":{"$ref":"#/$defs/sha"},"binding_record_sha256":{"$ref":"#/$defs/sha"}}},
+    "anchor": {"type":"object","additionalProperties":false,"required":["schema_version","anchor_id","binding_record_sha256","request_scope_sha256","ordered_response_evidence_sha256","parent_head_sha256","committed_at","anchor_sha256"],"properties":{"schema_version":{"const":"nmrpa.optional_source_binding_anchor.v1"},"anchor_id":{"type":"string","pattern":"^synthetic_"},"binding_record_sha256":{"$ref":"#/$defs/sha"},"request_scope_sha256":{"$ref":"#/$defs/sha"},"ordered_response_evidence_sha256":{"type":"array","items":{"$ref":"#/$defs/sha"},"minItems":2,"maxItems":2},"parent_head_sha256":{"$ref":"#/$defs/sha"},"committed_at":{"$ref":"#/$defs/time"},"anchor_sha256":{"$ref":"#/$defs/sha"}}},
+    "signature": {"type":"object","additionalProperties":false,"required":["algorithm","credential_id","signed_digest","signature_base64"],"properties":{"algorithm":{"const":"ed25519"},"credential_id":{"type":"string"},"signed_digest":{"$ref":"#/$defs/sha"},"signature_base64":{"type":"string"}}},
+    "body": {"type":"object","additionalProperties":false,"required":["schema_version","log_id","transaction_id","sequence","previous_commit_sha256","event_type","issued_at","issuer_identity_id","issuer_credential_id","payload"],"properties":{"schema_version":{"const":"nmrpa.optional_source_commit_body.v1"},"log_id":{"const":"nmrpa.optional_source_binding_log.v1"},"transaction_id":{"type":"string"},"sequence":{"type":"string","pattern":"^[1-9][0-9]*$"},"previous_commit_sha256":{"type":["string","null"],"pattern":"^[0-9a-f]{64}$"},"event_type":{"const":"optional_source_binding_committed"},"issued_at":{"$ref":"#/$defs/time"},"issuer_identity_id":{"type":"string"},"issuer_credential_id":{"type":"string"},"payload":{"type":"object","additionalProperties":false,"required":["binding_record_sha256","anchor_sha256"],"properties":{"binding_record_sha256":{"$ref":"#/$defs/sha"},"anchor_sha256":{"$ref":"#/$defs/sha"}}}}},
+    "signed": {"type":"object","additionalProperties":false,"required":["schema_version","record_body","record_body_sha256","signature","signed_record_sha256"],"properties":{"schema_version":{"const":"nmrpa.optional_source_signed_record.v1"},"record_body":{"$ref":"#/$defs/body"},"record_body_sha256":{"$ref":"#/$defs/sha"},"signature":{"$ref":"#/$defs/signature"},"signed_record_sha256":{"$ref":"#/$defs/sha"}}},
+    "journal": {"type":"object","additionalProperties":false,"required":["schema_version","log_id","transaction_id","sequence","previous_commit_sha256","expected_previous_head_sha256","signed_record_sha256","state","prepared_at","journal_sha256"],"properties":{"schema_version":{"const":"nmrpa.optional_source_transaction_journal.v1"},"log_id":{"const":"nmrpa.optional_source_binding_log.v1"},"transaction_id":{"type":"string"},"sequence":{"type":"string","pattern":"^[1-9][0-9]*$"},"previous_commit_sha256":{"type":["string","null"],"pattern":"^[0-9a-f]{64}$"},"expected_previous_head_sha256":{"$ref":"#/$defs/sha"},"signed_record_sha256":{"$ref":"#/$defs/sha"},"state":{"const":"prepared"},"prepared_at":{"$ref":"#/$defs/time"},"journal_sha256":{"$ref":"#/$defs/sha"}}},
+    "marker": {"type":"object","additionalProperties":false,"required":["schema_version","log_id","transaction_id","sequence","previous_commit_sha256","expected_previous_head_sha256","record_body_sha256","signed_record_sha256","journal_sha256","committed_at","commit_sha256"],"properties":{"schema_version":{"const":"nmrpa.optional_source_commit_marker.v1"},"log_id":{"const":"nmrpa.optional_source_binding_log.v1"},"transaction_id":{"type":"string"},"sequence":{"type":"string","pattern":"^[1-9][0-9]*$"},"previous_commit_sha256":{"type":["string","null"],"pattern":"^[0-9a-f]{64}$"},"expected_previous_head_sha256":{"$ref":"#/$defs/sha"},"record_body_sha256":{"$ref":"#/$defs/sha"},"signed_record_sha256":{"$ref":"#/$defs/sha"},"journal_sha256":{"$ref":"#/$defs/sha"},"committed_at":{"$ref":"#/$defs/time"},"commit_sha256":{"$ref":"#/$defs/sha"}}},
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_scope",
+        "response_evidence",
+        "binding",
+        "anchor",
+        "signed_record",
+        "journal",
+        "marker",
+        "history",
+        "head"
+      ],
+      "properties": {
+        "request_scope": {
+          "type": "string"
+        },
+        "response_evidence": {
+          "type": "string"
+        },
+        "binding": {
+          "type": "string"
+        },
+        "anchor": {
+          "type": "string"
+        },
+        "signed_record": {
+          "type": "string"
+        },
+        "journal": {
+          "type": "string"
+        },
+        "marker": {
+          "type": "string"
+        },
+        "history": {
+          "type": "string"
+        },
+        "head": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

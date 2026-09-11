@@ -54,7 +54,12 @@ target_holding_count
 candidate_k
 tie_breaker
 diagnostic_only
+partial_intent_kind
+partial_intent_policy
+partial_intent_note
 ```
+
+`partial_intent_*` 仅用于 simulation-only partial intent 的研究诊断，不得表达数量、仓位、权重、现金、成交或 broker/order 信息。
 
 ## 4. 行为语义
 
@@ -64,6 +69,20 @@ diagnostic_only
 - `skip` 表示规则明确跳过，必须提供 `intent_reason`。
 - 若 `signal_date` 是窗口最后一天且无下一交易日价格，ReplayExecution 决定是否 skip，OrderIntent 不得提前伪造成交。
 
+Simulation-only partial intent 只能通过意图原因表达，不得通过数量或目标仓位表达：
+
+```text
+intent_action=buy
+intent_reason=simulated_buy_small
+primary_reason_code=simulated_buy_small
+
+intent_action=sell
+intent_reason=simulated_reduce_partial
+primary_reason_code=simulated_reduce_partial
+```
+
+上述 partial intent 仍然只是研究意图，必须同时满足 `readonly_only=true`、`simulation_only=true`、`not_order=true`、`not_target_position=true`、`not_investment_advice=true`。
+
 ## 5. Forbidden Fields
 
 `order_intents.csv` 不得包含：
@@ -72,14 +91,30 @@ diagnostic_only
 execution_date
 execution_price
 execution_quantity
+quantity_to_buy
+quantity_to_sell
+shares
+lots
+target_position
+target_weight
+allocation_weight
 commission
+fee
 tax
 cash
+cash_after
+nav
 equity
 daily_return
 realized_pnl
 unrealized_pnl
+replay_return
+execution_date
+execution_price
+broker
 broker_order_id
+order_id
+quick_trade
 provider_publish_status
 accepted_latest_status
 ```

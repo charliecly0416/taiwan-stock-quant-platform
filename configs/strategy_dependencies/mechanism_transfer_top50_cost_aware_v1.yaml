@@ -1,0 +1,218 @@
+strategy_rule: mechanism_transfer_top50_cost_aware_v1
+dependency_version: strategy_dependency_v1
+
+readonly_only: true
+simulation_only: true
+diagnostic_only: true
+research_only: true
+production_allowed: false
+not_valid_strategy_evidence: true
+not_default_candidate: true
+not_order: true
+not_target_position: true
+not_investment_advice: true
+no_replay_return_conclusion: true
+
+baseline_strategy_rule: top50_exit_one_worst_sell
+mechanism_route: POLICY_MTR_MECHANISM_TRANSFER_TO_BASELINE
+mtr_phase: POLICY_MTR0_CONTRACT_AND_BASELINE_PARITY_FEASIBILITY
+
+required_core_fields:
+  - date
+  - instrument
+  - candidate_rank
+  - buy_score
+  - raw_score
+  - score_rank
+  - full_qlib_rank
+  - signal_asof
+  - available_at
+  - source_artifact
+
+required_capabilities:
+  - core_signal_v1
+  - candidate_boundary:qlib_top50
+  - buy_ordering:buy_score_desc
+  - full_rank_exit:full_qlib_rank
+
+optional_extensions: []
+required_extensions: []
+
+future_optional_extensions:
+  - field: ext_market_regime_code
+    semantic_role: market_regime
+    usage: diagnostic_risk_regime_hook
+    required: false
+    allowed_values:
+      - risk_on
+      - neutral
+      - risk_off
+    pit_policy: computed_from_history_lte_signal_date
+
+ranking_usage:
+  - field: candidate_rank
+    usage: qlib_top50_candidate_boundary
+  - field: full_qlib_rank
+    usage: qlib_exit_boundary_and_worst_holding
+  - field: buy_score
+    usage: buy_priority_score_gap_and_persistence_gate
+  - field: score_rank
+    usage: buy_rank_gap_and_overlap_audit
+  - field: raw_score
+    usage: audit_only
+
+required_portfolio_state_fields:
+  - asof_date
+  - instrument
+  - quantity
+  - cost_basis
+  - current_holding_flag
+
+required_strategy_config_fields:
+  - strategy_rule
+  - target_holding_count
+  - candidate_k
+  - max_buy_count
+  - max_sell_count
+  - sell_boundary
+  - buy_order
+  - tie_breaker
+  - allow_diagnostic_rule
+
+mechanism_candidates:
+  - mechanism_id: M0
+    mechanism_name: baseline_parity
+    parameters:
+      baseline_rule: top50_exit_one_worst_sell
+  - mechanism_id: M1
+    mechanism_name: max_replacement
+    parameters:
+      max_replace_per_day:
+        - 1
+        - 2
+  - mechanism_id: M2
+    mechanism_name: hold_rank_buffer
+    parameters:
+      hold_rank_buffer:
+        - 60
+        - 75
+        - 100
+  - mechanism_id: M3
+    mechanism_name: score_rank_advantage_gate
+    parameters:
+      score_z_gap_min:
+        - 0.0
+        - 0.25
+        - 0.5
+      rank_gap_min:
+        - 0
+        - 5
+        - 10
+  - mechanism_id: M4
+    mechanism_name: cost_gate
+    parameters:
+      cost_model: fixed_fee_tax_only
+      allowed_advantage_inputs:
+        - buy_score
+        - score_rank
+        - candidate_rank
+        - full_qlib_rank
+  - mechanism_id: M5
+    mechanism_name: regime_risk_hook
+    parameters:
+      market_regime_code:
+        - risk_on
+        - neutral
+        - risk_off
+      inputs: PIT_TWII_history_lte_signal_date
+      mtr0_status: contract_hook_only
+  - mechanism_id: M6
+    mechanism_name: fixed_combinations
+    parameters:
+      combos:
+        - C1: M1 max_replace=1 + M2 hold_rank_buffer=75
+        - C2: M1 max_replace=1 + M3 score_z_gap_min=0.25
+        - C3: M1 max_replace=1 + M2 hold_rank_buffer=75 + M3 score_z_gap_min=0.25
+        - C4: C3 + M5 risk_off_buy_block_for_weak_score
+
+max_buy_count: 1
+max_sell_count: 1
+target_holding_count: 10
+candidate_k: 50
+sell_boundary: qlib_top50_by_candidate_rank_and_full_qlib_rank
+buy_order: buy_score_desc
+tie_breaker:
+  - full_qlib_rank_asc
+  - instrument_asc
+
+forbidden_fields:
+  - future_return_*
+  - future_excess_return_*
+  - forward_return_*
+  - label_*
+  - relevance_10d_top_heavy
+  - ltr_relevance_label
+  - execution_price
+  - execution_date
+  - execution_quantity
+  - next_open
+  - next_close
+  - realized_pnl
+  - realized_return
+  - replay_return
+  - target_position
+  - target_weight
+  - allocation_weight
+  - quantity
+  - quantity_to_buy
+  - quantity_to_sell
+  - shares
+  - lots
+  - broker_order_id
+  - broker
+  - order_id
+  - quick_trade
+  - cash
+  - cash_after
+  - nav
+  - equity
+  - daily_return
+  - commission
+  - fee
+  - tax
+
+forbidden_actions:
+  - train_model
+  - tune_model
+  - read_model_private_file
+  - read_future_price
+  - read_future_label
+  - read_replay_return_as_input
+  - write_broker_order
+  - quick_trade
+  - provider_publish
+  - accepted_latest_switch
+  - frontend_default_switch
+  - monitor_scan_or_alert
+  - modified_replay_engine
+  - modified_registry_default
+  - modified_frontend_or_api
+  - modified_daily_or_provider
+  - generated_order_intent
+  - ran_replay_return
+  - output_target_weight_or_position
+  - output_quantity
+
+allowed_mtr0_outputs:
+  - dependency_yaml
+  - signal_lineage_audit
+  - baseline_parity_feasibility_plan
+  - mechanism_candidate_contract_matrix
+  - dependency_validator_gap_audit
+  - forbidden_action_audit
+
+production_consumers_allowed: false
+frontend_default_switch_allowed: false
+provider_publish_allowed: false
+accepted_latest_switch_allowed: false
+broker_authorized: false

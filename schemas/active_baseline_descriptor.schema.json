@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "arch1.active_baseline_descriptor.v1",
+  "type": "object",
+  "required": ["schema_version", "descriptor_id", "authority", "readonly_only", "simulation_only", "active_baseline", "shadow_models", "protected_latest_paths", "forbidden_scope"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "arch1.active_baseline_descriptor.v1"},
+    "descriptor_id": {"const": "active_baseline_descriptor"},
+    "authority": {"const": "canonical_runtime_baseline"},
+    "readonly_only": {"const": true},
+    "simulation_only": {"const": true},
+    "created_at": {"type": "string", "minLength": 10},
+    "active_baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "model_a", "model_b", "strategy_rule", "execution_price_mode", "product_mode", "portfolio_mode"],
+      "properties": {
+        "status": {"const": "MODEL_A_ONLY"},
+        "model_a": {"type": "object", "additionalProperties": false, "required": ["model_id", "model_family", "role", "artifact_path", "artifact_sha256", "latest_pointer"], "properties": {"model_id": {"const": "e4_frozen_qlib_2018_2022"}, "model_family": {"type": "string", "minLength": 1}, "role": {"type": "string", "minLength": 1}, "artifact_path": {"type": "string", "minLength": 1}, "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "latest_pointer": {"type": "string", "minLength": 1}}},
+        "model_b": {"type": ["null"]},
+        "strategy_rule": {"const": "top50_exit_one_worst_sell"},
+        "execution_price_mode": {"const": "next_open"},
+        "product_mode": {"type": "string", "minLength": 1},
+        "portfolio_mode": {"type": "string", "minLength": 1}
+      }
+    },
+    "shadow_models": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["canonical_id", "model_family", "role", "status", "production_default", "eligible_for_baseline", "allowed_consumers", "aliases", "artifacts", "constraints"], "properties": {"canonical_id": {"const": "e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025"}, "model_family": {"type": "string", "minLength": 1}, "role": {"type": "string", "minLength": 1}, "status": {"const": "PROSPECTIVE_SHADOW"}, "production_default": {"const": false}, "eligible_for_baseline": {"const": false}, "allowed_consumers": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["research", "readonly_comparison"]}, "contains": {"const": "research"}}, "aliases": {"type": "object", "required": ["legacy_display_id", "compatibility_model_id", "compatibility_candidate_id", "compatibility_score_column"], "additionalProperties": false, "properties": {"legacy_display_id": {"type": "string", "minLength": 1}, "compatibility_model_id": {"type": "string", "minLength": 1}, "compatibility_candidate_id": {"type": "string", "minLength": 1}, "compatibility_score_column": {"type": "string", "minLength": 1}}}, "artifacts": {"type": "object", "additionalProperties": false, "required": ["canonical_model", "materialized_shadow_model"], "properties": {"canonical_model": {"$ref": "#/$defs/artifact_ref"}, "materialized_shadow_model": {"$ref": "#/$defs/artifact_ref"}}}, "fallback": {"type": "object", "additionalProperties": false, "required": ["raw_registry_value", "source_registry", "resolution_base", "resolution_pattern", "resolved_observations"], "properties": {"raw_registry_value": {"type": "string", "minLength": 1}, "source_registry": {"type": "string", "minLength": 1}, "resolution_base": {"type": "string", "minLength": 1}, "resolution_pattern": {"type": "string", "minLength": 1}, "resolved_observations": {"type": "array"}}}, "constraints": {"type": "object", "additionalProperties": false, "required": ["candidate_universe", "can_change_candidate_universe", "can_change_exit_boundary", "signal_asof_required", "available_at_required", "source_manifest_required", "feature_manifest_required", "checksum_required"], "properties": {"candidate_universe": {"const": "model_a_top50_only"}, "can_change_candidate_universe": {"const": false}, "can_change_exit_boundary": {"const": false}, "signal_asof_required": {"const": true}, "available_at_required": {"const": true}, "source_manifest_required": {"const": true}, "feature_manifest_required": {"const": true}, "checksum_required": {"const": true}}}}}},
+    "protected_latest_paths": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+    "forbidden_scope": {"type": "object", "additionalProperties": false, "required": ["provider_publish", "accepted_latest_switch", "latest_pointer_write", "cron_write", "frontend_backend_default_switch", "training", "scoring", "broker_or_order"], "properties": {"provider_publish": {"const": false}, "accepted_latest_switch": {"const": false}, "latest_pointer_write": {"const": false}, "cron_write": {"const": false}, "frontend_backend_default_switch": {"const": false}, "training": {"const": false}, "scoring": {"const": false}, "broker_or_order": {"const": false}}}
+  },
+  "$defs": {"artifact_ref": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}}
+}

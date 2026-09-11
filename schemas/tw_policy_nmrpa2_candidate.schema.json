@@ -1,0 +1,322 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/tw_policy_nmrpa2_candidate.schema.json",
+  "title": "NMRPA2 exact isolated artifacts",
+  "oneOf": [
+    {"$ref": "#/$defs/input_snapshot"},
+    {"$ref": "#/$defs/source_manifest"},
+    {"$ref": "#/$defs/eligibility_audit"},
+    {"$ref": "#/$defs/feature_candidate"},
+    {"$ref": "#/$defs/event"},
+    {"$ref": "#/$defs/maturity_transition"},
+    {"$ref": "#/$defs/visible_status"},
+    {"$ref": "#/$defs/forbidden_audit"}
+  ],
+  "$defs": {
+    "sentinel": {"type": "string", "pattern": "^SYNTHETIC_[A-Z0-9_]+$"},
+    "synthetic_time": {"enum": ["SYNTHETIC_TIME_BEFORE_CUTOFF", "SYNTHETIC_TIME_DECISION_CUTOFF", "SYNTHETIC_TIME_AFTER_CUTOFF"]},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullable_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "absence_evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidence_version", "source_kind", "decision_date", "checked_at", "authoritative_scope_id", "expected_symbol_set_sha256", "expected_date", "request_or_batch_manifest_path", "request_or_batch_manifest_sha256", "request_manifest_payload", "immutable_response_or_audit_path", "immutable_response_or_audit_sha256", "immutable_response_or_audit_payload", "response_scope_start", "response_scope_end", "queried_symbol_count", "returned_symbol_count", "returned_rows", "returned_symbol_set_sha256", "absent_symbol_set_sha256", "result_class"],
+      "properties": {
+        "evidence_version": {"$ref": "#/$defs/sentinel"}, "source_kind": {"enum": ["institutional", "margin"]},
+        "decision_date": {"$ref": "#/$defs/sentinel"}, "checked_at": {"$ref": "#/$defs/synthetic_time"},
+        "authoritative_scope_id": {"$ref": "#/$defs/sentinel"}, "expected_symbol_set_sha256": {"$ref": "#/$defs/sha256"},
+        "expected_date": {"$ref": "#/$defs/sentinel"}, "request_or_batch_manifest_path": {"$ref": "#/$defs/sentinel"},
+        "request_or_batch_manifest_sha256": {"$ref": "#/$defs/sha256"}, "request_manifest_payload": {"$ref": "#/$defs/request_payload"},
+        "immutable_response_or_audit_path": {"$ref": "#/$defs/sentinel"}, "immutable_response_or_audit_sha256": {"$ref": "#/$defs/sha256"},
+        "immutable_response_or_audit_payload": {"$ref": "#/$defs/response_payload"}, "response_scope_start": {"$ref": "#/$defs/sentinel"},
+        "response_scope_end": {"$ref": "#/$defs/sentinel"}, "queried_symbol_count": {"type": "integer", "minimum": 1},
+        "returned_symbol_count": {"type": "integer", "minimum": 0}, "returned_rows": {"type": "array", "items": {"$ref": "#/$defs/returned_row"}},
+        "returned_symbol_set_sha256": {"$ref": "#/$defs/sha256"}, "absent_symbol_set_sha256": {"$ref": "#/$defs/sha256"},
+        "result_class": {"enum": ["authoritative_complete_zero_rows", "authoritative_complete_partial_rows"]}
+      }
+    },
+    "returned_row": {"type": "object", "additionalProperties": false, "required": ["instrument", "source_kind", "decision_date"], "properties": {"instrument": {"$ref": "#/$defs/sentinel"}, "source_kind": {"enum": ["institutional", "margin"]}, "decision_date": {"$ref": "#/$defs/sentinel"}}},
+    "request_payload": {"type": "object", "additionalProperties": false, "required": ["source_kind", "decision_date", "expected_symbols"], "properties": {"source_kind": {"enum": ["institutional", "margin"]}, "decision_date": {"$ref": "#/$defs/sentinel"}, "expected_symbols": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sentinel"}}}},
+    "response_payload": {"type": "object", "additionalProperties": false, "required": ["source_kind", "decision_date", "returned_rows"], "properties": {"source_kind": {"enum": ["institutional", "margin"]}, "decision_date": {"$ref": "#/$defs/sentinel"}, "returned_rows": {"type": "array", "items": {"$ref": "#/$defs/returned_row"}}}},
+    "institutional_row": {"type": "object", "additionalProperties": false, "required": ["date", "available_at", "source_asof", "foreign_net_buy", "investment_trust_net_buy", "dealer_net_buy"], "properties": {"date": {"$ref": "#/$defs/sentinel"}, "available_at": {"$ref": "#/$defs/synthetic_time"}, "source_asof": {"$ref": "#/$defs/sentinel"}, "foreign_net_buy": {"type": "number"}, "investment_trust_net_buy": {"type": "number"}, "dealer_net_buy": {"type": "number"}}},
+    "margin_row": {"type": "object", "additionalProperties": false, "required": ["date", "available_at", "source_asof", "margin_balance", "margin_balance_change", "short_balance", "short_balance_change"], "properties": {"date": {"$ref": "#/$defs/sentinel"}, "available_at": {"$ref": "#/$defs/synthetic_time"}, "source_asof": {"$ref": "#/$defs/sentinel"}, "margin_balance": {"type": "number"}, "margin_balance_change": {"type": "number"}, "short_balance": {"type": "number"}, "short_balance_change": {"type": "number"}}},
+    "synthetic_source": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["source_state", "absence_evidence"], "properties": {"source_state": {"const": "confirmed_absent"}, "absence_evidence": {"$ref": "#/$defs/absence_evidence"}}},
+        {"type": "object", "additionalProperties": false, "required": ["source_state", "rows", "delay_days"], "properties": {"source_state": {"const": "present"}, "rows": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"oneOf": [{"$ref": "#/$defs/institutional_row"}, {"$ref": "#/$defs/margin_row"}]}}, "delay_days": {"const": 0}}}
+      ]
+    },
+    "price_snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["close", "volume", "vwap", "expected_date_grid_last20", "observed_close_date_grid_last20"],
+      "properties": {
+        "close": {"type": "array", "minItems": 121, "items": {"type": "number"}},
+        "volume": {"type": "array", "minItems": 60, "items": {"type": "number"}},
+        "vwap": {"type": "array", "minItems": 60, "items": {"type": "number"}},
+        "expected_date_grid_last20": {"type": "array", "minItems": 20, "maxItems": 20, "items": {"$ref": "#/$defs/sentinel"}},
+        "observed_close_date_grid_last20": {"type": "array", "maxItems": 20, "items": {"$ref": "#/$defs/sentinel"}}
+      }
+    },
+    "input_symbol": {
+      "type": "object", "additionalProperties": false,
+      "required": ["score", "available_at", "rank_history", "top30_history", "top50_history", "price", "institutional", "margin"],
+      "properties": {
+        "score": {"type": "number"}, "available_at": {"$ref": "#/$defs/synthetic_time"},
+        "rank_history": {"type": "array", "items": {"type": "integer"}},
+        "top30_history": {"type": "array", "items": {"type": "boolean"}}, "top50_history": {"type": "array", "items": {"type": "boolean"}},
+        "price": {"$ref": "#/$defs/price_snapshot"}, "institutional": {"$ref": "#/$defs/synthetic_source"}, "margin": {"$ref": "#/$defs/synthetic_source"}
+      }
+    },
+    "input_snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contract_id", "decision_date", "decision_time", "calendar", "formal_active_symbols", "twii_close", "symbols"],
+      "properties": {
+        "contract_id": {"$ref": "#/$defs/sentinel"}, "decision_date": {"$ref": "#/$defs/sentinel"},
+        "decision_time": {"const": "SYNTHETIC_TIME_DECISION_CUTOFF"},
+        "calendar": {"type": "object", "additionalProperties": false, "required": ["available_at", "trading_dates"], "properties": {"available_at": {"$ref": "#/$defs/synthetic_time"}, "trading_dates": {"type": "array", "minItems": 131, "items": {"$ref": "#/$defs/sentinel"}}}},
+        "formal_active_symbols": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sentinel"}},
+        "twii_close": {"type": "array", "minItems": 121, "items": {"type": "number"}},
+        "symbols": {"type": "object", "minProperties": 1, "additionalProperties": false, "patternProperties": {"^SYNTHETIC_[A-Z0-9_]+$": {"$ref": "#/$defs/input_symbol"}}}
+      }
+    },
+    "contract_refs": {
+      "type": "object",
+      "required": ["feature_contract_sha256", "target_contract_sha256", "split_contract_sha256", "decision_time_policy_sha256"],
+      "properties": {
+        "feature_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "target_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "split_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "decision_time_policy_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "source_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_kind", "source_id", "source_state", "payload_sha256", "manifest_sha256"],
+      "properties": {
+        "source_kind": {"enum": ["calendar", "formal_instruments", "model_a", "price", "twii", "institutional", "margin"]},
+        "source_id": {"$ref": "#/$defs/sentinel"},
+        "source_state": {"const": "present"},
+        "payload_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "calendar_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_type", "schema_version", "decision_date", "prefix_dates", "full_dates", "prefix_sha256", "full_sha256", "maturity_horizon_td", "maturity_endpoint"],
+      "properties": {
+        "artifact_type": {"const": "synthetic_calendar_binding"},
+        "schema_version": {"const": "nmrpa2.synthetic.v1"},
+        "decision_date": {"$ref": "#/$defs/sentinel"},
+        "prefix_dates": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sentinel"}},
+        "full_dates": {"type": "array", "minItems": 11, "items": {"$ref": "#/$defs/sentinel"}},
+        "prefix_sha256": {"$ref": "#/$defs/sha256"},
+        "full_sha256": {"$ref": "#/$defs/sha256"},
+        "maturity_horizon_td": {"const": 10},
+        "maturity_endpoint": {"$ref": "#/$defs/sentinel"}
+      }
+    },
+    "source_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_type", "schema_version", "contract_id", "decision_date", "feature_contract_sha256", "target_contract_sha256", "split_contract_sha256", "decision_time_policy_sha256", "synthetic_input_snapshot_sha256", "calendar_binding", "source_references", "source_reference_set_sha256", "manifest_sha256"],
+      "properties": {
+        "artifact_type": {"const": "prospective_source_reference_manifest"},
+        "schema_version": {"const": "nmrpa2.synthetic.v1"},
+        "contract_id": {"$ref": "#/$defs/sentinel"},
+        "decision_date": {"$ref": "#/$defs/sentinel"},
+        "feature_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "target_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "split_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "decision_time_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "synthetic_input_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+        "calendar_binding": {"$ref": "#/$defs/calendar_binding"},
+        "source_references": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"$ref": "#/$defs/source_reference"}},
+        "source_reference_set_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "date_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["formal_active_count", "model_a_join_count", "price_join_count", "institutional_join_count", "margin_join_count", "included_count", "date_valid", "formal_active_set_sha256", "included_set_sha256"],
+      "properties": {
+        "formal_active_count": {"type": "integer", "minimum": 1},
+        "model_a_join_count": {"type": "integer", "minimum": 1},
+        "price_join_count": {"type": "integer", "minimum": 1},
+        "institutional_join_count": {"type": "integer", "minimum": 1},
+        "margin_join_count": {"type": "integer", "minimum": 1},
+        "included_count": {"type": "integer", "minimum": 1},
+        "date_valid": {"const": true},
+        "formal_active_set_sha256": {"$ref": "#/$defs/sha256"},
+        "included_set_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "symbol_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instrument", "reason", "included", "model_a_count", "price_count", "institutional_count", "margin_count", "candidate_sha256"],
+      "properties": {
+        "instrument": {"$ref": "#/$defs/sentinel"},
+        "reason": {"const": "eligible"},
+        "included": {"const": true},
+        "model_a_count": {"const": 1},
+        "price_count": {"const": 1},
+        "institutional_count": {"const": 1},
+        "margin_count": {"const": 1},
+        "candidate_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "eligibility_audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_type", "schema_version", "contract_id", "decision_date", "feature_contract_sha256", "target_contract_sha256", "split_contract_sha256", "decision_time_policy_sha256", "date_summary", "symbol_records", "audit_payload_sha256"],
+      "properties": {
+        "artifact_type": {"const": "dynamic_eligibility_audit"},
+        "schema_version": {"const": "nmrpa2.synthetic.v1"},
+        "contract_id": {"$ref": "#/$defs/sentinel"},
+        "decision_date": {"$ref": "#/$defs/sentinel"},
+        "feature_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "target_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "split_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "decision_time_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "date_summary": {"$ref": "#/$defs/date_summary"},
+        "symbol_records": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/symbol_record"}},
+        "audit_payload_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "feature_values": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qlib_score_raw", "qlib_rank", "qlib_score_percentile_by_date", "qlib_score_zscore_by_date", "rank_change_1d", "rank_change_3d", "rank_change_5d", "top10_flag", "top30_flag", "top50_flag", "top30_streak", "top50_streak", "MA5", "MA10", "MA20", "MA60", "RSI14", "MACD", "Bollinger_position", "ret20", "volatility20", "volume_ratio20", "avg_trading_value_20d", "volume_stability20", "missing_rate20", "suspension_proxy", "slippage_proxy", "TWII_ret20", "TWII_ret60", "TWII_close_vs_MA60", "TWII_close_vs_MA120", "market_volatility20", "market_drawdown60", "market_breadth20", "foreign_net_buy", "investment_trust_net_buy", "dealer_net_buy", "institutional_total_net_buy", "foreign_net_buy_roll1", "foreign_net_buy_roll3", "foreign_net_buy_roll5", "foreign_net_buy_roll10", "investment_trust_net_buy_roll1", "investment_trust_net_buy_roll3", "investment_trust_net_buy_roll5", "investment_trust_net_buy_roll10", "dealer_net_buy_roll1", "dealer_net_buy_roll3", "dealer_net_buy_roll5", "dealer_net_buy_roll10", "institutional_total_net_buy_roll1", "institutional_total_net_buy_roll3", "institutional_total_net_buy_roll5", "institutional_total_net_buy_roll10", "institutional_total_net_buy_streak", "institutional_missing_flag", "institutional_delay_flag", "institutional_flow_delay_days", "institutional_flow_asof_missing_flag", "margin_balance", "margin_balance_change", "short_balance", "short_balance_change", "margin_balance_change_roll1", "margin_balance_change_roll3", "margin_balance_change_roll5", "margin_balance_change_roll10", "short_balance_change_roll1", "short_balance_change_roll3", "short_balance_change_roll5", "short_balance_change_roll10", "margin_direction_proxy", "short_direction_proxy", "margin_short_divergence_proxy", "margin_short_missing_flag", "margin_short_delay_flag", "margin_short_delay_days", "margin_short_asof_missing_flag"],
+      "properties": {
+        "qlib_score_raw": {"type": "number"}, "qlib_rank": {"type": "integer"},
+        "qlib_score_percentile_by_date": {"type": "number"}, "qlib_score_zscore_by_date": {"type": "number"},
+        "rank_change_1d": {"type": "integer"}, "rank_change_3d": {"type": "integer"}, "rank_change_5d": {"type": "integer"},
+        "top10_flag": {"type": "integer"}, "top30_flag": {"type": "integer"}, "top50_flag": {"type": "integer"},
+        "top30_streak": {"type": "integer"}, "top50_streak": {"type": "integer"},
+        "MA5": {"type": "number"}, "MA10": {"type": "number"}, "MA20": {"type": "number"}, "MA60": {"type": "number"},
+        "RSI14": {"type": "number"}, "MACD": {"type": "number"}, "Bollinger_position": {"type": "number"},
+        "ret20": {"type": "number"}, "volatility20": {"type": "number"}, "volume_ratio20": {"type": "number"},
+        "avg_trading_value_20d": {"type": "number"}, "volume_stability20": {"type": "number"}, "missing_rate20": {"type": "number"},
+        "suspension_proxy": {"type": "integer"}, "slippage_proxy": {"type": "number"},
+        "TWII_ret20": {"type": "number"}, "TWII_ret60": {"type": "number"}, "TWII_close_vs_MA60": {"type": "number"}, "TWII_close_vs_MA120": {"type": "number"},
+        "market_volatility20": {"type": "number"}, "market_drawdown60": {"type": "number"}, "market_breadth20": {"type": "number"},
+        "foreign_net_buy": {"type": "number"}, "investment_trust_net_buy": {"type": "number"}, "dealer_net_buy": {"type": "number"}, "institutional_total_net_buy": {"type": "number"},
+        "foreign_net_buy_roll1": {"type": "number"}, "foreign_net_buy_roll3": {"type": "number"}, "foreign_net_buy_roll5": {"type": "number"}, "foreign_net_buy_roll10": {"type": "number"},
+        "investment_trust_net_buy_roll1": {"type": "number"}, "investment_trust_net_buy_roll3": {"type": "number"}, "investment_trust_net_buy_roll5": {"type": "number"}, "investment_trust_net_buy_roll10": {"type": "number"},
+        "dealer_net_buy_roll1": {"type": "number"}, "dealer_net_buy_roll3": {"type": "number"}, "dealer_net_buy_roll5": {"type": "number"}, "dealer_net_buy_roll10": {"type": "number"},
+        "institutional_total_net_buy_roll1": {"type": "number"}, "institutional_total_net_buy_roll3": {"type": "number"}, "institutional_total_net_buy_roll5": {"type": "number"}, "institutional_total_net_buy_roll10": {"type": "number"},
+        "institutional_total_net_buy_streak": {"type": "integer"}, "institutional_missing_flag": {"type": "integer"}, "institutional_delay_flag": {"type": "integer"}, "institutional_flow_delay_days": {"type": "integer"}, "institutional_flow_asof_missing_flag": {"type": "integer"},
+        "margin_balance": {"type": "number"}, "margin_balance_change": {"type": "number"}, "short_balance": {"type": "number"}, "short_balance_change": {"type": "number"},
+        "margin_balance_change_roll1": {"type": "number"}, "margin_balance_change_roll3": {"type": "number"}, "margin_balance_change_roll5": {"type": "number"}, "margin_balance_change_roll10": {"type": "number"},
+        "short_balance_change_roll1": {"type": "number"}, "short_balance_change_roll3": {"type": "number"}, "short_balance_change_roll5": {"type": "number"}, "short_balance_change_roll10": {"type": "number"},
+        "margin_direction_proxy": {"type": "integer"}, "short_direction_proxy": {"type": "integer"}, "margin_short_divergence_proxy": {"type": "integer"},
+        "margin_short_missing_flag": {"type": "integer"}, "margin_short_delay_flag": {"type": "integer"}, "margin_short_delay_days": {"type": "integer"}, "margin_short_asof_missing_flag": {"type": "integer"}
+      }
+    },
+    "feature_candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_type", "schema_version", "contract_id", "decision_date", "instrument", "feature_contract_sha256", "target_contract_sha256", "split_contract_sha256", "decision_time_policy_sha256", "feature_values", "feature_row_sha256"],
+      "properties": {
+        "artifact_type": {"const": "prospective_feature_candidate"}, "schema_version": {"const": "nmrpa2.synthetic.v1"},
+        "contract_id": {"$ref": "#/$defs/sentinel"}, "decision_date": {"$ref": "#/$defs/sentinel"}, "instrument": {"$ref": "#/$defs/sentinel"},
+        "feature_contract_sha256": {"$ref": "#/$defs/sha256"}, "target_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "split_contract_sha256": {"$ref": "#/$defs/sha256"}, "decision_time_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "feature_values": {"$ref": "#/$defs/feature_values"}, "feature_row_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_type", "schema_version", "contract_id", "decision_date", "event_type", "attempt_id", "event_time", "payload_sha256", "feature_contract_sha256", "target_contract_sha256", "split_contract_sha256", "decision_time_policy_sha256", "chain_sequence", "previous_event_hash", "event_body_sha256", "event_hash"],
+      "properties": {
+        "artifact_type": {"const": "prospective_accumulation_event"}, "schema_version": {"const": "nmrpa2.synthetic.v1"},
+        "contract_id": {"$ref": "#/$defs/sentinel"}, "decision_date": {"$ref": "#/$defs/sentinel"},
+        "event_type": {"enum": ["candidate_valid", "retry_observed", "collision_rejected", "invalidation", "validation_failed"]},
+        "attempt_id": {"$ref": "#/$defs/sentinel"}, "event_time": {"$ref": "#/$defs/sentinel"}, "payload_sha256": {"$ref": "#/$defs/sha256"},
+        "feature_contract_sha256": {"$ref": "#/$defs/sha256"}, "target_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "split_contract_sha256": {"$ref": "#/$defs/sha256"}, "decision_time_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "chain_sequence": {"type": "integer", "minimum": 1}, "previous_event_hash": {"$ref": "#/$defs/nullable_sha256"},
+        "event_body_sha256": {"$ref": "#/$defs/sha256"}, "event_hash": {"$ref": "#/$defs/sha256"},
+        "original_event_hash": {"$ref": "#/$defs/sha256"},
+        "original_business_key": {"type": "array", "prefixItems": [{"$ref": "#/$defs/sentinel"}, {"$ref": "#/$defs/sentinel"}, {"const": "candidate_valid"}], "minItems": 3, "maxItems": 3},
+        "rejected_payload_sha256": {"$ref": "#/$defs/sha256"}, "invalidates_event_hash": {"$ref": "#/$defs/sha256"},
+        "trigger_event_hash": {"$ref": "#/$defs/sha256"}, "counter_effect": {"type": "integer", "minimum": -1, "maximum": 0}
+      },
+      "oneOf": [
+        {"properties": {"event_type": {"enum": ["candidate_valid", "validation_failed"]}}, "not": {"anyOf": [{"required": ["original_event_hash"]}, {"required": ["original_business_key"]}, {"required": ["rejected_payload_sha256"]}, {"required": ["invalidates_event_hash"]}, {"required": ["trigger_event_hash"]}, {"required": ["counter_effect"]}]}},
+        {"properties": {"event_type": {"const": "retry_observed"}}, "required": ["original_event_hash", "original_business_key", "counter_effect"], "not": {"anyOf": [{"required": ["rejected_payload_sha256"]}, {"required": ["invalidates_event_hash"]}, {"required": ["trigger_event_hash"]}]}},
+        {"properties": {"event_type": {"const": "collision_rejected"}}, "required": ["original_event_hash", "rejected_payload_sha256", "counter_effect"], "not": {"anyOf": [{"required": ["original_business_key"]}, {"required": ["invalidates_event_hash"]}, {"required": ["trigger_event_hash"]}]}},
+        {"properties": {"event_type": {"const": "invalidation"}}, "required": ["invalidates_event_hash", "trigger_event_hash", "counter_effect"], "not": {"anyOf": [{"required": ["original_event_hash"]}, {"required": ["original_business_key"]}, {"required": ["rejected_payload_sha256"]}]}}
+      ]
+    },
+    "maturity_transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_type", "schema_version", "state_event_id", "state_sequence", "previous_state_hash", "from_state", "to_state", "transition_reason", "contract_id", "decision_date", "instrument", "candidate_sha256", "calendar_prefix_sha256", "calendar_full_sha256", "maturity_endpoint", "feature_contract_sha256", "target_contract_sha256", "split_contract_sha256", "decision_time_policy_sha256", "event_time", "restricted_seal_ref", "invalidation_ref", "transition_body_sha256", "state_event_hash"],
+      "properties": {
+        "artifact_type": {"const": "sealed_maturity_transition"}, "schema_version": {"const": "nmrpa2.synthetic.v1"},
+        "state_event_id": {"$ref": "#/$defs/sentinel"}, "state_sequence": {"type": "integer", "minimum": 1},
+        "previous_state_hash": {"$ref": "#/$defs/nullable_sha256"}, "from_state": {"enum": ["none", "candidate_pending", "label_pending", "matured", "sealed"]},
+        "to_state": {"enum": ["candidate_pending", "label_pending", "matured", "sealed", "invalid"]}, "transition_reason": {"$ref": "#/$defs/sentinel"},
+        "contract_id": {"$ref": "#/$defs/sentinel"}, "decision_date": {"$ref": "#/$defs/sentinel"}, "instrument": {"$ref": "#/$defs/sentinel"},
+        "candidate_sha256": {"$ref": "#/$defs/sha256"}, "calendar_prefix_sha256": {"$ref": "#/$defs/sha256"}, "calendar_full_sha256": {"$ref": "#/$defs/sha256"},
+        "maturity_endpoint": {"$ref": "#/$defs/sentinel"}, "feature_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "target_contract_sha256": {"$ref": "#/$defs/sha256"}, "split_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "decision_time_policy_sha256": {"$ref": "#/$defs/sha256"}, "event_time": {"$ref": "#/$defs/sentinel"},
+        "restricted_seal_ref": {"oneOf": [{"$ref": "#/$defs/sentinel"}, {"type": "null"}]},
+        "invalidation_ref": {"oneOf": [{"$ref": "#/$defs/sentinel"}, {"type": "null"}]},
+        "transition_body_sha256": {"$ref": "#/$defs/sha256"}, "state_event_hash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "visible_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_type", "schema_version", "contract_id", "start_state", "latest_attempted_date", "valid_decision_date_count_bucket", "pending_date_count", "sealed_date_count", "invalid_date_count", "remaining_valid_dates", "maturity_wait_state", "integrity_state", "readiness_state", "last_failure_code", "generated_at"],
+      "properties": {
+        "artifact_type": {"const": "researcher_visible_holdout_status"}, "schema_version": {"const": "nmrpa2.synthetic.v1"},
+        "contract_id": {"$ref": "#/$defs/sentinel"}, "start_state": {"enum": ["not_started", "started"]}, "latest_attempted_date": {"$ref": "#/$defs/sentinel"},
+        "valid_decision_date_count_bucket": {"enum": ["0_19", "20_24", "25_29", "30_34", "35_39", "40_44", "45_49", "50_54", "55_59", "60_64", "65_69", "70_74", "75_79", "80_84", "85_89", "90_94", "95_99", "100_104", "105_109", "110_114", "115_119", "120_124", "125", "126"]},
+        "pending_date_count": {"oneOf": [{"const": "suppressed"}, {"type": "integer", "minimum": 0}]},
+        "sealed_date_count": {"oneOf": [{"const": "suppressed"}, {"type": "integer", "minimum": 0}]},
+        "invalid_date_count": {"oneOf": [{"const": "suppressed"}, {"type": "integer", "minimum": 0}]},
+        "remaining_valid_dates": {"oneOf": [{"const": "suppressed"}, {"type": "integer", "minimum": 0, "maximum": 126}]},
+        "maturity_wait_state": {"enum": ["not_started", "waiting", "partially_sealed", "complete"]}, "integrity_state": {"enum": ["synthetic_valid", "synthetic_invalid"]},
+        "readiness_state": {"enum": ["isolated_only", "isolated_complete"]}, "last_failure_code": {"$ref": "#/$defs/sentinel"}, "generated_at": {"$ref": "#/$defs/sentinel"}
+      }
+    },
+    "fingerprint": {
+      "type": "object", "additionalProperties": false, "required": ["exists", "sha256"],
+      "properties": {"exists": {"type": "boolean"}, "sha256": {"$ref": "#/$defs/nullable_sha256"}}
+    },
+    "protected_map": {
+      "type": "object", "additionalProperties": false,
+      "required": ["qlib_pipeline/data_tw/experiments/option_c_daily_signal/latest_signal.json", "data_tw/experiments/option_c_daily_signal/latest_signal.json", "data_tw/artifacts/signals/e4_frozen_qlib_2018_2022/latest.json", "data_tw/artifacts/publish/readonly_strategy_snapshot/latest.json", "data_tw/artifacts/agent_daily_prompt/latest.json", "data_tw/ops/daily_auto_update/tw-daily-auto-update.installed.cron", "qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin", "data_tw/ops/daily_auto_update", "__actual_crontab__"],
+      "properties": {
+        "qlib_pipeline/data_tw/experiments/option_c_daily_signal/latest_signal.json": {"$ref": "#/$defs/fingerprint"},
+        "data_tw/experiments/option_c_daily_signal/latest_signal.json": {"$ref": "#/$defs/fingerprint"},
+        "data_tw/artifacts/signals/e4_frozen_qlib_2018_2022/latest.json": {"$ref": "#/$defs/fingerprint"},
+        "data_tw/artifacts/publish/readonly_strategy_snapshot/latest.json": {"$ref": "#/$defs/fingerprint"},
+        "data_tw/artifacts/agent_daily_prompt/latest.json": {"$ref": "#/$defs/fingerprint"},
+        "data_tw/ops/daily_auto_update/tw-daily-auto-update.installed.cron": {"$ref": "#/$defs/fingerprint"},
+        "qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin": {"$ref": "#/$defs/fingerprint"},
+        "data_tw/ops/daily_auto_update": {"$ref": "#/$defs/fingerprint"},
+        "__actual_crontab__": {"$ref": "#/$defs/fingerprint"}
+      }
+    },
+    "forbidden_audit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact_type", "schema_version", "training_performed", "network_accessed", "database_accessed", "cron_modified", "provider_or_latest_written", "product_modified", "real_data_read", "result_value_generated", "protected_before", "protected_after", "protected_unchanged", "audit_sha256"],
+      "properties": {
+        "artifact_type": {"const": "nmrpa_forbidden_action_audit"}, "schema_version": {"const": "nmrpa2.synthetic.v1"},
+        "training_performed": {"const": false}, "network_accessed": {"const": false}, "database_accessed": {"const": false},
+        "cron_modified": {"const": false}, "provider_or_latest_written": {"const": false}, "product_modified": {"const": false},
+        "real_data_read": {"const": false}, "result_value_generated": {"const": false},
+        "protected_before": {"$ref": "#/$defs/protected_map"}, "protected_after": {"$ref": "#/$defs/protected_map"},
+        "protected_unchanged": {"const": true}, "audit_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

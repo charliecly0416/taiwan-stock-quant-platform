@@ -5,7 +5,7 @@
     "signal_root_exists": true,
     "latest_signal_exists": true,
     "provider_calendar_exists": true,
-    "provider_calendar_latest": "2026-06-01",
+    "provider_calendar_latest": "2026-08-21",
     "option_c_150_normalized_count": 150,
     "recorder_exists": true,
     "params_pkl_exists": true,
@@ -27,7 +27,7 @@
         "/home/chuliyang/software/miniconda3/bin/python",
         "examples/tw/run_option_c_daily_signal_option_c_provider.py",
         "--asof",
-        "2026-06-01",
+        "2026-08-21",
         "--dry-run"
       ],
       "cwd": "/home/chuliyang/taiwan-stock-quant-platform/qlib_pipeline",

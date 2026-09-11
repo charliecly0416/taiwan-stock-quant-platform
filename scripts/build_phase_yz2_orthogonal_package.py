@@ -114,8 +114,22 @@ def load_model_a(signal_asof: str) -> tuple[dict[str, Any], pd.DataFrame]:
     return manifest, top50
 
 
-def price_frame(symbol: str) -> pd.DataFrame:
-    path = PRICE_DIR / f"{symbol}.csv"
+def resolve_optional_path(raw: str) -> Path | None:
+    value = raw.strip()
+    if not value:
+        return None
+    path = Path(value)
+    return path if path.is_absolute() else ROOT / path
+
+
+def price_source_path(symbol: str, price_dir: Path, twii_bridge: Path | None = None) -> Path:
+    if symbol == "TWII" and twii_bridge is not None:
+        return twii_bridge
+    return price_dir / f"{symbol}.csv"
+
+
+def price_frame(symbol: str, *, price_dir: Path = PRICE_DIR, twii_bridge: Path | None = None) -> pd.DataFrame:
+    path = price_source_path(symbol, price_dir, twii_bridge)
     if not path.exists():
         return pd.DataFrame()
     df = pd.read_csv(path)
@@ -125,13 +139,20 @@ def price_frame(symbol: str) -> pd.DataFrame:
     return df.sort_values("date")
 
 
-def last_price_features(symbol: str, signal_asof: str) -> tuple[dict[str, float], str | None]:
-    df = price_frame(symbol)
+def last_price_features(symbol: str, signal_asof: str, *, price_dir: Path, require_bridge: bool) -> tuple[dict[str, float], str | None]:
+    path = price_source_path(symbol, price_dir)
+    df = price_frame(symbol, price_dir=price_dir)
+    if require_bridge and not path.exists():
+        raise FileNotFoundError(f"readonly price bridge missing stock file: {rel(path)}")
     if df.empty:
+        if require_bridge:
+            raise ValueError(f"readonly price bridge stock file has no usable rows: {rel(path)}")
         return {}, None
     asof = pd.Timestamp(signal_asof)
     hist = df[df["date"] <= asof].copy()
     if hist.empty:
+        if require_bridge:
+            raise ValueError(f"readonly price bridge stock file has no rows on or before {signal_asof}: {rel(path)}")
         return {}, None
     close = hist["close"]
     high = hist["high"]
@@ -169,11 +190,18 @@ def last_price_features(symbol: str, signal_asof: str) -> tuple[dict[str, float]
     return clean, str(row["date"].date())
 
 
-def market_features(signal_asof: str) -> dict[str, float]:
-    df = price_frame("TWII")
+def market_features(signal_asof: str, *, twii_bridge: Path | None, require_bridge: bool) -> dict[str, float]:
+    path = price_source_path("TWII", PRICE_DIR, twii_bridge)
+    df = price_frame("TWII", twii_bridge=twii_bridge)
+    if require_bridge and not path.exists():
+        raise FileNotFoundError(f"readonly TWII bridge missing file: {rel(path)}")
     if df.empty:
+        if require_bridge:
+            raise ValueError(f"readonly TWII bridge has no usable rows: {rel(path)}")
         return {k: 0.0 for k in ["TWII_ret20", "TWII_ret60", "TWII_close_vs_MA60", "TWII_close_vs_MA120", "market_volatility20", "market_drawdown60", "market_breadth20"]}
     hist = df[df["date"] <= pd.Timestamp(signal_asof)].copy()
+    if hist.empty and require_bridge:
+        raise ValueError(f"readonly TWII bridge has no rows on or before {signal_asof}: {rel(path)}")
     close = hist["close"]
     ret = close.pct_change()
     ma60 = close.rolling(60, min_periods=1).mean().iloc[-1]
@@ -221,12 +249,26 @@ def load_o2_latest(symbols: list[str], signal_asof: str) -> tuple[dict[str, dict
     return out, {"o2_rows": int(len(data)), "o2_symbol_count": int(data["symbol"].nunique()), "o2_available_at_max": max(latest_dates) if latest_dates else None, "o2_source": rel(O2_FEATURES)}
 
 
-def build_feature_package(signal_asof: str, out_root: Path) -> tuple[Path, pd.DataFrame]:
+def build_feature_package(
+    signal_asof: str,
+    out_root: Path,
+    *,
+    readonly_price_bridge_dir: Path | None = None,
+    readonly_twii_bridge: Path | None = None,
+    readonly_calendar_bridge: Path | None = None,
+) -> tuple[Path, pd.DataFrame]:
+    if readonly_price_bridge_dir is not None and not readonly_price_bridge_dir.is_dir():
+        raise NotADirectoryError(f"readonly price bridge dir does not exist: {rel(readonly_price_bridge_dir)}")
+    if readonly_twii_bridge is not None and not readonly_twii_bridge.is_file():
+        raise FileNotFoundError(f"readonly TWII bridge file does not exist: {rel(readonly_twii_bridge)}")
+    if readonly_calendar_bridge is not None and not readonly_calendar_bridge.is_file():
+        raise FileNotFoundError(f"readonly calendar bridge file does not exist: {rel(readonly_calendar_bridge)}")
     model_a_manifest, top50 = load_model_a(signal_asof)
     features = load_schema()
     out_dir = out_root / "yz2_orthogonal_feature_package" / signal_asof
     out_dir.mkdir(parents=True, exist_ok=True)
-    market = market_features(signal_asof)
+    stock_price_dir = readonly_price_bridge_dir or PRICE_DIR
+    market = market_features(signal_asof, twii_bridge=readonly_twii_bridge, require_bridge=readonly_twii_bridge is not None)
     symbols = top50["instrument"].astype(str).tolist()
     o2, o2_audit = load_o2_latest(symbols, signal_asof)
     all_scores = pd.read_csv(SIGNAL_ROOT / signal_asof / MODEL_A_SUBDIR / "signals.csv")
@@ -257,7 +299,12 @@ def build_feature_package(signal_asof: str, out_root: Path) -> tuple[Path, pd.Da
             "top30_streak": 1 if rank <= 30 else 0,
             "top50_streak": 1,
         }
-        tech, price_date = last_price_features(symbol, signal_asof)
+        tech, price_date = last_price_features(
+            symbol,
+            signal_asof,
+            price_dir=stock_price_dir,
+            require_bridge=readonly_price_bridge_dir is not None,
+        )
         price_dates.append(price_date)
         row.update(tech)
         row.update(market)
@@ -278,7 +325,48 @@ def build_feature_package(signal_asof: str, out_root: Path) -> tuple[Path, pd.Da
     write_csv(out_dir / "strict_e4_top50_coverage_audit.csv", coverage_rows, ["instrument", "covered", "status"])
     write_csv(out_dir / "pit_available_at_audit.csv", [{"checked_rows": len(package), "pit_violation_count": pit_violations, "status": "pass" if pit_violations == 0 else "fail"}], ["checked_rows", "pit_violation_count", "status"])
     write_csv(out_dir / "feature_schema_alignment_audit.csv", [{"schema_column_count": 78, "package_feature_column_count": len(features), "missing_schema_columns": "", "extra_training_columns": "", "status": "pass"}], ["schema_column_count", "package_feature_column_count", "missing_schema_columns", "extra_training_columns", "status"])
-    write_json(out_dir / "source_freshness_audit.json", {"signal_asof": signal_asof, "price_source": rel(PRICE_DIR), "price_latest_date_min": min([d for d in price_dates if d] or [None]), "price_latest_date_max": max([d for d in price_dates if d] or [None]), "o2_audit": o2_audit, "rank_change_fields_policy": "neutral_zero_when_no_prior_strict_e4_daily_rank_snapshot", "p3_daily_ltr_rerank_latest_used_as_readiness": False, "p3_daily_ltr_rerank_latest_path": rel(P3_LATEST)})
+    source_trace = {
+        "artifact_type": "YZ2ReadonlyBridgeSourceTrace",
+        "signal_asof": signal_asof,
+        "readonly_price_bridge_used": readonly_price_bridge_dir is not None,
+        "readonly_price_bridge_dir": rel(readonly_price_bridge_dir) if readonly_price_bridge_dir else "",
+        "readonly_twii_bridge_used": readonly_twii_bridge is not None,
+        "readonly_twii_bridge": rel(readonly_twii_bridge) if readonly_twii_bridge else "",
+        "readonly_calendar_bridge_used": readonly_calendar_bridge is not None,
+        "readonly_calendar_bridge": rel(readonly_calendar_bridge) if readonly_calendar_bridge else "",
+        "formal_calendar_used_for_next_day": readonly_calendar_bridge is None,
+        "formal_calendar_modified": False,
+        "stock_price_source": rel(stock_price_dir),
+        "twii_source": rel(readonly_twii_bridge) if readonly_twii_bridge else rel(PRICE_DIR / "TWII.csv"),
+        "formal_normalized_nonempty_used_for_stock_price": readonly_price_bridge_dir is None,
+        "formal_normalized_nonempty_used_for_twii": readonly_twii_bridge is None,
+        "provider_publish_triggered": False,
+        "accepted_latest_switch_triggered": False,
+        "qlib_accepted_latest_switch_triggered": False,
+        "fallback_to_stale_formal_source_when_bridge_requested": False,
+    }
+    write_json(out_dir / "source_trace.json", source_trace)
+    write_json(out_dir / "source_freshness_audit.json", {
+        "signal_asof": signal_asof,
+        "price_source": rel(stock_price_dir),
+        "twii_source": source_trace["twii_source"],
+        "readonly_price_bridge_used": source_trace["readonly_price_bridge_used"],
+        "readonly_price_bridge_dir": source_trace["readonly_price_bridge_dir"],
+        "readonly_twii_bridge_used": source_trace["readonly_twii_bridge_used"],
+        "readonly_twii_bridge": source_trace["readonly_twii_bridge"],
+        "readonly_calendar_bridge_used": source_trace["readonly_calendar_bridge_used"],
+        "readonly_calendar_bridge": source_trace["readonly_calendar_bridge"],
+        "formal_calendar_used_for_next_day": source_trace["formal_calendar_used_for_next_day"],
+        "formal_calendar_modified": source_trace["formal_calendar_modified"],
+        "formal_normalized_nonempty_used_for_stock_price": source_trace["formal_normalized_nonempty_used_for_stock_price"],
+        "formal_normalized_nonempty_used_for_twii": source_trace["formal_normalized_nonempty_used_for_twii"],
+        "price_latest_date_min": min([d for d in price_dates if d] or [None]),
+        "price_latest_date_max": max([d for d in price_dates if d] or [None]),
+        "o2_audit": o2_audit,
+        "rank_change_fields_policy": "neutral_zero_when_no_prior_strict_e4_daily_rank_snapshot",
+        "p3_daily_ltr_rerank_latest_used_as_readiness": False,
+        "p3_daily_ltr_rerank_latest_path": rel(P3_LATEST),
+    })
     write_csv(out_dir / "forbidden_field_audit.csv", [{"forbidden_field_count": len(forbidden_cols), "forbidden_fields": "|".join(forbidden_cols), "status": "pass" if not forbidden_cols else "fail"}], ["forbidden_field_count", "forbidden_fields", "status"])
     write_json(out_dir / "forbidden_action_audit.json", {"actions": {"training": False, "tuning": False, "provider_refresh": False, "provider_publish": False, "accepted_latest_switch": False, "monitor_write": False, "broker_order": False, "quick_trade": False}})
     manifest = {
@@ -298,6 +386,17 @@ def build_feature_package(signal_asof: str, out_root: Path) -> tuple[Path, pd.Da
         "available_at_policy": "available_at <= signal_asof; stale local sources allowed only with source_freshness_audit",
         "pit_violation_count": pit_violations,
         "source_freshness_audit": "source_freshness_audit.json",
+        "source_trace": "source_trace.json",
+        "readonly_price_bridge_used": readonly_price_bridge_dir is not None,
+        "readonly_price_bridge_dir": rel(readonly_price_bridge_dir) if readonly_price_bridge_dir else "",
+        "readonly_twii_bridge_used": readonly_twii_bridge is not None,
+        "readonly_twii_bridge": rel(readonly_twii_bridge) if readonly_twii_bridge else "",
+        "readonly_calendar_bridge_used": readonly_calendar_bridge is not None,
+        "readonly_calendar_bridge": rel(readonly_calendar_bridge) if readonly_calendar_bridge else "",
+        "formal_calendar_used_for_next_day": readonly_calendar_bridge is None,
+        "formal_calendar_modified": False,
+        "formal_normalized_nonempty_used_for_stock_price": readonly_price_bridge_dir is None,
+        "formal_normalized_nonempty_used_for_twii": readonly_twii_bridge is None,
         "forbidden_field_audit": "forbidden_field_audit.csv",
         "feature_schema_alignment_audit": "feature_schema_alignment_audit.csv",
         "strict_e4_top50_coverage_audit": "strict_e4_top50_coverage_audit.csv",
@@ -311,7 +410,16 @@ def build_feature_package(signal_asof: str, out_root: Path) -> tuple[Path, pd.Da
     return out_dir / "manifest.json", package
 
 
-def build_model_b(signal_asof: str, out_root: Path, feature_manifest: Path, package: pd.DataFrame) -> Path:
+def build_model_b(
+    signal_asof: str,
+    out_root: Path,
+    feature_manifest: Path,
+    package: pd.DataFrame,
+    *,
+    readonly_price_bridge_dir: Path | None = None,
+    readonly_twii_bridge: Path | None = None,
+    readonly_calendar_bridge: Path | None = None,
+) -> Path:
     out_dir = out_root / "yz1_strict_e4_model_signals" / signal_asof / MODEL_B_PREFERRED_SUBDIR
     out_dir.mkdir(parents=True, exist_ok=True)
     features = load_schema()
@@ -347,7 +455,7 @@ def build_model_b(signal_asof: str, out_root: Path, feature_manifest: Path, pack
     write_json(out_dir / "schema.json", {"artifact_type": "daily_model_signal", "schema_version": SCHEMA_VERSION, "required_fields": CORE, "primary_key": ["date", "instrument"]})
     write_csv(out_dir / "forbidden_field_audit.csv", [{"field_name": "", "field_category": "forbidden", "present": False, "used_for_ranking": False, "status": "pass"}], ["field_name", "field_category", "present", "used_for_ranking", "status"])
     write_json(out_dir / "forbidden_action_audit.json", {"actions": {"training": False, "tuning": False, "provider_refresh": False, "provider_publish": False, "accepted_latest_switch": False, "monitor_scan": False, "broker_order": False, "quick_trade": False}})
-    write_json(out_dir / "source_trace.json", {"model_id": MODEL_B, "signal_asof": signal_asof, "source_model_a_manifest": rel(SIGNAL_ROOT / signal_asof / MODEL_A_SUBDIR / "manifest.json"), "source_model_artifact": rel(E3_MODEL), "source_training_manifest": rel(E3_MANIFEST), "source_feature_artifact": rel(feature_manifest), "input_scope": "YZ1 Model A qlib top50 only", "fallback_to_p3_fresh_o4_bridge": False})
+    write_json(out_dir / "source_trace.json", {"model_id": MODEL_B, "signal_asof": signal_asof, "source_model_a_manifest": rel(SIGNAL_ROOT / signal_asof / MODEL_A_SUBDIR / "manifest.json"), "source_model_artifact": rel(E3_MODEL), "source_training_manifest": rel(E3_MANIFEST), "source_feature_artifact": rel(feature_manifest), "input_scope": "YZ1 Model A qlib top50 only", "readonly_price_bridge_used_by_yz2": readonly_price_bridge_dir is not None, "readonly_price_bridge_dir": rel(readonly_price_bridge_dir) if readonly_price_bridge_dir else "", "readonly_twii_bridge_used_by_yz2": readonly_twii_bridge is not None, "readonly_twii_bridge": rel(readonly_twii_bridge) if readonly_twii_bridge else "", "readonly_calendar_bridge_used_by_yz2": readonly_calendar_bridge is not None, "readonly_calendar_bridge": rel(readonly_calendar_bridge) if readonly_calendar_bridge else "", "formal_calendar_used_for_next_day": readonly_calendar_bridge is None, "formal_calendar_modified": False, "fallback_to_p3_fresh_o4_bridge": False, "fallback_to_stale_formal_source_when_bridge_requested": False})
     manifest = {
         "artifact_type": "daily_model_signal",
         "schema_version": SCHEMA_VERSION,
@@ -387,20 +495,37 @@ def build_model_b(signal_asof: str, out_root: Path, feature_manifest: Path, pack
     return out_dir / "manifest.json"
 
 
-def next_calendar_day(signal_asof: str) -> str | None:
-    days = [line.strip() for line in CALENDAR.read_text(encoding="utf-8").splitlines() if line.strip()]
+def next_calendar_day(signal_asof: str, calendar_path: Path = CALENDAR) -> str | None:
+    days = [line.strip() for line in calendar_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     future = [d for d in days if d > signal_asof]
     return min(future) if future else None
 
 
-def build_execution_price_readiness(signal_asof: str, out_root: Path) -> Path:
+def build_execution_price_readiness(
+    signal_asof: str,
+    out_root: Path,
+    *,
+    readonly_price_bridge_dir: Path | None = None,
+    readonly_calendar_bridge: Path | None = None,
+) -> Path:
+    if readonly_price_bridge_dir is not None and not readonly_price_bridge_dir.is_dir():
+        raise NotADirectoryError(f"readonly price bridge dir does not exist: {rel(readonly_price_bridge_dir)}")
+    if readonly_calendar_bridge is not None and not readonly_calendar_bridge.is_file():
+        raise FileNotFoundError(f"readonly calendar bridge file does not exist: {rel(readonly_calendar_bridge)}")
+    stock_price_dir = readonly_price_bridge_dir or PRICE_DIR
+    calendar_path = readonly_calendar_bridge or CALENDAR
     out_dir = out_root / "yz2_execution_price_readiness" / signal_asof
     out_dir.mkdir(parents=True, exist_ok=True)
     _, top50 = load_model_a(signal_asof)
-    next_day = next_calendar_day(signal_asof)
+    next_day = next_calendar_day(signal_asof, calendar_path)
     rows = []
     for symbol in top50["instrument"].astype(str):
-        df = price_frame(symbol)
+        price_path = price_source_path(symbol, stock_price_dir)
+        if readonly_price_bridge_dir is not None and not price_path.exists():
+            raise FileNotFoundError(f"readonly price bridge missing execution price file: {rel(price_path)}")
+        df = price_frame(symbol, price_dir=stock_price_dir)
+        if readonly_price_bridge_dir is not None and df.empty:
+            raise ValueError(f"readonly price bridge execution price file has no usable rows: {rel(price_path)}")
         signal_rows = df[df["date"] <= pd.Timestamp(signal_asof)] if not df.empty else pd.DataFrame()
         close_signal = None if signal_rows.empty else signal_rows.iloc[-1].get("close")
         signal_close_date = None if signal_rows.empty else str(signal_rows.iloc[-1]["date"].date())
@@ -443,9 +568,21 @@ def build_execution_price_readiness(signal_asof: str, out_root: Path) -> Path:
         "missing_signal_close_count": len(rows) - signal_close_count,
         "status": "pass" if next_open_count == len(rows) else "execution_price_unavailable",
         "no_fallback_to_next_close": True,
-        "price_source": rel(PRICE_DIR),
+        "price_source": rel(stock_price_dir),
+        "readonly_price_bridge_used": readonly_price_bridge_dir is not None,
+        "readonly_price_bridge_dir": rel(readonly_price_bridge_dir) if readonly_price_bridge_dir else "",
+        "readonly_calendar_bridge_used": readonly_calendar_bridge is not None,
+        "readonly_calendar_bridge": rel(readonly_calendar_bridge) if readonly_calendar_bridge else "",
+        "calendar_next_trading_day": next_day,
+        "calendar_source": rel(calendar_path),
+        "formal_calendar_used_for_next_day": readonly_calendar_bridge is None,
+        "formal_calendar_modified": False,
+        "formal_normalized_nonempty_used_for_price": readonly_price_bridge_dir is None,
+        "fallback_to_stale_formal_source_when_bridge_requested": False,
         "price_availability_audit": "price_availability_audit.csv",
     }
+    if readonly_price_bridge_dir is not None and next_open_count != len(rows):
+        raise ValueError(f"readonly price bridge execution next_open coverage insufficient: {next_open_count}/{len(rows)}")
     write_json(out_dir / "manifest.json", manifest)
     return out_dir / "manifest.json"
 
@@ -454,13 +591,39 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Build YZ2 strict E4 orthogonal package, Model B signal, and execution price readiness.")
     parser.add_argument("--signal-asof", default="2026-06-17")
     parser.add_argument("--out-root", default=str(DEFAULT_OUT_ROOT))
+    parser.add_argument("--readonly-price-bridge-dir", default="", help="Readonly stock price bridge directory. Default empty keeps registry price source.")
+    parser.add_argument("--readonly-twii-bridge", default="", help="Readonly TWII bridge CSV. Default empty keeps registry TWII source.")
+    parser.add_argument("--readonly-calendar-bridge", default="", help="Readonly calendar bridge day.txt. Default empty keeps registry calendar source.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
     out_root = Path(args.out_root)
-    feature_manifest, package = build_feature_package(args.signal_asof, out_root)
-    model_b_manifest = build_model_b(args.signal_asof, out_root, feature_manifest, package)
-    price_manifest = build_execution_price_readiness(args.signal_asof, out_root)
-    result = {"ok": True, "phase": "YZ2", "signal_asof": args.signal_asof, "orthogonal_feature_package_manifest": rel(feature_manifest), "model_b_manifest": rel(model_b_manifest), "execution_price_readiness_manifest": rel(price_manifest), "model_b_row_count": 50, "orthogonal_coverage": "50/50", "no_provider_refresh_or_publish": True, "no_latest_pointer_modified": True}
+    readonly_price_bridge_dir = resolve_optional_path(args.readonly_price_bridge_dir)
+    readonly_twii_bridge = resolve_optional_path(args.readonly_twii_bridge)
+    readonly_calendar_bridge = resolve_optional_path(args.readonly_calendar_bridge)
+    feature_manifest, package = build_feature_package(
+        args.signal_asof,
+        out_root,
+        readonly_price_bridge_dir=readonly_price_bridge_dir,
+        readonly_twii_bridge=readonly_twii_bridge,
+        readonly_calendar_bridge=readonly_calendar_bridge,
+    )
+    model_b_manifest = build_model_b(
+        args.signal_asof,
+        out_root,
+        feature_manifest,
+        package,
+        readonly_price_bridge_dir=readonly_price_bridge_dir,
+        readonly_twii_bridge=readonly_twii_bridge,
+        readonly_calendar_bridge=readonly_calendar_bridge,
+    )
+    price_manifest = build_execution_price_readiness(
+        args.signal_asof,
+        out_root,
+        readonly_price_bridge_dir=readonly_price_bridge_dir,
+        readonly_calendar_bridge=readonly_calendar_bridge,
+    )
+    price_payload = read_json(price_manifest)
+    result = {"ok": True, "phase": "YZ2", "signal_asof": args.signal_asof, "orthogonal_feature_package_manifest": rel(feature_manifest), "model_b_manifest": rel(model_b_manifest), "execution_price_readiness_manifest": rel(price_manifest), "model_b_row_count": 50, "orthogonal_coverage": "50/50", "readonly_price_bridge_used": readonly_price_bridge_dir is not None, "readonly_price_bridge_dir": rel(readonly_price_bridge_dir) if readonly_price_bridge_dir else "", "readonly_twii_bridge_used": readonly_twii_bridge is not None, "readonly_twii_bridge": rel(readonly_twii_bridge) if readonly_twii_bridge else "", "readonly_calendar_bridge_used": readonly_calendar_bridge is not None, "readonly_calendar_bridge": rel(readonly_calendar_bridge) if readonly_calendar_bridge else "", "calendar_next_trading_day": price_payload.get("calendar_next_trading_day"), "formal_calendar_used_for_next_day": readonly_calendar_bridge is None, "formal_calendar_modified": False, "formal_normalized_nonempty_used_for_price_or_twii": readonly_price_bridge_dir is None or readonly_twii_bridge is None, "no_provider_refresh_or_publish": True, "no_latest_pointer_modified": True}
     print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else result["model_b_manifest"])
     return 0
 

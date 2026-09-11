@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend"
 VIEW = FRONTEND / "src/views/tw-stock-monitor/index.vue"
 API = FRONTEND / "src/api/tw-stock.js"
+READONLY_API = FRONTEND / "src/api/tw-stock-readonly.js"
+ACTION_API = FRONTEND / "src/api/tw-stock-action.js"
 COMPONENT_DIR = FRONTEND / "src/views/tw-stock-monitor/components"
 COMPONENTS = {
     "ReadonlyStrategySnapshotPanel": COMPONENT_DIR / "ReadonlyStrategySnapshotPanel.vue",
@@ -191,7 +193,7 @@ def validate_primary_audit_mapping() -> tuple[list[dict[str, str]], list[dict[st
 
 
 def validate_readonly_api() -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
-    api = read(API)
+    api = read(READONLY_API)
     rows: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     for fn, endpoint in READONLY_API_FUNCTIONS.items():
@@ -201,14 +203,14 @@ def validate_readonly_api() -> tuple[list[dict[str, Any]], list[dict[str, str]]]
         row = {"function": fn, "endpoint": endpoint, "exists": bool(body), "method_get": method_get, "write_method_count": write_method_count}
         rows.append(row)
         if not row["exists"]:
-            errors.append(err("readonly_api_missing", f"{fn} missing", API, fn))
+            errors.append(err("readonly_api_missing", f"{fn} missing", READONLY_API, fn))
         if not row["method_get"] or row["write_method_count"]:
-            errors.append(err("readonly_api_not_get_only", f"{fn} must be GET-only", API, fn))
+            errors.append(err("readonly_api_not_get_only", f"{fn} must be GET-only", READONLY_API, fn))
     return rows, errors
 
 
 def validate_replay_strategy_wrappers() -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
-    api = read(API)
+    api = read(ACTION_API)
     rows: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     for fn, endpoint in REPLAY_STRATEGY_WRITE_WRAPPERS.items():
@@ -219,14 +221,14 @@ def validate_replay_strategy_wrappers() -> tuple[list[dict[str, Any]], list[dict
             method_write = True
         rows.append({"function": fn, "endpoint": endpoint, "exists": bool(body), "method_write": method_write, "manual_only_allowed": True})
         if not body:
-            errors.append(err("replay_strategy_wrapper_missing", f"{fn} missing", API, fn))
+            errors.append(err("replay_strategy_wrapper_missing", f"{fn} missing", ACTION_API, fn))
         if body and not method_write:
-            errors.append(err("replay_strategy_wrapper_not_classified", f"{fn} was expected to be classified as a replay/strategy write wrapper", API, fn))
+            errors.append(err("replay_strategy_wrapper_not_classified", f"{fn} was expected to be classified as a replay/strategy write wrapper", ACTION_API, fn))
     return rows, errors
 
 
 def readonly_surface_source() -> str:
-    api = read(API)
+    api = read(READONLY_API)
     parts = [read(path) for path in COMPONENTS.values() if path.exists()]
     for fn in READONLY_API_FUNCTIONS:
         parts.append(slice_function(api, fn))
@@ -248,7 +250,8 @@ def agent_surface_source() -> str:
     start = view.find('<div class="tw-stock-agent-panel">')
     end = view.find('<div v-if="crossAnalysisAccepted"', start) if start >= 0 else -1
     panel = view[start:end] if start >= 0 and end > start else ""
-    return "\n".join([panel, slice_function(read(API), "chatTwStockAgent"), slice_function(read(API), "getTwStockAgentContext")])
+    api = read(READONLY_API)
+    return "\n".join([panel, slice_function(api, "simpleChatTwStockAgent"), slice_function(api, "getTwStockAgentContext")])
 
 
 def validate_forbidden_surface() -> tuple[dict[str, Any], list[dict[str, str]]]:
@@ -352,7 +355,7 @@ def validate() -> dict[str, Any]:
         "schema_version": "m4.0.1",
         "errors": errors,
         "warnings": warnings,
-        "checked_files": [rel(path) for path in [VIEW, API, *COMPONENTS.values()] if path.exists()],
+        "checked_files": [rel(path) for path in [VIEW, API, READONLY_API, ACTION_API, *COMPONENTS.values()] if path.exists()],
         "component_boundary_summary": component_rows,
         "primary_fields_vs_audit_fields_mapping": mapping,
         "readonly_api_summary": api_rows,

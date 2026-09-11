@@ -31,6 +31,14 @@ def rel(path: Path) -> str:
         return str(path)
 
 
+def resolve_optional_path(raw: str) -> Path | None:
+    value = raw.strip()
+    if not value:
+        return None
+    path = Path(value)
+    return path if path.is_absolute() else ROOT / path
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
@@ -67,14 +75,14 @@ def load_top50(signal_asof: str) -> list[str]:
     return top50["instrument"].astype(str).tolist()
 
 
-def calendar_next_day(signal_asof: str) -> str | None:
-    days = [line.strip() for line in CALENDAR.read_text(encoding="utf-8").splitlines() if line.strip()]
+def calendar_next_day(signal_asof: str, calendar_path: Path = CALENDAR) -> str | None:
+    days = [line.strip() for line in calendar_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     future = [d for d in days if d > signal_asof]
     return min(future) if future else None
 
 
-def read_price(symbol: str) -> pd.DataFrame:
-    path = PRICE_DIR / f"{symbol}.csv"
+def read_price(symbol: str, *, price_dir: Path = PRICE_DIR) -> pd.DataFrame:
+    path = price_dir / f"{symbol}.csv"
     if not path.exists():
         return pd.DataFrame()
     df = pd.read_csv(path)
@@ -85,17 +93,44 @@ def read_price(symbol: str) -> pd.DataFrame:
     return df.dropna(subset=["date"]).sort_values("date")
 
 
-def build(signal_asof: str, out_root: Path) -> dict[str, Any]:
+def build(
+    signal_asof: str,
+    out_root: Path,
+    target_next_day: str = "",
+    readonly_price_bridge_dir: Path | None = None,
+    readonly_calendar_bridge: Path | None = None,
+) -> dict[str, Any]:
+    if readonly_price_bridge_dir is not None and not readonly_price_bridge_dir.is_dir():
+        raise NotADirectoryError(f"readonly price bridge dir does not exist: {rel(readonly_price_bridge_dir)}")
+    if readonly_calendar_bridge is not None and not readonly_calendar_bridge.is_file():
+        raise FileNotFoundError(f"readonly calendar bridge file does not exist: {rel(readonly_calendar_bridge)}")
+    price_dir = readonly_price_bridge_dir or PRICE_DIR
+    calendar_path = readonly_calendar_bridge or CALENDAR
     out_dir = out_root / signal_asof
     out_dir.mkdir(parents=True, exist_ok=True)
     symbols = load_top50(signal_asof)
-    cal_next = calendar_next_day(signal_asof)
-    next_day = TARGET_NEXT_DAY
+    # The legacy path intentionally keeps its fixed target day and does not
+    # claim formal-calendar evidence unless an explicit readonly bridge was
+    # supplied.
+    cal_next = calendar_next_day(signal_asof, calendar_path) if readonly_calendar_bridge is not None else None
+    explicit_target_next_day = target_next_day.strip()
+    if explicit_target_next_day:
+        next_day = explicit_target_next_day
+    elif readonly_calendar_bridge is not None:
+        next_day = cal_next
+    else:
+        next_day = TARGET_NEXT_DAY
+    if not next_day:
+        raise ValueError(f"No next trading day found after signal_asof={signal_asof}")
     rows: list[dict[str, Any]] = []
     source_files = []
     for symbol in symbols:
-        price_path = PRICE_DIR / f"{symbol}.csv"
-        df = read_price(symbol)
+        price_path = price_dir / f"{symbol}.csv"
+        if readonly_price_bridge_dir is not None and not price_path.exists():
+            raise FileNotFoundError(f"readonly price bridge missing YZ2R price file: {rel(price_path)}")
+        df = read_price(symbol, price_dir=price_dir)
+        if readonly_price_bridge_dir is not None and df.empty:
+            raise ValueError(f"readonly price bridge YZ2R price file has no usable rows: {rel(price_path)}")
         if price_path.exists():
             source_files.append(price_path)
         signal_hist = df[df["date"] <= pd.Timestamp(signal_asof)] if not df.empty else pd.DataFrame()
@@ -141,18 +176,28 @@ def build(signal_asof: str, out_root: Path) -> dict[str, Any]:
         "target_next_trading_day": next_day,
         "calendar_next_trading_day": cal_next,
         "calendar_contains_target_next_day": cal_next == next_day,
-        "price_source": rel(PRICE_DIR),
+        "price_source": rel(price_dir),
+        "readonly_price_bridge_used": readonly_price_bridge_dir is not None,
+        "readonly_price_bridge_dir": rel(readonly_price_bridge_dir) if readonly_price_bridge_dir else "",
+        "readonly_calendar_bridge_used": readonly_calendar_bridge is not None,
+        "readonly_calendar_bridge": rel(readonly_calendar_bridge) if readonly_calendar_bridge else "",
+        "calendar_source": rel(calendar_path),
+        "formal_calendar_used_for_next_day": False,
+        "formal_calendar_modified": False,
+        "formal_normalized_nonempty_used_for_price": readonly_price_bridge_dir is None,
         "source_file_count": len(source_files),
         "source_file_sha256_sample": [{"path": rel(p), "sha256": sha256(p)} for p in source_files[:5]],
-        "local_csv_scan_found_2026_06_18": next_open_count > 0 or next_close_count > 0,
+        "local_csv_scan_found_target_next_day": next_open_count > 0 or next_close_count > 0,
         "external_network_used": False,
         "provider_refresh_triggered": False,
         "provider_publish_triggered": False,
         "accepted_latest_switch_triggered": False,
+        "qlib_accepted_latest_switch_triggered": False,
         "fallback_to_next_close": False,
         "fallback_to_signal_close": False,
+        "fallback_to_stale_formal_source_when_bridge_requested": False,
         "manual_or_synthetic_ohlc": False,
-        "blocked_reason": "local_2026_06_18_ohlc_not_found" if status != "pass" else "",
+        "blocked_reason": f"local_{next_day.replace('-', '_')}_ohlc_not_found" if status != "pass" else "",
     }
     write_json(out_dir / "source_trace.json", source_trace)
     write_json(out_dir / "forbidden_action_audit.json", {"actions": {"training": False, "tuning": False, "network_provider_fetch": False, "provider_refresh": False, "provider_publish": False, "accepted_latest_switch": False, "monitor_write": False, "monitor_scan": False, "broker_order": False, "quick_trade": False, "paper_apply_reset_write": False, "frontend_change": False}})
@@ -180,11 +225,25 @@ def build(signal_asof: str, out_root: Path) -> dict[str, Any]:
         "recommended_gate": "allow_yz3" if status == "pass" else "blocked_before_yz3",
         "no_fallback_to_next_close": True,
         "no_fallback_to_signal_close": True,
-        "price_source": rel(PRICE_DIR),
+        "price_source": rel(price_dir),
+        "readonly_price_bridge_used": readonly_price_bridge_dir is not None,
+        "readonly_price_bridge_dir": rel(readonly_price_bridge_dir) if readonly_price_bridge_dir else "",
+        "readonly_calendar_bridge_used": readonly_calendar_bridge is not None,
+        "readonly_calendar_bridge": rel(readonly_calendar_bridge) if readonly_calendar_bridge else "",
+        "calendar_source": rel(calendar_path),
+        "formal_calendar_used_for_next_day": False,
+        "formal_calendar_modified": False,
+        "formal_normalized_nonempty_used_for_price": readonly_price_bridge_dir is None,
+        "fallback_to_stale_formal_source_when_bridge_requested": False,
         "price_availability_audit": "price_availability_audit.csv",
         "source_trace": "source_trace.json",
         "forbidden_action_audit": "forbidden_action_audit.json",
     }
+    if readonly_price_bridge_dir is not None and status != "pass":
+        write_json(out_dir / "source_trace.json", source_trace)
+        write_json(out_dir / "forbidden_action_audit.json", {"actions": {"training": False, "tuning": False, "network_provider_fetch": False, "provider_refresh": False, "provider_publish": False, "accepted_latest_switch": False, "monitor_write": False, "monitor_scan": False, "broker_order": False, "quick_trade": False, "paper_apply_reset_write": False, "frontend_change": False}})
+        write_json(out_dir / "manifest.json", manifest)
+        raise ValueError(f"readonly price bridge YZ2R coverage insufficient: next_open={next_open_count}/50 next_close={next_close_count}/50 signal_close={signal_close_count}/50")
     write_json(out_dir / "manifest.json", manifest)
     return {"ok": True, "manifest": rel(out_dir / "manifest.json"), "status": status, "next_open_available_count": next_open_count, "missing_next_open_count": len(rows) - next_open_count, "recommended_gate": manifest["recommended_gate"]}
 
@@ -192,10 +251,19 @@ def build(signal_asof: str, out_root: Path) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Repair/check YZ2R execution price readiness using local audited price sources only.")
     parser.add_argument("--signal-asof", default="2026-06-17")
+    parser.add_argument("--target-next-day", default="", help=f"Optional explicit next trading day. Default: legacy fixed {TARGET_NEXT_DAY} unless --readonly-calendar-bridge is provided.")
     parser.add_argument("--out-root", default=str(DEFAULT_OUT_ROOT))
+    parser.add_argument("--readonly-price-bridge-dir", default="", help="Readonly stock price bridge directory. Default empty keeps local formal price source.")
+    parser.add_argument("--readonly-calendar-bridge", default="", help="Readonly calendar bridge day.txt. Default empty keeps local formal calendar source.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
-    result = build(args.signal_asof, Path(args.out_root))
+    result = build(
+        args.signal_asof,
+        Path(args.out_root),
+        target_next_day=args.target_next_day,
+        readonly_price_bridge_dir=resolve_optional_path(args.readonly_price_bridge_dir),
+        readonly_calendar_bridge=resolve_optional_path(args.readonly_calendar_bridge),
+    )
     print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else result["manifest"])
     return 0
 

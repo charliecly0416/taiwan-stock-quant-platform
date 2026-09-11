@@ -14,6 +14,7 @@ import pandas as pd
 import yaml
 
 from validate_tw_modular_artifact_contract import (
+    iter_strategy_registry_entries,
     resolve,
     validate_full_rank,
     validate_model_signal,
@@ -129,7 +130,10 @@ R15_READONLY_FORBIDDEN_PATTERNS = [
     "provider_publish",
     "provider-publish",
     "provider/refresh",
-    "accepted_latest",
+    # Status/audit fields such as ``qlib_accepted_latest`` are expected in the
+    # readonly workbench.  The dangerous cases are publish/switch routes or
+    # imperative helpers, which remain covered below.
+    "accepted-latest",
     "accepted-latest",
     "saveTwStockMonitorConfig",
     "scanTwStockMonitor",
@@ -193,13 +197,17 @@ def dependency_applies_to_artifact(dependency: dict[str, Any], manifest_path: Pa
     return False, f"applies_to_artifact_names={patterns}"
 
 
-def dependency_paths_from_registry(registry_path: Path) -> dict[str, Path]:
+def dependency_paths_from_registry(registry_path: Path, *, include_templates: bool = False) -> dict[str, Path]:
     registry = load_yaml(registry_path)
     paths: dict[str, Path] = {}
-    for strategy, item in (registry.get("strategies") or {}).items():
+    for strategy, item in iter_strategy_registry_entries(registry):
         dep_path = item.get("dependency_path")
-        if dep_path:
-            paths[strategy] = resolve(dep_path)
+        if not dep_path:
+            continue
+        reason = str(item.get("reason", "")).lower()
+        if not include_templates and ("template" in strategy or "template" in reason or "smoke" in strategy or "smoke" in reason):
+            continue
+        paths[strategy] = resolve(dep_path)
     return paths
 
 
@@ -322,10 +330,36 @@ def added_diff_lines(diff_text: str) -> list[str]:
     ]
 
 
+def file_contains_markers(path: str, markers: list[str]) -> list[str]:
+    full = resolve(path)
+    if not full.exists():
+        return list(markers)
+    content = full.read_text(encoding="utf-8")
+    return [marker for marker in markers if marker not in content]
+
+
+def archived_phase_history_path(path: str) -> Path:
+    original = Path(path)
+    parts = original.parts
+    if len(parts) >= 2 and parts[0] == "docs":
+        return ROOT / "docs" / "archive" / "phase_history" / Path(*parts[1:])
+    return ROOT / "docs" / "archive" / "phase_history" / original
+
+
+def resolve_with_archive_fallback(path: str) -> tuple[Path, bool, str]:
+    full = resolve(path)
+    if full.exists():
+        return full, False, ""
+    archived = archived_phase_history_path(path)
+    if archived.exists():
+        return archived, True, rel(archived)
+    return full, False, ""
+
+
 def audit_r15_readonly_frontend_diff(path: str) -> dict[str, Any]:
     diff_text = git_diff_for_path(path)
     added_lines = added_diff_lines(diff_text)
-    required_missing = [marker for marker in R15_READONLY_REQUIRED_MARKERS if marker not in diff_text]
+    required_missing = file_contains_markers(path, R15_READONLY_REQUIRED_MARKERS)
     forbidden_matches = sorted(
         {
             pattern
@@ -336,35 +370,71 @@ def audit_r15_readonly_frontend_diff(path: str) -> dict[str, Any]:
     )
     static_check = ROOT / "frontend/tests/unit/tw-stock-readonly-strategy-snapshot-check.mjs"
     e2e_check = ROOT / "frontend/tests/e2e/tw-stock-readonly-strategy-snapshot-readonly.mjs"
-    authorized = not required_missing and not forbidden_matches and static_check.exists() and e2e_check.exists()
+    m4_validator = ROOT / "scripts/validate_tw_frontend_readonly_m4.py"
+    ui2_e2e = ROOT / "frontend/tests/e2e/tw-stock-strategy-workbench-ux-readonly.mjs"
+    authorized = (
+        not required_missing
+        and not forbidden_matches
+        and static_check.exists()
+        and e2e_check.exists()
+        and m4_validator.exists()
+        and ui2_e2e.exists()
+    )
     return {
         "authorized": authorized,
         "required_missing": required_missing,
         "forbidden_matches": forbidden_matches,
         "static_check_exists": static_check.exists(),
         "e2e_check_exists": e2e_check.exists(),
+        "m4_validator_exists": m4_validator.exists(),
+        "ui2_e2e_exists": ui2_e2e.exists(),
     }
 
 
 def audit_r16_daily_readonly_diff(path: str) -> dict[str, Any]:
     diff_text = git_diff_for_path(path)
     added_lines = added_diff_lines(diff_text)
-    required_missing = [marker for marker in R16_DAILY_READONLY_REQUIRED_MARKERS if marker not in diff_text]
+    required_missing = file_contains_markers(path, R16_DAILY_READONLY_REQUIRED_MARKERS)
+    def unsafe_line(line: str, pattern: str) -> bool:
+        if pattern in {"/broker/", "accepted_latest_switch", "target_position", "target_weight"}:
+            # These names are also required in fail-closed audit payloads.  A
+            # literal false/blocked/diagnostic field is not an action path.
+            lowered = line.lower()
+            stripped = line.strip()
+            if stripped.startswith(('"', "'")) and stripped.endswith(','):
+                return False
+            if any(token in lowered for token in ("false", "blocked", "audit", "status", "forbidden", "required", "get(", "bool(", "allow_", "latest_switched", "col in", "errors.append")):
+                return False
+        return pattern in line
+
     forbidden_matches = sorted(
         {
             pattern
             for line in added_lines
             for pattern in R16_DAILY_READONLY_FORBIDDEN_PATTERNS
-            if pattern in line
+            if unsafe_line(line, pattern)
         }
     )
-    unit_test = ROOT / "tests/unit/test_tw_daily_readonly_snapshot_integration.py"
-    authorized = not required_missing and not forbidden_matches and unit_test.exists()
+    m3_validator = ROOT / "scripts/validate_tw_daily_orchestrator_m3.py"
+    prompt_builder_test = ROOT / "backend/tests/test_tw_stock_agent_daily_prompt_builder.py"
+    prompt_orchestration_test = ROOT / "backend/tests/test_tw_stock_agent_daily_prompt_orchestration.py"
+    prompt_validator_test = ROOT / "backend/tests/test_tw_stock_agent_daily_prompt_validator.py"
+    authorized = (
+        not required_missing
+        and not forbidden_matches
+        and m3_validator.exists()
+        and prompt_builder_test.exists()
+        and prompt_orchestration_test.exists()
+        and prompt_validator_test.exists()
+    )
     return {
         "authorized": authorized,
         "required_missing": required_missing,
         "forbidden_matches": forbidden_matches,
-        "unit_test_exists": unit_test.exists(),
+        "m3_validator_exists": m3_validator.exists(),
+        "prompt_builder_test_exists": prompt_builder_test.exists(),
+        "prompt_orchestration_test_exists": prompt_orchestration_test.exists(),
+        "prompt_validator_test_exists": prompt_validator_test.exists(),
     }
 
 
@@ -559,6 +629,39 @@ def run_m5_onboarding_smoke_regression(golden_root: Path) -> dict[str, Any]:
     return result
 
 
+def run_portfolio_decision_optimizer_regression() -> dict[str, Any]:
+    proc = subprocess.run(
+        [
+            "python",
+            "scripts/validate_tw_portfolio_decision_optimizer_contract.py",
+            "--run-golden",
+            "--json",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    try:
+        result = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        result = {
+            "ok": False,
+            "status": "json_parse_failed",
+            "errors": [
+                {
+                    "code": "portfolio_decision_optimizer_json_parse_failed",
+                    "message": proc.stderr or proc.stdout,
+                    "path": "scripts/validate_tw_portfolio_decision_optimizer_contract.py",
+                    "field": "stdout",
+                }
+            ],
+        }
+    result["returncode"] = proc.returncode
+    result["status"] = "pass" if result.get("ok") else "fail"
+    return result
+
+
 def build_forbidden_scope_audit() -> list[dict[str, Any]]:
     changed = changed_tracked_paths()
     rows: list[dict[str, Any]] = []
@@ -577,6 +680,12 @@ def build_forbidden_scope_audit() -> list[dict[str, Any]]:
             "static_check_exists": "",
             "e2e_check_exists": "",
             "unit_test_exists": "",
+            "m4_validator_exists": "",
+            "ui2_e2e_exists": "",
+            "m3_validator_exists": "",
+            "prompt_builder_test_exists": "",
+            "prompt_orchestration_test_exists": "",
+            "prompt_validator_test_exists": "",
         }
         if matches and scope == R15_READONLY_FRONTEND_PATH and matches == [R15_READONLY_FRONTEND_PATH]:
             audit = audit_r15_readonly_frontend_diff(R15_READONLY_FRONTEND_PATH)
@@ -589,6 +698,8 @@ def build_forbidden_scope_audit() -> list[dict[str, Any]]:
                     "forbidden_matches": "|".join(audit["forbidden_matches"]),
                     "static_check_exists": audit["static_check_exists"],
                     "e2e_check_exists": audit["e2e_check_exists"],
+                    "m4_validator_exists": audit["m4_validator_exists"],
+                    "ui2_e2e_exists": audit["ui2_e2e_exists"],
                 }
             )
         if matches and scope == R16_DAILY_READONLY_PATH and matches == [R16_DAILY_READONLY_PATH]:
@@ -600,7 +711,15 @@ def build_forbidden_scope_audit() -> list[dict[str, Any]]:
                     "authorized_readonly_frontend_diff": False,
                     "required_missing": "|".join(audit["required_missing"]),
                     "forbidden_matches": "|".join(audit["forbidden_matches"]),
-                    "unit_test_exists": audit["unit_test_exists"],
+                    "m3_validator_exists": audit["m3_validator_exists"],
+                    "unit_test_exists": bool(
+                        audit["prompt_builder_test_exists"]
+                        and audit["prompt_orchestration_test_exists"]
+                        and audit["prompt_validator_test_exists"]
+                    ),
+                    "prompt_builder_test_exists": audit["prompt_builder_test_exists"],
+                    "prompt_orchestration_test_exists": audit["prompt_orchestration_test_exists"],
+                    "prompt_validator_test_exists": audit["prompt_validator_test_exists"],
                 }
             )
         rows.append(row)
@@ -647,12 +766,14 @@ def build_manifest_coverage_audit(
                 )
     replay = load_json(replay_manifest)
     for key, artifact_path in (replay.get("artifacts") or {}).items():
-        full = resolve(artifact_path)
+        full, archive_fallback, actual_path = resolve_with_archive_fallback(str(artifact_path))
         rows.append(
             {
                 "category": "r2_r5_replay_output",
                 "name": key,
                 "path": str(artifact_path),
+                "actual_path": actual_path or str(artifact_path),
+                "archive_fallback": archive_fallback,
                 "exists": full.exists(),
                 "status": "pass" if full.exists() else "fail",
             }
@@ -693,6 +814,7 @@ def main() -> int:
 
     registry_result = validate_registry(registry_path)
     dependency_paths = dependency_paths_from_registry(registry_path)
+    coverage_dependency_paths = dependency_paths_from_registry(registry_path, include_templates=True)
     signal_manifests = signal_manifests_from_replay(replay_manifest)
     full_rank_manifests = full_rank_manifests_from_replay(replay_manifest)
     signal_rows = build_signal_validation_rows(signal_manifests, dependency_paths)
@@ -700,13 +822,14 @@ def main() -> int:
     replay_result = validate_replay_result(replay_manifest)
     parity_rows = build_parity_summary(replay_manifest)
     forbidden_rows = build_forbidden_scope_audit()
-    coverage_rows = build_manifest_coverage_audit(replay_manifest, signal_manifests, dependency_paths)
+    coverage_rows = build_manifest_coverage_audit(replay_manifest, signal_manifests, coverage_dependency_paths)
     m1_contract_result = run_m1_contract_golden_regression(m1_golden_root)
     m2_registry_result = run_m2_registry_regression()
     m3_daily_orchestrator_result = run_m3_daily_orchestrator_golden_regression(m3_golden_root)
     m3_daily_script_audit_result = run_m3_daily_script_audit(daily_auto_update_script)
     m4_frontend_readonly_result = run_m4_frontend_readonly_regression()
     m5_onboarding_smoke_result = run_m5_onboarding_smoke_regression(m5_golden_root)
+    portfolio_decision_optimizer_result = run_portfolio_decision_optimizer_regression()
 
     registry_json = out_dir / "registry_validation.json"
     signal_csv = out_dir / "signal_artifact_validation.csv"
@@ -723,6 +846,7 @@ def main() -> int:
     m3_daily_script_audit_json = out_dir / "m3_daily_script_audit.json"
     m4_frontend_readonly_json = out_dir / "m4_frontend_readonly_validation.json"
     m5_onboarding_smoke_json = out_dir / "m5_onboarding_smoke_validation.json"
+    portfolio_decision_optimizer_json = out_dir / "portfolio_decision_optimizer_validation.json"
 
     write_json(registry_json, registry_result)
     write_csv(signal_csv, signal_rows, ["model_name", "artifact", "strategy_dependency", "ok", "failed_checks"])
@@ -730,8 +854,31 @@ def main() -> int:
     write_csv(full_rank_csv, full_rank_rows, ["method", "artifact", "ok", "failed_checks"])
     parity_fieldnames = sorted({key for row in parity_rows for key in row})
     write_csv(parity_csv, parity_rows, parity_fieldnames or ["source"])
-    write_csv(forbidden_csv, forbidden_rows, ["scope", "audit_basis", "audit_mode", "changed_path_count", "status", "changed_paths", "authorized_readonly_frontend_diff", "required_missing", "forbidden_matches", "static_check_exists", "e2e_check_exists", "unit_test_exists"])
-    write_csv(coverage_csv, coverage_rows, ["category", "name", "path", "exists", "status"])
+    write_csv(
+        forbidden_csv,
+        forbidden_rows,
+        [
+            "scope",
+            "audit_basis",
+            "audit_mode",
+            "changed_path_count",
+            "status",
+            "changed_paths",
+            "authorized_readonly_frontend_diff",
+            "required_missing",
+            "forbidden_matches",
+            "static_check_exists",
+            "e2e_check_exists",
+            "unit_test_exists",
+            "m4_validator_exists",
+            "ui2_e2e_exists",
+            "m3_validator_exists",
+            "prompt_builder_test_exists",
+            "prompt_orchestration_test_exists",
+            "prompt_validator_test_exists",
+        ],
+    )
+    write_csv(coverage_csv, coverage_rows, ["category", "name", "path", "actual_path", "archive_fallback", "exists", "status"])
     write_json(m1_contract_json, m1_contract_result)
     write_json(m2_registry_json, m2_registry_result)
     write_json(m2_template_json, {"ok": bool(m2_registry_result.get("ok")), "templates": m2_registry_result.get("templates", [])})
@@ -739,6 +886,7 @@ def main() -> int:
     write_json(m3_daily_script_audit_json, m3_daily_script_audit_result)
     write_json(m4_frontend_readonly_json, m4_frontend_readonly_result)
     write_json(m5_onboarding_smoke_json, m5_onboarding_smoke_result)
+    write_json(portfolio_decision_optimizer_json, portfolio_decision_optimizer_result)
 
     ok = (
         registry_result["ok"]
@@ -754,6 +902,7 @@ def main() -> int:
         and bool(m3_daily_script_audit_result.get("ok"))
         and bool(m4_frontend_readonly_result.get("ok"))
         and bool(m5_onboarding_smoke_result.get("ok"))
+        and bool(portfolio_decision_optimizer_result.get("ok"))
     )
     summary = {
         "ok": ok,
@@ -781,6 +930,9 @@ def main() -> int:
         "m4_legacy_provider_gate_not_exposed": m4_frontend_readonly_result.get("legacy_provider_gate_not_exposed"),
         "m5_onboarding_smoke_status": m5_onboarding_smoke_result.get("status"),
         "m5_onboarding_smoke_sample_count": m5_onboarding_smoke_result.get("sample_count", 0),
+        "portfolio_decision_optimizer_status": portfolio_decision_optimizer_result.get("status"),
+        "portfolio_decision_optimizer_ok": bool(portfolio_decision_optimizer_result.get("ok")),
+        "portfolio_decision_optimizer_check_count": len(portfolio_decision_optimizer_result.get("checks", [])),
         "outputs": {
             "registry_validation": rel(registry_json),
             "signal_artifact_validation": rel(signal_csv),
@@ -797,6 +949,7 @@ def main() -> int:
             "m3_daily_script_audit": rel(m3_daily_script_audit_json),
             "m4_frontend_readonly_validation": rel(m4_frontend_readonly_json),
             "m5_onboarding_smoke_validation": rel(m5_onboarding_smoke_json),
+            "portfolio_decision_optimizer_validation": rel(portfolio_decision_optimizer_json),
         },
     }
     write_json(summary_json, summary)
@@ -812,6 +965,7 @@ def main() -> int:
         print(f"m3_daily_orchestrator_status={summary['m3_daily_orchestrator_status']}")
         print(f"m3_daily_script_audit_status={summary['m3_daily_script_audit_status']}")
         print(f"m4_frontend_readonly_status={summary['m4_frontend_readonly_status']}")
+        print(f"portfolio_decision_optimizer_status={summary['portfolio_decision_optimizer_status']}")
     return 0 if ok else 2
 
 

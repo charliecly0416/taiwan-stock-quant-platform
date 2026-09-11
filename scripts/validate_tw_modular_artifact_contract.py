@@ -129,16 +129,36 @@ def dtype_matches(series: pd.Series, dtype_name: str) -> bool:
     return False
 
 
+def iter_strategy_registry_entries(registry: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    entries: list[tuple[str, dict[str, Any]]] = []
+    strategies = registry.get("strategies") or {}
+    for name, item in strategies.items():
+        if not isinstance(item, dict):
+            continue
+        if "dependency_path" in item:
+            entries.append((str(name), item))
+            continue
+        for child_name, child_item in item.items():
+            if isinstance(child_item, dict):
+                entries.append((f"{name}.{child_name}", child_item))
+    return entries
+
+
 def validate_registry(registry_path: Path) -> dict[str, Any]:
     registry = yaml.safe_load(registry_path.read_text(encoding="utf-8"))
     checks: list[dict[str, Any]] = []
     checks.append(check("registry_version", bool(registry.get("registry_version")), str(registry.get("registry_version", ""))))
     missing_dependency_paths = []
-    for name, item in (registry.get("strategies") or {}).items():
+    skipped_dependency_paths = []
+    for name, item in iter_strategy_registry_entries(registry):
         dep_path = item.get("dependency_path")
+        if not dep_path and item.get("reason"):
+            skipped_dependency_paths.append(f"{name}:reason={item.get('reason')}")
+            continue
         if not dep_path or not resolve(dep_path).exists():
             missing_dependency_paths.append(f"{name}:{dep_path}")
     checks.append(check("registry_dependency_paths", not missing_dependency_paths, ",".join(missing_dependency_paths)))
+    checks.append(check("registry_dependency_skipped_aliases", True, ",".join(skipped_dependency_paths)))
     missing_contract_docs = []
     for _, item in (registry.get("contracts") or {}).items():
         for key in ("docs", "extension_docs"):
@@ -371,7 +391,7 @@ def validate_full_rank(manifest_path: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Readonly validator skeleton for TW modular artifact contracts.")
-    parser.add_argument("--artifact", required=True, help="Path to artifact manifest.json")
+    parser.add_argument("--artifact", default="", help="Path to artifact manifest.json")
     parser.add_argument("--strategy-dependency", default="", help="Optional strategy dependency yaml")
     parser.add_argument("--registry", default="", help="Optional registry yaml to validate dependency paths")
     parser.add_argument("--json", action="store_true", help="Print JSON result")
@@ -380,6 +400,8 @@ def main() -> int:
     if args.registry:
         result = validate_registry(resolve(args.registry))
     else:
+        if not args.artifact:
+            parser.error("--artifact is required unless --registry is provided")
         artifact_path = resolve(args.artifact)
         manifest = json.loads(artifact_path.read_text(encoding="utf-8"))
         if manifest.get("artifact_type") == "replay_result":

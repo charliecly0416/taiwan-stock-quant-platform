@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "nmrpa.real_trust_bootstrap.v1",
+  "title": "NMRPA3 T_R-A caller-pinned real trust bootstrap descriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "required": [
+    "schema_version", "bootstrap_id", "mode", "runtime_overrides",
+    "root_reservations", "fixed_logs", "trust_stores", "capabilities",
+    "descriptor_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "nmrpa.real_trust_bootstrap.v1"},
+    "bootstrap_id": {"const": "nmrpa.real_trust.bootstrap.v1"},
+    "mode": {"const": "descriptor_only_no_payload_read"},
+    "runtime_overrides": {"type": "object", "maxProperties": 0},
+    "root_reservations": {
+      "type": "array", "minItems": 5, "maxItems": 5,
+      "prefixItems": [
+        {"$ref": "#/$defs/root_sealed_calendar"}, {"$ref": "#/$defs/root_formal_instruments"},
+        {"$ref": "#/$defs/root_adjusted_price"}, {"$ref": "#/$defs/root_twii"},
+        {"$ref": "#/$defs/root_modela_signal"}
+      ],
+      "items": false
+    },
+    "fixed_logs": {
+      "type": "array", "minItems": 6, "maxItems": 6,
+      "prefixItems": [
+        {"$ref": "#/$defs/log_principal"}, {"$ref": "#/$defs/log_identity"},
+        {"$ref": "#/$defs/log_credential"}, {"$ref": "#/$defs/log_service"},
+        {"$ref": "#/$defs/log_authority"}, {"$ref": "#/$defs/log_recorder"}
+      ],
+      "items": false
+    },
+    "trust_stores": {
+      "type": "array", "minItems": 9, "maxItems": 9,
+      "prefixItems": [
+        {"$ref": "#/$defs/store_root_locator"}, {"$ref": "#/$defs/store_identity"},
+        {"$ref": "#/$defs/store_actor"}, {"$ref": "#/$defs/store_authorization"},
+        {"$ref": "#/$defs/store_anchor"}, {"$ref": "#/$defs/store_binding"},
+        {"$ref": "#/$defs/store_head"}, {"$ref": "#/$defs/store_project_root"},
+        {"$ref": "#/$defs/store_descriptor_policy"}
+      ],
+      "items": false
+    },
+    "capabilities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["create_storage", "read_payload", "issue_authorization", "record_trust", "run_real_date"],
+      "properties": {
+        "create_storage": {"const": false}, "read_payload": {"const": false},
+        "issue_authorization": {"const": false}, "record_trust": {"const": false},
+        "run_real_date": {"const": false}
+      }
+    },
+    "descriptor_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "root": {
+      "type": "object", "additionalProperties": false, "unevaluatedProperties": false,
+      "required": ["order", "base_id", "base_project_relative_path", "root_kind", "root_id", "root_project_relative_path", "locator_token", "reservation_status", "payload_present", "activation_ref", "seal_ref"],
+      "properties": {
+        "order": {"type": "integer", "minimum": 1, "maximum": 5},
+        "base_id": {"const": "nmrpa_isolated_source_base_v1"},
+        "base_project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/immutable_source_roots"},
+        "root_kind": {"enum": ["sealed_calendar", "formal_instruments", "adjusted_price", "twii", "modela_signal"]},
+        "root_id": {"type": "string"}, "root_project_relative_path": {"type": "string"},
+        "locator_token": {"type": "string"}, "reservation_status": {"const": "reserved_empty"},
+        "payload_present": {"const": false}, "activation_ref": {"type": "null"}, "seal_ref": {"type": "null"}
+      }
+    },
+    "log": {
+      "type": "object", "additionalProperties": false, "unevaluatedProperties": false,
+      "required": ["bootstrap_order", "logical_name", "log_kind", "log_id", "owner_role", "storage_id", "storage_project_relative_path", "genesis_locator", "current_head_locator", "historical_heads_locator", "journal_locator", "commit_marker_locator"],
+      "properties": {
+        "bootstrap_order": {"type": "integer", "minimum": 1, "maximum": 6},
+        "logical_name": {"type": "string"}, "log_kind": {"type": "string"}, "log_id": {"type": "string"},
+        "owner_role": {"const": "trust_registry_issuer"}, "storage_id": {"type": "string"},
+        "storage_project_relative_path": {"type": "string"}, "genesis_locator": {"type": "string"},
+        "current_head_locator": {"type": "string"}, "historical_heads_locator": {"type": "string"},
+        "journal_locator": {"type": "string"}, "commit_marker_locator": {"type": "string"}
+      }
+    },
+    "store": {
+      "type": "object", "additionalProperties": false, "unevaluatedProperties": false,
+      "required": ["order", "store_kind", "store_id", "project_relative_path", "caller_pinned", "runtime_override_allowed", "env_override_allowed", "package_override_allowed"],
+      "properties": {
+        "order": {"type": "integer", "minimum": 1, "maximum": 9}, "store_kind": {"type": "string"},
+        "store_id": {"type": "string"}, "project_relative_path": {"type": "string"},
+        "caller_pinned": {"const": true}, "runtime_override_allowed": {"const": false},
+        "env_override_allowed": {"const": false}, "package_override_allowed": {"const": false}
+      }
+    },
+    "root_sealed_calendar": {"allOf": [{"$ref": "#/$defs/root"}, {"properties": {"order": {"const": 1}, "root_kind": {"const": "sealed_calendar"}, "root_id": {"const": "nmrpa_sealed_calendar_root_v1"}, "root_project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/immutable_source_roots/sealed_calendar/nmrpa_sealed_calendar_root_v1"}, "locator_token": {"const": "NMRPA_REAL_ROOT_SEALED_CALENDAR_V1"}}}]},
+    "root_formal_instruments": {"allOf": [{"$ref": "#/$defs/root"}, {"properties": {"order": {"const": 2}, "root_kind": {"const": "formal_instruments"}, "root_id": {"const": "nmrpa_formal_instruments_root_v1"}, "root_project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/immutable_source_roots/formal_instruments/nmrpa_formal_instruments_root_v1"}, "locator_token": {"const": "NMRPA_REAL_ROOT_FORMAL_INSTRUMENTS_V1"}}}]},
+    "root_adjusted_price": {"allOf": [{"$ref": "#/$defs/root"}, {"properties": {"order": {"const": 3}, "root_kind": {"const": "adjusted_price"}, "root_id": {"const": "nmrpa_adjusted_price_root_v1"}, "root_project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/immutable_source_roots/adjusted_price/nmrpa_adjusted_price_root_v1"}, "locator_token": {"const": "NMRPA_REAL_ROOT_ADJUSTED_PRICE_V1"}}}]},
+    "root_twii": {"allOf": [{"$ref": "#/$defs/root"}, {"properties": {"order": {"const": 4}, "root_kind": {"const": "twii"}, "root_id": {"const": "nmrpa_twii_root_v1"}, "root_project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/immutable_source_roots/twii/nmrpa_twii_root_v1"}, "locator_token": {"const": "NMRPA_REAL_ROOT_TWII_V1"}}}]},
+    "root_modela_signal": {"allOf": [{"$ref": "#/$defs/root"}, {"properties": {"order": {"const": 5}, "root_kind": {"const": "modela_signal"}, "root_id": {"const": "nmrpa_modela_signal_root_v1"}, "root_project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/immutable_source_roots/modela_signal/nmrpa_modela_signal_root_v1"}, "locator_token": {"const": "NMRPA_REAL_ROOT_MODELA_SIGNAL_V1"}}}]},
+    "log_principal": {"allOf": [{"$ref": "#/$defs/log"}, {"properties": {"bootstrap_order": {"const": 1}, "logical_name": {"const": "principal_registry_log"}, "log_kind": {"const": "issuer_registry"}, "log_id": {"const": "nmrpa.principal_registry.v1"}, "storage_id": {"const": "nmrpa.storage.principal_registry_log.v1"}, "storage_project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/principal_registry_log"}, "genesis_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/principal_registry_log/genesis.json"}, "current_head_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/principal_registry_log/head.json"}, "historical_heads_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/principal_registry_log/historical_heads.json"}, "journal_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/principal_registry_log/journals"}, "commit_marker_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/principal_registry_log/commit_markers"}}}]},
+    "log_identity": {"allOf": [{"$ref": "#/$defs/log"}, {"properties": {"bootstrap_order": {"const": 2}, "logical_name": {"const": "identity_registry_log"}, "log_kind": {"const": "issuer_registry"}, "log_id": {"const": "nmrpa.identity_registry.v1"}, "storage_id": {"const": "nmrpa.storage.identity_registry_log.v1"}, "storage_project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/identity_registry_log"}, "genesis_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/identity_registry_log/genesis.json"}, "current_head_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/identity_registry_log/head.json"}, "historical_heads_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/identity_registry_log/historical_heads.json"}, "journal_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/identity_registry_log/journals"}, "commit_marker_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/identity_registry_log/commit_markers"}}}]},
+    "log_credential": {"allOf": [{"$ref": "#/$defs/log"}, {"properties": {"bootstrap_order": {"const": 3}, "logical_name": {"const": "credential_registry_log"}, "log_kind": {"const": "issuer_registry"}, "log_id": {"const": "nmrpa.credential_registry.v1"}, "storage_id": {"const": "nmrpa.storage.credential_registry_log.v1"}, "storage_project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/credential_registry_log"}, "genesis_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/credential_registry_log/genesis.json"}, "current_head_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/credential_registry_log/head.json"}, "historical_heads_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/credential_registry_log/historical_heads.json"}, "journal_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/credential_registry_log/journals"}, "commit_marker_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/credential_registry_log/commit_markers"}}}]},
+    "log_service": {"allOf": [{"$ref": "#/$defs/log"}, {"properties": {"bootstrap_order": {"const": 4}, "logical_name": {"const": "trusted_service_registration_log"}, "log_kind": {"const": "issuer_registry"}, "log_id": {"const": "nmrpa.trusted_service_registration.v1"}, "storage_id": {"const": "nmrpa.storage.trusted_service_registration_log.v1"}, "storage_project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/trusted_service_registration_log"}, "genesis_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/trusted_service_registration_log/genesis.json"}, "current_head_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/trusted_service_registration_log/head.json"}, "historical_heads_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/trusted_service_registration_log/historical_heads.json"}, "journal_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/trusted_service_registration_log/journals"}, "commit_marker_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/trusted_service_registration_log/commit_markers"}}}]},
+    "log_authority": {"allOf": [{"$ref": "#/$defs/log"}, {"properties": {"bootstrap_order": {"const": 5}, "logical_name": {"const": "publication_authority_registration_log"}, "log_kind": {"const": "publication_authority_registry"}, "log_id": {"const": "nmrpa.publication_authority_registration.v1"}, "storage_id": {"const": "nmrpa.storage.publication_authority_registration_log.v1"}, "storage_project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/publication_authority_registration_log"}, "genesis_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/publication_authority_registration_log/genesis.json"}, "current_head_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/publication_authority_registration_log/head.json"}, "historical_heads_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/publication_authority_registration_log/historical_heads.json"}, "journal_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/publication_authority_registration_log/journals"}, "commit_marker_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/publication_authority_registration_log/commit_markers"}}}]},
+    "log_recorder": {"allOf": [{"$ref": "#/$defs/log"}, {"properties": {"bootstrap_order": {"const": 6}, "logical_name": {"const": "capture_recorder_registration_log"}, "log_kind": {"const": "capture_recorder_registry"}, "log_id": {"const": "nmrpa.capture_recorder_registration.v1"}, "storage_id": {"const": "nmrpa.storage.capture_recorder_registration_log.v1"}, "storage_project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/capture_recorder_registration_log"}, "genesis_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/capture_recorder_registration_log/genesis.json"}, "current_head_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/capture_recorder_registration_log/head.json"}, "historical_heads_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/capture_recorder_registration_log/historical_heads.json"}, "journal_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/capture_recorder_registration_log/journals"}, "commit_marker_locator": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/fixed_logs/capture_recorder_registration_log/commit_markers"}}}]},
+    "store_root_locator": {"allOf": [{"$ref": "#/$defs/store"}, {"properties": {"order": {"const": 1}, "store_kind": {"const": "root_locator_registry"}, "store_id": {"const": "nmrpa.store.root_locator_registry.v1"}, "project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/stores/root_locator_registry"}}}]},
+    "store_identity": {"allOf": [{"$ref": "#/$defs/store"}, {"properties": {"order": {"const": 2}, "store_kind": {"const": "principal_identity_credential_registry_stores"}, "store_id": {"const": "nmrpa.store.principal_identity_credential_registry_stores.v1"}, "project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/stores/principal_identity_credential_registry_stores"}}}]},
+    "store_actor": {"allOf": [{"$ref": "#/$defs/store"}, {"properties": {"order": {"const": 3}, "store_kind": {"const": "trusted_actor_registry_stores"}, "store_id": {"const": "nmrpa.store.trusted_actor_registry_stores.v1"}, "project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/stores/trusted_actor_registry_stores"}}}]},
+    "store_authorization": {"allOf": [{"$ref": "#/$defs/store"}, {"properties": {"order": {"const": 4}, "store_kind": {"const": "authorization_ledger"}, "store_id": {"const": "nmrpa.store.authorization_ledger.v1"}, "project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/stores/authorization_ledger"}}}]},
+    "store_anchor": {"allOf": [{"$ref": "#/$defs/store"}, {"properties": {"order": {"const": 5}, "store_kind": {"const": "anchor_ledger"}, "store_id": {"const": "nmrpa.store.anchor_ledger.v1"}, "project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/stores/anchor_ledger"}}}]},
+    "store_binding": {"allOf": [{"$ref": "#/$defs/store"}, {"properties": {"order": {"const": 6}, "store_kind": {"const": "binding_store"}, "store_id": {"const": "nmrpa.store.binding_store.v1"}, "project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/stores/binding_store"}}}]},
+    "store_head": {"allOf": [{"$ref": "#/$defs/store"}, {"properties": {"order": {"const": 7}, "store_kind": {"const": "immutable_historical_head_storage"}, "store_id": {"const": "nmrpa.store.immutable_historical_head_storage.v1"}, "project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/stores/immutable_historical_head_storage"}}}]},
+    "store_project_root": {"allOf": [{"$ref": "#/$defs/store"}, {"properties": {"order": {"const": 8}, "store_kind": {"const": "project_root_identity_marker"}, "store_id": {"const": "nmrpa.store.project_root_identity_marker.v1"}, "project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/stores/project_root_identity_marker"}}}]},
+    "store_descriptor_policy": {"allOf": [{"$ref": "#/$defs/store"}, {"properties": {"order": {"const": 9}, "store_kind": {"const": "preopened_descriptor_policy"}, "store_id": {"const": "nmrpa.store.preopened_descriptor_policy.v1"}, "project_relative_path": {"const": "data_tw/artifacts/research/nmrpa/trust_bootstrap_v1/stores/preopened_descriptor_policy"}}}]}
+  }
+}

@@ -1,0 +1,250 @@
+strategy_rule: portfolio_decision_optimizer_v1
+dependency_version: strategy_dependency_v1
+
+required_core_fields:
+  - date
+  - instrument
+  - model_name
+  - model_family
+  - candidate_rank
+  - buy_score
+  - raw_score
+  - score_rank
+  - full_qlib_rank
+  - signal_asof
+  - available_at
+  - source_artifact
+
+required_capabilities:
+  - core_signal_v1
+  - candidate_boundary:qlib_top50
+  - buy_ordering:buy_score_desc
+  - full_rank_exit:full_qlib_rank
+  - pit_available_at_checked
+
+optional_extensions: []
+required_extensions: []
+
+ranking_usage:
+  - field: candidate_rank
+    usage: qlib_top50_candidate_boundary
+  - field: buy_score
+    usage: candidate_ordering_and_score_gap
+  - field: full_qlib_rank
+    usage: weakest_holding_selection
+  - field: score_rank
+    usage: audit_only
+  - field: raw_score
+    usage: audit_only
+
+required_portfolio_state_fields:
+  - asof_date
+  - instrument
+  - quantity
+  - cost_basis
+  - current_holding_flag
+  - holding_days
+  - cash
+
+optional_portfolio_state_fields:
+  - unrealized_return
+  - max_drawdown_since_entry
+  - current_weight_simulated
+
+required_execution_readiness_fields:
+  - next_open_ready
+  - execution_price_status
+
+optional_execution_readiness_fields:
+  - price_store_asof
+  - execution_calendar_status
+
+required_execution_config_fields:
+  - execution_price_mode
+  - fee_rate
+  - tax_rate
+  - min_lot_policy
+
+input_ownership:
+  model_signal_artifact:
+    owns:
+      - date
+      - instrument
+      - model_name
+      - model_family
+      - candidate_rank
+      - buy_score
+      - raw_score
+      - score_rank
+      - full_qlib_rank
+      - signal_asof
+      - available_at
+      - source_artifact
+    forbidden:
+      - cash
+      - current_holdings
+      - next_open_ready
+      - execution_price_status
+      - fee_rate
+      - tax_rate
+      - min_lot_policy
+      - execution_price
+      - next_open
+  portfolio_state:
+    owns:
+      - current_holdings
+      - cash
+      - holding_days
+      - cost_basis
+      - quantity
+  execution_readiness:
+    owns:
+      - next_open_ready
+      - execution_price_status
+    forbidden:
+      - next_open
+      - next_close
+      - execution_price
+      - fallback_price
+  execution_config:
+    owns:
+      - execution_price_mode
+      - fee_rate
+      - tax_rate
+      - min_lot_policy
+
+order_intent_extension_gate:
+  schema_required: true
+  validator_required: true
+  golden_sample_required: true
+  free_form_extension_forbidden: true
+  partial_intent_contract_support:
+    allowed_reason_codes:
+      - simulated_buy_small
+      - simulated_reduce_partial
+    allowed_diagnostic_fields:
+      - partial_intent_kind
+      - partial_intent_policy
+      - partial_intent_note
+    required_flags:
+      readonly_only: true
+      simulation_only: true
+      not_order: true
+      not_target_position: true
+      not_investment_advice: true
+    forbidden_quantity_or_position_fields:
+      - execution_quantity
+      - quantity_to_buy
+      - quantity_to_sell
+      - shares
+      - lots
+      - target_position
+      - target_weight
+      - allocation_weight
+
+ablation_policy:
+  baseline_strategy_rule: top50_exit_one_worst_sell
+  implementation_mode: baseline_plus_one_mechanism_at_a_time
+  forbid_all_gates_at_once: true
+  pass_standard_not_turnover_only: true
+  phases:
+    - phase: P1B-A
+      mechanism: execution_price_gate
+    - phase: P1B-B
+      mechanism: tiny_no_trade_buffer
+    - phase: P1B-C
+      mechanism: confidence_gap
+    - phase: P1B-D
+      mechanism: min_holding_days_with_exception
+    - phase: P1B-E
+      mechanism: turnover_budget
+    - phase: P1B-F
+      mechanism: risk_off_raised_threshold
+    - phase: P1B-G
+      mechanism: partial_adjustment_after_contract_support
+
+max_buy_count: 1
+max_sell_count: 1
+
+diagnostic_only: false
+not_valid_strategy_evidence: false
+readonly_only: true
+simulation_only: true
+not_order: true
+not_target_position: true
+not_investment_advice: true
+
+forbidden_fields:
+  - future_return_*
+  - future_excess_return_*
+  - forward_return_*
+  - label_*
+  - relevance_10d_top_heavy
+  - ltr_relevance_label
+  - realized_pnl
+  - realized_return
+  - execution_price
+  - execution_date
+  - execution_quantity
+  - next_open
+  - next_close
+  - broker_order_id
+  - target_position
+  - target_weight
+  - cash_after
+  - commission
+  - tax
+  - quantity_to_buy
+  - quantity_to_sell
+  - shares
+  - lots
+  - allocation_weight
+  - cash
+  - nav
+  - fee
+  - broker
+  - order_id
+  - quick_trade
+  - replay_return
+
+order_intent_forbidden_fields:
+  - execution_date
+  - execution_price
+  - execution_quantity
+  - commission
+  - tax
+  - cash
+  - cash_after
+  - equity
+  - daily_return
+  - realized_pnl
+  - unrealized_pnl
+  - broker_order_id
+  - target_position
+  - target_weight
+  - quantity_to_buy
+  - quantity_to_sell
+  - shares
+  - lots
+  - allocation_weight
+  - nav
+  - fee
+  - broker
+  - order_id
+  - quick_trade
+  - replay_return
+
+forbidden_actions:
+  - train_model
+  - tune_model
+  - read_model_private_file
+  - read_future_price
+  - read_future_label
+  - write_broker_order
+  - quick_trade
+  - provider_publish
+  - accepted_latest_switch
+  - monitor_write
+  - default_model_switch
+  - default_strategy_switch
+  - frontend_default_switch

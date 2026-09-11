@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "nmrpa.optional_source_trust.v1",
+  "title": "NMRPA3 optional-source trust bootstrap package",
+  "type": "object",
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "required": ["descriptor", "genesis", "head", "historical_heads", "config"],
+  "properties": {
+    "descriptor": {"$ref": "#/$defs/descriptor"},
+    "genesis": {"$ref": "#/$defs/genesis"},
+    "head": {"$ref": "#/$defs/head"},
+    "historical_heads": {"$ref": "#/$defs/history"},
+    "config": {"$ref": "#/$defs/config"}
+  },
+  "$defs": {
+    "closed": {"type": "object", "additionalProperties": false, "unevaluatedProperties": false},
+    "descriptor": {
+      "type": "object", "additionalProperties": false, "unevaluatedProperties": false,
+      "required": ["schema_version", "namespace", "profile_id", "profile_roles", "source_kinds", "decision_timezone", "pit_policy_id", "status", "payload_evidence_state", "real_payload_read", "target_asof", "future_companion_paths", "parent_binding_ref", "forbidden_in_bootstrap", "descriptor_sha256"],
+      "properties": {
+        "schema_version": {"const": "nmrpa.optional_source_trust_descriptor.v1"},
+        "namespace": {"const": "independent_optional_source_daily_binding_v1"},
+        "profile_id": {"const": "nmrpa.institutional_margin.optional_daily.v1"},
+        "profile_roles": {"type": "object", "additionalProperties": false, "required": ["institutional", "margin"], "properties": {"institutional": {"const": "institutional_source_profile"}, "margin": {"const": "margin_source_profile"}}},
+        "source_kinds": {"type": "array", "prefixItems": [{"const": "institutional"}, {"const": "margin"}], "items": false, "minItems": 2, "maxItems": 2},
+        "decision_timezone": {"const": "Asia/Taipei"},
+        "pit_policy_id": {"const": "nmrpa.optional_source.pit_cutoff.asia_taipei.v1"},
+        "status": {"const": "bootstrap_genesis_only"},
+        "payload_evidence_state": {"const": "not_bound"}, "real_payload_read": {"const": false}, "target_asof": {"type": "null"},
+        "future_companion_paths": {"type": "object", "additionalProperties": false, "required": ["request_scope_store", "authorization_store", "anchor_store", "binding_store", "capture_store", "response_evidence_store", "sealed_object_store"], "properties": {
+          "request_scope_store": {"const": "data_tw/artifacts/research/nmrpa/optional_source_trust_v1/stores/optional_source_profile_registry/"},
+          "authorization_store": {"const": "data_tw/artifacts/research/nmrpa/optional_source_trust_v1/stores/authorization_ledger/"},
+          "anchor_store": {"const": "data_tw/artifacts/research/nmrpa/optional_source_trust_v1/stores/anchor_ledger/"},
+          "binding_store": {"const": "data_tw/artifacts/research/nmrpa/optional_source_trust_v1/stores/binding_store/"},
+          "capture_store": {"const": "data_tw/artifacts/research/nmrpa/optional_source_trust_v1/stores/capture_attempt_store/"},
+          "response_evidence_store": {"const": "data_tw/artifacts/research/nmrpa/optional_source_trust_v1/stores/response_evidence_store/"},
+          "sealed_object_store": {"const": "data_tw/artifacts/research/nmrpa/optional_source_trust_v1/stores/sealed_object_store/"}
+        }},
+        "parent_binding_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "mode", "value"], "properties": {"kind": {"const": "five_root_binding"}, "mode": {"const": "one_way_reference_only"}, "value": {"const": "not_bound"}}},
+        "forbidden_in_bootstrap": {"type": "array", "prefixItems": [{"const": "payload"}, {"const": "credential"}, {"const": "authorization"}, {"const": "anchor"}, {"const": "binding"}, {"const": "capture"}, {"const": "sealed_evidence"}, {"const": "post_genesis_record"}, {"const": "latest"}, {"const": "cron"}], "items": false, "minItems": 10, "maxItems": 10},
+        "descriptor_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "genesis": {
+      "type": "object", "additionalProperties": false, "unevaluatedProperties": false,
+      "required": ["schema_version", "log_id", "sequence", "previous_head_sha256", "profile_id", "state", "payload_evidence_state", "real_payload_read", "genesis_sha256"],
+      "properties": {"schema_version": {"const": "nmrpa.optional_source.binding_log_genesis.v1"}, "log_id": {"const": "nmrpa.optional_source_binding_log.v1"}, "sequence": {"const": 0}, "previous_head_sha256": {"type": "null"}, "profile_id": {"const": "nmrpa.institutional_margin.optional_daily.v1"}, "state": {"const": "genesis_only"}, "payload_evidence_state": {"const": "not_bound"}, "real_payload_read": {"const": false}, "genesis_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+    },
+    "head": {
+      "type": "object", "additionalProperties": false, "unevaluatedProperties": false,
+      "required": ["schema_version", "log_id", "sequence", "previous_head_sha256", "record_sha256", "head_sha256"],
+      "properties": {"schema_version": {"const": "nmrpa.optional_source.binding_log_head.v1"}, "log_id": {"const": "nmrpa.optional_source_binding_log.v1"}, "sequence": {"const": 0}, "previous_head_sha256": {"type": "null"}, "record_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "head_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+    },
+    "history": {
+      "type": "object", "additionalProperties": false, "unevaluatedProperties": false,
+      "required": ["schema_version", "log_id", "heads", "state"],
+      "properties": {"schema_version": {"const": "nmrpa.optional_source.binding_log_history.v1"}, "log_id": {"const": "nmrpa.optional_source_binding_log.v1"}, "heads": {"type": "array", "prefixItems": [{"$ref": "#/$defs/head"}], "items": false, "minItems": 1, "maxItems": 1}, "state": {"const": "genesis_only"}}
+    },
+    "config": {
+      "type": "object", "additionalProperties": false, "unevaluatedProperties": false,
+      "required": ["schema_version", "descriptor_path", "namespace", "profile_id", "activation", "payload_read_allowed", "target_asof"],
+      "properties": {"schema_version": {"const": "nmrpa.optional_source.config.v1"}, "descriptor_path": {"const": "data_tw/artifacts/research/nmrpa/optional_source_trust_v1/descriptor.json"}, "namespace": {"const": "independent_optional_source_daily_binding_v1"}, "profile_id": {"const": "nmrpa.institutional_margin.optional_daily.v1"}, "activation": {"const": "bootstrap_only"}, "payload_read_allowed": {"const": false}, "target_asof": {"type": "null"}}
+    }
+  }
+}
