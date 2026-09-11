@@ -20,6 +20,12 @@ frontend/dist/
 # Generated data and artifacts
 /data/
 /data_tw/
+!/data_tw/
+/data_tw/*
+!/data_tw/golden_samples/
+/data_tw/golden_samples/*
+!/data_tw/golden_samples/portfolio_decision_optimizer_v1/
+!/data_tw/golden_samples/portfolio_decision_optimizer_v1/**
 backend/data/
 backend/data_tw/
 qlib_data/
@@ -48,3 +54,7 @@ tmp/
 .idea/
 .vscode/
 tools/arXiv-mcp/
+
+# Local agent tooling and lock state
+.agents/
+skills-lock.json
