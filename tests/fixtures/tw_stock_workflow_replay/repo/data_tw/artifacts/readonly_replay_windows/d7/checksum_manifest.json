@@ -1,0 +1,17 @@
+{
+  "artifact_type": "readonly_replay_window_index_checksum",
+  "created_at": "2026-06-18T11:39:13+00:00",
+  "files": [
+    {
+      "bytes": 1080,
+      "path": "data_tw/artifacts/readonly_replay_windows/d7/manifest.json",
+      "sha256": "a2fdde89071a03ee6fd93cb206c22a54786ece90d05e8ab421b6dd72aa8ccab6"
+    },
+    {
+      "bytes": 3160,
+      "path": "data_tw/artifacts/readonly_replay_windows/d6/e4_frozen_qlib_2018_2022/top50_exit_one_worst_sell/20260101_20260507/order_intent_replay_result/manifest.json",
+      "sha256": "c483eab0326270e75ea4fd84154bc47b2289be30e2150e3511af0e1ef2e0cc0e"
+    }
+  ],
+  "schema_version": "readonly_replay_window_index_checksum_d7_v1"
+}

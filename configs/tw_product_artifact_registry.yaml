@@ -17,6 +17,7 @@ artifacts:
   yz2_execution_price_readiness_root: data_tw/artifacts/phase_yz/yz2_execution_price_readiness
   yz2r_execution_price_readiness_root: data_tw/artifacts/phase_yz/yz2r_execution_price_readiness
   readonly_strategy_latest: data_tw/artifacts/publish/readonly_strategy_snapshot/latest.json
+  readonly_replay_window_index_manifest: data_tw/artifacts/readonly_replay_windows/d7/manifest.json
   phase_yz_out_root: data_tw/artifacts/phase_yz
   model_a_subdir: model_a
   model_b_preferred_subdir: model_b_yz2

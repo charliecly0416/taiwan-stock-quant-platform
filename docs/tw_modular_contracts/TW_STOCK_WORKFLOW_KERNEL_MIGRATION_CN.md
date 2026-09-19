@@ -1,12 +1,27 @@
 # 通用 Workflow Kernel 与迁移顺序
 
-状态：WF-0 独立内核，尚未接入 daily、replay 或任何发布链路。
+状态：WF-0 独立内核与 WF-1 replay observation sidecar。均未接入 daily、replay execution 或任何发布链路。
 
 ## 目标与边界
 
 `tw_stock_workflow` 提供一个小型通用执行内核，将执行上下文、artifact 查询、模块注册、DAG、权限和运行记录统一起来。当前唯一内置模块 `research_history.observe` 只读 `data_tw/catalog/research_data_history/index.json`，用于证明既有 Model A 输入和信号可以通过标准引用串联。当前 adapter 只暴露具备标准 `artifact_type/model_id/asof/status/run_id` manifest 身份的 Model A artifact；Model B history 是缺少标准 `run_id` 的多文件研究 bundle，必须在后续通过独立 adapter 接入，不能弱化通用 manifest 校验来伪装成标准 signal。
 
 内核不触发数据抓取、模型训练、provider/latest 写入、paper account、broker 或订单路径。`configs/workflows/research_history_observation.yaml` 只是只读 workflow spec，不在 cron 或 daily orchestrator 中注册。B19R2R 仍为 `production_allowed=false` 的研究 challenger。
+
+WF-1 增加 `replay_window.observe`，只观察产品 registry 指向的 D7 readonly replay window index 及其 D6 artifact。它不会调用 replay runner、读取 policy 中的历史 experiment `source`、生成新收益结果或修改 index/latest。`configs/workflows/replay_window_observation.yaml` 同样没有接入 cron 或 daily。
+
+## WF-1 Replay Observation 判定
+
+当前权威入口为 `configs/tw_product_artifact_registry.yaml` 的 `readonly_replay_window_index_manifest`。adapter 只允许该入口及其引用位于 `data_tw/artifacts/readonly_replay_windows/`，并验证：
+
+- D7 index 与 D6 artifact manifest 均被各自 checksum evidence 覆盖；
+- 所有 D6 声明文件存在、位于 readonly product root 且 SHA256/bytes 一致；
+- model、strategy、window、`next_open`、policy 与 readonly/no-write safety 字段一致；
+- D6 manifest 的安全布尔字段必须是 JSON `true/false`，不接受可与布尔值相等的整数 `1/0`；产品 registry 的五项 no-write safety 声明也必须全部为严格布尔 `true`；
+- 窄版 `validation_report.json` 为 `pass`，其实际 SHA256 也进入 workflow run identity；
+- 重复 window identity、private experiment path 和 symlink escape 均 fail closed。
+
+WF-1 暴露的类型是 `ReadonlyReplayWindowArtifact`，状态为 `INDEXED_READONLY`。其 run identity 同时绑定 D7 index manifest SHA256 与 D6 manifest SHA256。它不把现有 D6 宣称为完整 `ReplayResultArtifact`：正式 D6 缺少标准 `run_id/status`，且当前完整 validator 仍缺 `not_copied_from_legacy_replay`、`model_training_windows_traceable` 和 source OrderIntent evidence。因此 metadata 固定为 `full_replay_contract_status=HOLD` 并保留当前可见 gaps，module admission 固定为 false。即使窄观察字段被补齐，WF-1 也无权输出 PASS；完整准入只能由后续正式 validator/adapter 判定。这不是 baseline admission 或 replay execution 切换依据。
 
 ## 合同
 
@@ -35,8 +50,8 @@ PYTHONPATH=. python3 scripts/run_tw_stock_workflow.py \
 
 ## 后续迁移顺序
 
-1. **Replay observation**：先新增只读 replay adapter 和 observation module，用固定 fixture、历史 manifest 与 parity validator 验证，不替换现有 replay runner。
-2. **Replay execution**：把单一 replay 阶段包装成显式 module；输出仍写隔离目录，经既有 validator 通过后才允许下游读取。保留旧入口并做一段时间双跑比对。
+1. **Replay observation（WF-1 已完成 sidecar）**：专用只读 adapter 和 observation module 用固定 fixture、历史 manifest 与 backend index parity 验证，不替换现有 replay runner。完整 ReplayResult admission 仍为 HOLD。
+2. **Replay execution（未开始）**：先修复正式 D6 的完整合同缺口并形成新的不可变 artifact；只有完整 validator 通过后，才可另行设计执行 module。输出仍写隔离目录，保留旧入口并做一段时间双跑比对。
 3. **Daily shadow orchestration**：仅在 replay 迁移稳定后，将无写入的 daily preflight/observation 作为 optional shadow DAG 接入；不得改变 pending、latest 或主线返回码。
 4. **Daily stage migration**：逐阶段迁移 data、feature、Model A signal、strategy、snapshot，每阶段都保留现有合同、artifact validator 和回退入口。Model B 始终是非阻断 optional branch。
 5. **切换与清理**：只有完整模块回归、M3 validator、readonly deployment acceptance 和连续自然调度证据均通过后，才另行提出切换决定。旧执行路径的删除需要独立影响闭包、备份和恢复验证。

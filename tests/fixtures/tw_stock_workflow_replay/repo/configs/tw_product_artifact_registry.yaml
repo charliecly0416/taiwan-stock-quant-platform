@@ -1,0 +1,14 @@
+schema_version: tw_product_artifact_registry_v1
+readonly_only: true
+models:
+  base_model_id: e4_frozen_qlib_2018_2022
+strategies:
+  default_strategy_rule: top50_exit_one_worst_sell
+artifacts:
+  readonly_replay_window_index_manifest: data_tw/artifacts/readonly_replay_windows/d7/manifest.json
+safety:
+  no_training_in_product_context: true
+  no_provider_publish: true
+  no_accepted_latest_switch: true
+  no_monitor_write: true
+  no_broker_order: true

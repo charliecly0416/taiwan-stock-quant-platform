@@ -5,6 +5,7 @@ from pathlib import Path
 from .artifacts import ArtifactResolver, ResearchHistoryAdapter
 from .engine import WorkflowEngine, WorkflowRunResult
 from .modules import ModuleRegistry, ResearchHistoryObservation
+from .replay import ReadonlyReplayWindowAdapter, ReadonlyReplayWindowObservation
 from .spec import WorkflowSpec
 from .types import ExecutionContext
 
@@ -16,6 +17,9 @@ def build_default_engine(
     resolver.register(ResearchHistoryAdapter(repo_root, history_index))
     modules = ModuleRegistry()
     modules.register(ResearchHistoryObservation())
+    modules.register(
+        ReadonlyReplayWindowObservation(ReadonlyReplayWindowAdapter(repo_root))
+    )
     return WorkflowEngine(modules, resolver)
 
 

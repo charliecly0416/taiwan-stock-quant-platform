@@ -1,0 +1,7 @@
+{
+  "artifact_type": "readonly_replay_forbidden_scope_audit",
+  "no_accepted_latest_switch": true,
+  "no_monitor_broker_order": true,
+  "no_provider_publish": true,
+  "status": "pass"
+}

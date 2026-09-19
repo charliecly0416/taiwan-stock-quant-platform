@@ -1,0 +1,13 @@
+policy_version: replay_window_policy_yz0_clean_v1
+fixed_window_only: true
+allowed_windows:
+  - name: 2026_ytd
+    start: "2026-01-01"
+    end: "2026-05-07"
+models:
+  e4_frozen_qlib_2018_2022:
+    model_id: e4_frozen_qlib_2018_2022
+    production_selectable: true
+    allowed_replay_start_min: "2026-01-01"
+default_model_id: e4_frozen_qlib_2018_2022
+default_strategy_rule: top50_exit_one_worst_sell
