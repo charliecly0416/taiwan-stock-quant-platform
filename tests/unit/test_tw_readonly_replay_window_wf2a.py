@@ -421,6 +421,7 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         "actions": actions,
         "coverage_audit": audit_paths["coverage_audit"],
         "daily_nav": nav,
+        "summary": summary,
         "snapshots": snapshots,
         "forbidden_field_audit": audit_paths["forbidden_field_audit"],
         "forbidden_action_audit": forbidden_action,
@@ -471,6 +472,42 @@ def test_validator_rejects_duplicate_position(tmp_path: Path) -> None:
     result = validator.validate_artifact(manifest)
     assert result["ok"] is False
     assert statuses(result)["duplicate_position_count_zero"] == "fail"
+
+
+def test_validator_rejects_self_consistent_snapshot_position_forgery(
+    tmp_path: Path,
+) -> None:
+    manifest, paths = build_fixture(tmp_path)
+    mutate_csv(
+        paths["snapshots"],
+        lambda frame: frame.assign(
+            quantity=2,
+            market_value=22.0,
+            unrealized_pnl=1.98,
+        ),
+    )
+
+    def forge_nav(frame: pd.DataFrame) -> pd.DataFrame:
+        mask = frame["date"].astype(str) == "2026-01-05"
+        frame.loc[mask, "market_value"] = 22.0
+        frame.loc[mask, "equity"] = 1011.99
+        frame.loc[mask, "daily_return"] = 0.01199
+        return frame
+
+    mutate_csv(paths["daily_nav"], forge_nav)
+    mutate_csv(
+        paths["summary"],
+        lambda frame: frame.assign(final_equity=1011.99, total_return=0.01199),
+    )
+    refresh_checksum(
+        manifest,
+        paths["snapshots"],
+        paths["daily_nav"],
+        paths["summary"],
+    )
+    result = validator.validate_artifact(manifest)
+    assert result["ok"] is False
+    assert statuses(result)["snapshots_match_action_positions"] == "fail"
 
 
 def test_validator_rejects_forbidden_output_field(tmp_path: Path) -> None:

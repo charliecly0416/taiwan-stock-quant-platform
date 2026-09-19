@@ -482,6 +482,7 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
         .replace("nan", "9999-12-31")
     ).sort_values(["_execution_sort"], kind="stable")
     last_cash_by_date: dict[str, float] = {}
+    positions_after_date: dict[str, dict[str, int]] = {}
     for row in ordered_actions.itertuples(index=False):
         instrument = str(row.instrument)
         quantity = int(float(row.quantity))
@@ -506,6 +507,11 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
         execution_date = str(row.execution_date)
         if execution_date and execution_date != "nan":
             last_cash_by_date[execution_date] = replay_cash
+            positions_after_date[execution_date] = {
+                symbol: position
+                for symbol, position in replay_positions.items()
+                if position > 0
+            }
     checks.append(check("action_cash_and_position_recomputed", action_accounting_ok))
 
     snapshots_numeric = snapshots.copy()
@@ -562,6 +568,28 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
         .groupby("date")
         .size()
         .to_dict()
+    )
+    nav_date_values = nav["date"].astype(str).tolist()
+    snapshot_date_values = set(snapshots_numeric["date"].astype(str))
+    expected_positions: dict[str, int] = {}
+    snapshot_action_positions_ok = set(positions_after_date).issubset(
+        set(nav_date_values)
+    ) and snapshot_date_values.issubset(set(nav_date_values))
+    for nav_date in nav_date_values:
+        if nav_date in positions_after_date:
+            expected_positions = positions_after_date[nav_date]
+        actual_rows = snapshots_numeric[
+            (snapshots_numeric["date"].astype(str) == nav_date)
+            & (snapshots_numeric["quantity"] > 0)
+        ]
+        actual_positions = {
+            str(row.instrument): int(row.quantity)
+            for row in actual_rows.itertuples(index=False)
+        }
+        if actual_positions != expected_positions:
+            snapshot_action_positions_ok = False
+    checks.append(
+        check("snapshots_match_action_positions", snapshot_action_positions_ok)
     )
     nav_math_ok = not nav_numeric.empty
     prior_cash = initial_cash
