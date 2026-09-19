@@ -1,6 +1,6 @@
 # 通用 Workflow Kernel 与迁移顺序
 
-状态：WF-0 独立内核、WF-1 replay observation、WF-2B 隔离 replay candidate execution module、WF-3 日更 replay 只读 shadow、WF-4A 日更 Model A 输入/信号只读 shadow 与 WF-4B 日更 readonly snapshot 只读 shadow 已完成。WF-3/WF-4A/WF-4B 仅以源码默认关闭的非阻断 sidecar 接入 daily finalizer；未修改 installed cron，也未接入任何发布链路。
+状态：WF-0 独立内核、WF-1 replay observation、WF-2B 隔离 replay candidate execution module、WF-3 日更 replay 只读 shadow、WF-4A 日更 Model A 输入/信号只读 shadow、WF-4B 日更 readonly snapshot 只读 shadow 与 WF-5A 纯策略计算内核已完成。WF-3/WF-4A/WF-4B 仅以源码默认关闭的非阻断 sidecar 接入 daily finalizer；WF-5A 尚未接入 daily 或 replay runtime。未修改 installed cron，也未接入任何发布链路。
 
 ## 目标与边界
 
@@ -91,6 +91,30 @@ daily 前置条件不采信“latest 恰好同日”这一项。正常发布必�
 
 WF-4B 只证明 daily 产品展示 artifact 可以由通用 kernel 读取、形成身份并留下持久化 run evidence。当前 snapshot 明确保持 `candidate_only=true`、`strategy_rule=candidate_only_no_strategy_replay`、`full_strategy_status=NOT_BUILT` 和 `full_strategy_admission=false`；它不等于 `OrderIntentArtifact`，不证明 `top50_exit_one_worst_sell` 的策略执行已经迁入 kernel。daily/backtest 真正共享策略计算需由后续阶段先建立 canonical daily OrderIntent producer。
 
+## WF-5A 纯策略计算内核
+
+WF-5A 新增 `tw_stock_strategy.top50_exit_one_worst_sell`，仅实现当前 active Model A 的 `top50_exit_one_worst_sell`。入口是纯函数：
+
+```text
+ModelSignal rows + explicit PortfolioState rows + frozen StrategyRuleConfig
+  -> StrategyDecision + immutable StrategyIntent values
+```
+
+冻结语义为 `candidate_k=50`、`target_holding_count=10`、每日最多一买一卖、买入按 `buy_score desc, instrument asc`、卖出按 `full_qlib_rank desc, instrument desc`。代码中的不可变配置与 `configs/strategy_dependencies/top50_exit_one_worst_sell.yaml` 由结构化测试逐字段核对，YAML 的 `runtime_migration_status` 固定为 `hold`。
+
+内核没有 I/O、pandas、时钟、价格、现金、费用、数量 sizing、future 字段或执行依赖。它严格拒绝未知字段和未知配置、非严格 bool、错误字段类型、重复 instrument/rank、缺失 Top50 rank、混合日期、`available_at > signal date`、未来 PortfolioState，以及任何持仓缺少当日 `full_qlib_rank` 的输入。WF-5A 仅接受日期级 `available_at=YYYY-MM-DD`；标准 ModelSignal 合同还允许 ISO-8601 时间戳，带时分秒的输入必须等后续 adapter 提供显式带时区 `decision_cutoff`，当前直接阻断，不声称能消费所有标准 ModelSignal。旧脚本以 `999999` 替代缺失持仓 rank 后继续决策；WF-5A 将其改为 fail closed。这是有意的合同收紧，因此旧 runtime 不能因单元测试通过而自动迁移。
+
+真实历史 fixture 只证明在以下前置条件成立时，WF-5A 的 sell/buy choice 与旧 replay 的 pre-execution decision 一致：输入是完整合法的同日 150-row Model A 截面、所有持仓在该截面可见、没有未结 pending order，且尚未进入 next-open price、cash 或 quantity 分支。WF-5A 会输出 exhaustive hold intents，旧 replay 通常只物化 buy/sell rows，因此这不是 OrderIntent row-set parity，也不是全窗口 replay/NAV parity。
+
+当前 runtime migration 继续 HOLD，原因如下：
+
+- daily Model A signal 当前只有 150 行，尚无权威 full-market held-rank source；跨日持仓可能不在这 150 行内，不能用缺失值替代 rank。
+- 尚无标准、不可变并带 lineage/checksum 的 canonical `PortfolioStateArtifact`，也未决定 daily intent 对应全局研究模拟组合还是 per-user paper portfolio。
+- 旧 replay 的买入循环读取跨日 pending execution state，并按 next-open price、cash 和 quantity 跳过候选；这些执行关注点必须先从策略选择中拆出。
+- candidate-only `ReadonlyStrategySnapshot` 明确不是 PortfolioState 或 OrderIntent 输入。
+
+WF-5B 或后续阶段必须先定义 PortfolioStateArtifact、覆盖所有当前持仓的同日 FullRank source、pending intent/execution 状态交接，以及缺价时“跳过该 intent”还是“尝试下一候选”的正式语义。完成这些合同和 parity 证据前，不得让 WF-5A 替换 WF-2A、daily、paper portfolio 或产品链路。
+
 ## 合同
 
 - `ExecutionContext` 明确声明 `mode`、`asof`、带时区的 `decision_cutoff`、隔离 `workspace` 和权限集合。
@@ -123,7 +147,7 @@ PYTHONPATH=. python3 scripts/run_tw_stock_workflow.py \
 3. **Daily shadow orchestration（WF-3 已完成、源码默认关闭）**：固定 replay observation 已作为非阻断 sidecar 接入统一 finalizer；是否加入 installed cron 和连续自然调度观察仍需独立运维决定。
 4. **Model A input/signal shadow（WF-4A 已完成、源码默认关闭）**：只观察本次 finalizer 成功物化的 Model A 输入与信号，不执行模型；是否加入 installed cron 和连续自然调度观察仍需独立运维决定。
 5. **Readonly snapshot shadow（WF-4B 已完成、源码默认关闭）**：只观察当前 DAPR18 成功或严格同日幂等绑定的 candidate-only 产品 snapshot，不发布 snapshot、不生成策略或 replay；是否加入 installed cron 仍需独立运维决定。
-6. **Strategy migration**：先建立 canonical daily `OrderIntentArtifact` producer，再让 daily 与 replay 共用同一个 strategy module。不得把 WF-4B candidate-only snapshot 当作完整策略证据。data/feature 后续迁移也必须保留现有合同、validator 和回退入口；Model B 始终是非阻断 optional branch。
+6. **Strategy migration（WF-5A pure kernel 已完成，runtime HOLD）**：先补 canonical PortfolioState 与 held-rank 完整可见性，拆分 legacy pending/price/cash/quantity 耦合，再建立 canonical daily `OrderIntentArtifact` producer，并在有限 decision parity 之外补完整迁移证据。不得把 WF-4B candidate-only snapshot 当作完整策略证据。data/feature 后续迁移也必须保留现有合同、validator 和回退入口；Model B 始终是非阻断 optional branch。
 7. **切换与清理**：只有完整模块回归、M3 validator、readonly deployment acceptance 和连续自然调度证据均通过后，才另行提出切换决定。旧执行路径的删除需要独立影响闭包、备份和恢复验证。
 
 任何迁移都不得通过 workflow 私下读取实验文件；依赖必须来自 registry 允许的标准 artifact。生产默认、provider/accepted latest 和 cron 变更需要单独授权，本文件不构成授权。

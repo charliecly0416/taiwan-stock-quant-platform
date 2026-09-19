@@ -20,7 +20,20 @@ ranking_usage:
     usage: buy_ordering
   - field: full_qlib_rank
     usage: exit_worst_rank
+target_holding_count: 10
+candidate_k: 50
 max_buy_count: 1
 max_sell_count: 1
+sell_boundary: candidate_rank_gt_candidate_k
+buy_order: buy_score_desc_instrument_asc
+tie_breaker: full_qlib_rank_desc_instrument_desc
+allow_diagnostic_rule: false
 diagnostic_only: false
 not_valid_strategy_evidence: false
+canonical_kernel:
+  module: tw_stock_strategy.top50_exit_one_worst_sell
+  runtime_migration_status: hold
+  unsupported_preconditions:
+    - pending_order_state
+    - price_coupled_candidate_fallback
+    - cash_or_quantity_sizing
