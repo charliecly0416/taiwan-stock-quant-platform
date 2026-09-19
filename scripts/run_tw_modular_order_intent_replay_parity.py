@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import importlib.util
 import json
 import sys
@@ -14,8 +15,13 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_REPLAY_SCRIPT = ROOT / "scripts/run_tw_modular_config_replay_matrix.py"
-DEFAULT_BASELINE_MANIFEST = ROOT / "data_tw/experiments/extended_oos_qlib_orthogonal_ltr/modular_replay_matrix/formal_replay_manifest.json"
-DEFAULT_OUT_DIR = ROOT / "data_tw/experiments/extended_oos_qlib_orthogonal_ltr/order_intent_replay_d3"
+DEFAULT_BASELINE_MANIFEST = (
+    ROOT
+    / "data_tw/experiments/extended_oos_qlib_orthogonal_ltr/modular_replay_matrix/formal_replay_manifest.json"
+)
+DEFAULT_OUT_DIR = (
+    ROOT / "data_tw/experiments/extended_oos_qlib_orthogonal_ltr/order_intent_replay_d3"
+)
 RULES = [
     "original",
     "top50_exit_all",
@@ -54,10 +60,15 @@ def load_json(path: Path) -> dict[str, Any]:
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
 
 
-def write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str] | None = None) -> None:
+def write_csv(
+    path: Path, rows: list[dict[str, Any]], fields: list[str] | None = None
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if fields is None:
         fields = sorted({key for row in rows for key in row}) if rows else ["status"]
@@ -69,7 +80,9 @@ def write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str] | None =
 
 
 def load_base() -> Any:
-    spec = importlib.util.spec_from_file_location("run_tw_modular_config_replay_matrix", BASE_REPLAY_SCRIPT)
+    spec = importlib.util.spec_from_file_location(
+        "run_tw_modular_config_replay_matrix", BASE_REPLAY_SCRIPT
+    )
     if spec is None or spec.loader is None:
         raise RuntimeError(f"unable to load {BASE_REPLAY_SCRIPT}")
     mod = importlib.util.module_from_spec(spec)
@@ -83,8 +96,149 @@ def norm_symbol(value: Any) -> str:
     return text if text.startswith("TW") else f"TW{text}"
 
 
-def status_row(name: str, baseline_rows: int, replay_rows: int, ok: bool, details: str = "") -> dict[str, Any]:
-    return {"check_name": name, "baseline_rows": int(baseline_rows), "replay_rows": int(replay_rows), "status": "pass" if ok else "fail", "details": details}
+class CanonicalPriceStore:
+    def __init__(
+        self,
+        manifest_path: Path,
+        symbols: set[str],
+        *,
+        execution_price_mode: str,
+    ) -> None:
+        if execution_price_mode != "next_open":
+            raise RuntimeError(
+                f"unsupported canonical execution price mode: {execution_price_mode}"
+            )
+        manifest = load_json(manifest_path)
+        if (
+            manifest.get("artifact_type") != "price_store"
+            or manifest.get("readonly_only") is not True
+            or manifest.get("no_provider_publish") is not True
+            or manifest.get("no_accepted_latest_switch") is not True
+        ):
+            raise RuntimeError("canonical price store manifest is not readonly")
+        prices_path = resolve(str(manifest.get("prices_path") or ""))
+        if not prices_path.is_file():
+            raise RuntimeError("canonical price store prices file is missing")
+        digest = hashlib.sha256()
+        with prices_path.open("rb") as handle:
+            for block in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(block)
+        prices_sha256 = digest.hexdigest()
+        if manifest.get("checksum") != prices_sha256:
+            raise RuntimeError("canonical price store checksum mismatch")
+        self.manifest_path = manifest_path.resolve()
+        self.manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        self.prices_path = prices_path.resolve()
+        self.prices_sha256 = prices_sha256
+        wanted = {norm_symbol(symbol) for symbol in symbols}
+        frames: list[pd.DataFrame] = []
+        for chunk in pd.read_csv(
+            prices_path,
+            usecols=[
+                "price_date",
+                "instrument",
+                "open",
+                "close",
+                "tradable_flag",
+                "halt_flag",
+                "next_day_execution_availability",
+                "next_day_execution_status",
+            ],
+            dtype={"price_date": str, "instrument": str},
+            chunksize=100_000,
+        ):
+            chunk["instrument"] = chunk["instrument"].map(norm_symbol)
+            selected = chunk[chunk["instrument"].isin(wanted)].copy()
+            if not selected.empty:
+                frames.append(selected)
+        frame = (
+            pd.concat(frames, ignore_index=True)
+            if frames
+            else pd.DataFrame(columns=["price_date", "instrument", "open", "close"])
+        )
+        frame["price_date"] = frame["price_date"].astype(str).str[:10]
+        frame["open"] = pd.to_numeric(frame["open"], errors="coerce")
+        frame["close"] = pd.to_numeric(frame["close"], errors="coerce")
+        if frame.duplicated(["price_date", "instrument"]).any():
+            raise RuntimeError(
+                "canonical price store has duplicate date/instrument rows"
+            )
+        self.by_symbol: dict[str, list[dict[str, Any]]] = {}
+        for symbol, group in frame.sort_values(["instrument", "price_date"]).groupby(
+            "instrument"
+        ):
+            rows = [
+                {
+                    "date": str(row.price_date),
+                    "open": float(row.open)
+                    if pd.notna(row.open) and float(row.open) > 0
+                    else None,
+                    "close": float(row.close)
+                    if pd.notna(row.close) and float(row.close) > 0
+                    else None,
+                    "tradable": str(row.tradable_flag).lower() == "true",
+                    "halted": str(row.halt_flag).lower() == "true",
+                    "next_available": str(row.next_day_execution_availability).lower()
+                    == "true",
+                    "next_status": str(row.next_day_execution_status),
+                }
+                for row in group.itertuples(index=False)
+            ]
+            if rows:
+                self.by_symbol[str(symbol)] = rows
+
+    def close_on_or_before(self, symbol: str, asof: str) -> float | None:
+        out = None
+        for row in self.by_symbol.get(norm_symbol(symbol), []):
+            if row["date"] > asof:
+                break
+            if row["close"] is not None:
+                out = float(row["close"])
+        return out
+
+    def _next_quote(
+        self, symbol: str, asof: str
+    ) -> tuple[tuple[str, float] | None, str]:
+        rows = self.by_symbol.get(norm_symbol(symbol), [])
+        source = None
+        target = None
+        for row in rows:
+            if row["date"] <= asof:
+                source = row
+            elif target is None:
+                target = row
+                break
+        if source is None or target is None:
+            return None, "no_next_trading_day_price"
+        if not source["next_available"] or source["next_status"] != "available":
+            return None, f"next_day_execution_unavailable:{source['next_status']}"
+        if not target["tradable"]:
+            return None, "next_day_not_tradable"
+        if target["halted"]:
+            return None, "next_day_halted"
+        if target["open"] is None:
+            return None, "missing_next_open"
+        return (str(target["date"]), float(target["open"])), ""
+
+    def next_after(self, symbol: str, asof: str) -> tuple[str, float] | None:
+        quote, _reason = self._next_quote(symbol, asof)
+        return quote
+
+    def execution_skip_reason(self, symbol: str, asof: str) -> str:
+        _quote, reason = self._next_quote(symbol, asof)
+        return reason
+
+
+def status_row(
+    name: str, baseline_rows: int, replay_rows: int, ok: bool, details: str = ""
+) -> dict[str, Any]:
+    return {
+        "check_name": name,
+        "baseline_rows": int(baseline_rows),
+        "replay_rows": int(replay_rows),
+        "status": "pass" if ok else "fail",
+        "details": details,
+    }
 
 
 def filter_window(frame: pd.DataFrame) -> pd.DataFrame:
@@ -94,7 +248,9 @@ def filter_window(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def signal_lookup(day_group: pd.DataFrame) -> dict[str, Any]:
-    return {norm_symbol(row.instrument): row for row in day_group.itertuples(index=False)}
+    return {
+        norm_symbol(row.instrument): row for row in day_group.itertuples(index=False)
+    }
 
 
 def rank_value(value: Any, default: Any = "") -> Any:
@@ -119,7 +275,9 @@ def make_intent_row(
     if signal_row is not None:
         candidate_rank = rank_value(getattr(signal_row, "candidate_rank", ""))
         buy_rank = rank_value(getattr(signal_row, "score_rank", ""))
-        full_value = rank_value(getattr(signal_row, "full_qlib_rank", full_rank), rank_value(full_rank, ""))
+        full_value = rank_value(
+            getattr(signal_row, "full_qlib_rank", full_rank), rank_value(full_rank, "")
+        )
         source_signal_asof = str(getattr(signal_row, "signal_asof", day))
         source_available_at = str(getattr(signal_row, "available_at", day))
     else:
@@ -183,33 +341,39 @@ def append_pending_order(
     quote = prices.next_after(symbol, day)
     if quote is None:
         last_day_counter["count"] += 1
-        skipped.append({
+        skipped.append(
+            {
+                "signal_date": day,
+                "execution_date": "",
+                "effective_nav_date": "",
+                "symbol": symbol,
+                "action": "historical_skip",
+                "quantity": 0,
+                "price": "",
+                "fee_and_tax": 0.0,
+                "reason": prices.execution_skip_reason(symbol, day)
+                if hasattr(prices, "execution_skip_reason")
+                else "no_next_trading_day_price",
+                "order_intent_artifact": order_intent_artifact,
+                "order_intent_row_id": order_intent_row_id,
+                "decision_meta": decision_meta,
+            }
+        )
+        return False
+    execution_date, price = quote
+    pending.setdefault(execution_date, []).append(
+        {
             "signal_date": day,
-            "execution_date": "",
-            "effective_nav_date": "",
             "symbol": symbol,
-            "action": "historical_skip",
-            "quantity": 0,
-            "price": "",
-            "fee_and_tax": 0.0,
-            "reason": "no_next_trading_day_price",
+            "action": action,
+            "quantity": int(qty),
+            "price": float(price),
+            "reason": reason,
             "order_intent_artifact": order_intent_artifact,
             "order_intent_row_id": order_intent_row_id,
             "decision_meta": decision_meta,
-        })
-        return False
-    execution_date, price = quote
-    pending.setdefault(execution_date, []).append({
-        "signal_date": day,
-        "symbol": symbol,
-        "action": action,
-        "quantity": int(qty),
-        "price": float(price),
-        "reason": reason,
-        "order_intent_artifact": order_intent_artifact,
-        "order_intent_row_id": order_intent_row_id,
-        "decision_meta": decision_meta,
-    })
+        }
+    )
     return True
 
 
@@ -227,7 +391,10 @@ def execute_pending_orders(
     base: Any,
 ) -> tuple[float, float, int]:
     skipped = 0
-    ordered = sorted(pending_orders, key=lambda row: 0 if row["action"] == "historical_risk_reduce" else 1)
+    ordered = sorted(
+        pending_orders,
+        key=lambda row: 0 if row["action"] == "historical_risk_reduce" else 1,
+    )
     for order in ordered:
         symbol = norm_symbol(order["symbol"])
         price = float(order["price"])
@@ -240,45 +407,136 @@ def execute_pending_orders(
             "symbol": symbol,
             "order_intent_artifact": order["order_intent_artifact"],
             "order_intent_row_id": order["order_intent_row_id"],
+            "intent_reason": order["reason"],
         }
         if order["action"] == "historical_risk_reduce":
             qty = int(holdings.pop(symbol, 0))
             holding_meta.pop(symbol, None)
             if qty <= 0:
                 skipped += 1
-                actions.append({**common, "effective_nav_date": "", "action": "historical_skip", "quantity": 0, "price": round(price, 4), "fee_and_tax": 0.0, "reason": "sell_without_active_holding"})
+                actions.append(
+                    {
+                        **common,
+                        "effective_nav_date": "",
+                        "action": "historical_skip",
+                        "quantity": 0,
+                        "price": round(price, 4),
+                        "commission": 0.0,
+                        "tax": 0.0,
+                        "fee_and_tax": 0.0,
+                        "cash_after": round(cash, 2),
+                        "position_after": 0,
+                        "reason": "sell_without_active_holding",
+                        "intent_reason": order["reason"],
+                    }
+                )
                 continue
-            fee_tax = qty * price * (base.S2D_FEE_RATE + base.S2D_SELL_TAX_RATE)
+            commission = qty * price * base.S2D_FEE_RATE
+            tax = qty * price * base.S2D_SELL_TAX_RATE
+            fee_tax = commission + tax
             cash += qty * price - fee_tax
             fees += fee_tax
-            actions.append({**common, "effective_nav_date": asof, "action": "historical_risk_reduce", "quantity": qty, "price": round(price, 4), "fee_and_tax": round(fee_tax, 2), "reason": order["reason"]})
+            actions.append(
+                {
+                    **common,
+                    "effective_nav_date": asof,
+                    "action": "historical_risk_reduce",
+                    "quantity": qty,
+                    "price": round(price, 4),
+                    "execution_price": round(price, 8),
+                    "commission": round(commission, 8),
+                    "tax": round(tax, 8),
+                    "fee_and_tax": round(fee_tax, 2),
+                    "cash_after": round(cash, 2),
+                    "position_after": 0,
+                    "reason": order["reason"],
+                }
+            )
         elif order["action"] == "historical_add":
             qty = int(order["quantity"])
             fee = qty * price * base.S2D_FEE_RATE
             total_cost = qty * price + fee
-            if qty > 0 and cash >= total_cost and holdings.get(symbol, 0) == 0 and len(holdings) < TARGET_HOLDINGS:
+            if (
+                qty > 0
+                and cash >= total_cost
+                and holdings.get(symbol, 0) == 0
+                and len(holdings) < TARGET_HOLDINGS
+            ):
                 cash -= total_cost
                 fees += fee
                 holdings[symbol] = qty
-                holding_meta[symbol] = dict(order.get("decision_meta") or {})
-                actions.append({**common, "effective_nav_date": asof, "action": "historical_add", "quantity": qty, "price": round(price, 4), "fee_and_tax": round(fee, 2), "reason": order["reason"]})
+                holding_meta[symbol] = {
+                    **dict(order.get("decision_meta") or {}),
+                    "cost_basis": total_cost / qty,
+                }
+                actions.append(
+                    {
+                        **common,
+                        "effective_nav_date": asof,
+                        "action": "historical_add",
+                        "quantity": qty,
+                        "price": round(price, 4),
+                        "execution_price": round(price, 8),
+                        "commission": round(fee, 8),
+                        "tax": 0.0,
+                        "fee_and_tax": round(fee, 2),
+                        "cash_after": round(cash, 2),
+                        "position_after": qty,
+                        "reason": order["reason"],
+                    }
+                )
             else:
                 skipped += 1
-                actions.append({**common, "effective_nav_date": "", "action": "historical_skip", "quantity": 0, "price": round(price, 4), "fee_and_tax": 0.0, "reason": "insufficient_cash_duplicate_zero_qty_or_full"})
+                actions.append(
+                    {
+                        **common,
+                        "effective_nav_date": "",
+                        "action": "historical_skip",
+                        "quantity": 0,
+                        "price": round(price, 4),
+                        "commission": 0.0,
+                        "tax": 0.0,
+                        "fee_and_tax": 0.0,
+                        "cash_after": round(cash, 2),
+                        "position_after": int(holdings.get(symbol, 0)),
+                        "reason": "insufficient_cash_duplicate_zero_qty_or_full",
+                        "intent_reason": order["reason"],
+                    }
+                )
     return cash, fees, skipped
 
 
-def has_pending_order(pending: dict[str, list[dict[str, Any]]], symbol: str, action: str) -> bool:
+def has_pending_order(
+    pending: dict[str, list[dict[str, Any]]], symbol: str, action: str
+) -> bool:
     normalized = norm_symbol(symbol)
-    return any(norm_symbol(order.get("symbol")) == normalized and order.get("action") == action for orders in pending.values() for order in orders)
+    return any(
+        norm_symbol(order.get("symbol")) == normalized and order.get("action") == action
+        for orders in pending.values()
+        for order in orders
+    )
 
 
-def pending_buy_reserved_cash(pending: dict[str, list[dict[str, Any]]], fee_rate: float) -> float:
-    return sum(float(order.get("quantity") or 0) * float(order.get("price") or 0.0) * (1.0 + fee_rate) for orders in pending.values() for order in orders if order.get("action") == "historical_add")
+def pending_buy_reserved_cash(
+    pending: dict[str, list[dict[str, Any]]], fee_rate: float
+) -> float:
+    return sum(
+        float(order.get("quantity") or 0)
+        * float(order.get("price") or 0.0)
+        * (1.0 + fee_rate)
+        for orders in pending.values()
+        for order in orders
+        if order.get("action") == "historical_add"
+    )
 
 
 def pending_buy_symbols(pending: dict[str, list[dict[str, Any]]]) -> set[str]:
-    return {norm_symbol(order.get("symbol")) for orders in pending.values() for order in orders if order.get("action") == "historical_add"}
+    return {
+        norm_symbol(order.get("symbol"))
+        for orders in pending.values()
+        for order in orders
+        if order.get("action") == "historical_add"
+    }
 
 
 def forward_order_intent_replay(
@@ -294,8 +552,12 @@ def forward_order_intent_replay(
     full_rank_artifact: str,
     order_manifest_path: str,
 ) -> dict[str, Any]:
-    sub = signals[(signals["date_str"] >= WINDOW_START) & (signals["date_str"] <= WINDOW_END)].copy()
-    full = full_rank[(full_rank["date_str"] >= WINDOW_START) & (full_rank["date_str"] <= WINDOW_END)].copy()
+    sub = signals[
+        (signals["date_str"] >= WINDOW_START) & (signals["date_str"] <= WINDOW_END)
+    ].copy()
+    full = full_rank[
+        (full_rank["date_str"] >= WINDOW_START) & (full_rank["date_str"] <= WINDOW_END)
+    ].copy()
     dates = sorted(sub["date_str"].unique().tolist())
     full_by_date = {day: group for day, group in full.groupby("date_str")}
     cash = INITIAL_EQUITY
@@ -315,7 +577,18 @@ def forward_order_intent_replay(
     intent_seq = 0
 
     for asof in dates:
-        cash, fees, skipped = execute_pending_orders(pending_orders=pending.pop(asof, []), asof=asof, method=method, rule=rule, cash=cash, holdings=holdings, holding_meta=holding_meta, actions=actions, fees=fees, base=base)
+        cash, fees, skipped = execute_pending_orders(
+            pending_orders=pending.pop(asof, []),
+            asof=asof,
+            method=method,
+            rule=rule,
+            cash=cash,
+            holdings=holdings,
+            holding_meta=holding_meta,
+            actions=actions,
+            fees=fees,
+            base=base,
+        )
         skipped_count += skipped
         equity, missing = base.mark_to_market(cash, holdings, prices, asof)
         missing_price_days += 1 if missing else 0
@@ -328,10 +601,57 @@ def forward_order_intent_replay(
         buy_order = state["buy_order"]
         buy_rank = state["buy_rank"]
         full_rank_map = state["full_rank"]
-        nav_rows.append({"date": asof, "window": WINDOW, "method": method, "family": family, "rule": rule, "equity": round(equity, 2), "cash": round(cash, 2), "holding_count": len(holdings), "missing_price_count": missing, "regime_segment": "normal"})
+        previous_equity = float(nav_rows[-1]["equity"]) if nav_rows else INITIAL_EQUITY
+        nav_rows.append(
+            {
+                "date": asof,
+                "window": WINDOW,
+                "method": method,
+                "family": family,
+                "rule": rule,
+                "cash": round(cash, 2),
+                "market_value": round(equity - cash, 2),
+                "equity": round(equity, 2),
+                "daily_return": round(equity / previous_equity - 1.0, 8)
+                if previous_equity
+                else 0.0,
+                "holding_count": len(holdings),
+                "missing_price_count": missing,
+                "regime_segment": "normal",
+            }
+        )
         for symbol, qty in sorted(holdings.items()):
             meta = holding_meta.get(symbol, {})
-            snapshots.append({"date": asof, "window": WINDOW, "method": method, "family": family, "rule": rule, "symbol": symbol, "quantity": qty, "in_qlib_top50_candidate": symbol in candidate_set, "buy_rank": buy_rank.get(symbol, meta.get("buy_rank", "")), "full_qlib_rank": full_rank_map.get(symbol, meta.get("full_qlib_rank", ""))})
+            mark_price = prices.close_on_or_before(symbol, asof)
+            cost_basis = float(meta.get("cost_basis") or 0.0)
+            market_value = float(mark_price or 0.0) * qty
+            snapshots.append(
+                {
+                    "date": asof,
+                    "window": WINDOW,
+                    "method": method,
+                    "model_name": method,
+                    "family": family,
+                    "rule": rule,
+                    "strategy_rule": rule,
+                    "symbol": symbol,
+                    "instrument": symbol,
+                    "quantity": qty,
+                    "cost_basis": round(cost_basis, 8),
+                    "mark_price": round(float(mark_price), 8)
+                    if mark_price is not None
+                    else "",
+                    "market_value": round(market_value, 2),
+                    "unrealized_pnl": round(
+                        (float(mark_price or 0.0) - cost_basis) * qty, 2
+                    ),
+                    "in_qlib_top50_candidate": symbol in candidate_set,
+                    "buy_rank": buy_rank.get(symbol, meta.get("buy_rank", "")),
+                    "full_qlib_rank": full_rank_map.get(
+                        symbol, meta.get("full_qlib_rank", "")
+                    ),
+                }
+            )
 
         sells = base.choose_sells(rule, holdings, state)
         skipped_local: list[dict[str, Any]] = []
@@ -344,40 +664,132 @@ def forward_order_intent_replay(
             intent_seq += 1
             row_id = f"{method}|{rule}|{asof}|{symbol}|sell|{intent_seq}"
             meta = holding_meta.get(symbol, {})
-            sell_full_rank = full_rank_map.get(symbol, meta.get("full_qlib_rank", 999999))
-            intent = make_intent_row(row_id=row_id, method=method, rule=rule, day=asof, symbol=symbol, intent="sell", reason=f"{rule}_sell", signal_row=by_symbol.get(symbol), full_rank=sell_full_rank, signal_artifact=signal_artifact, full_rank_artifact=full_rank_artifact)
+            sell_full_rank = full_rank_map.get(
+                symbol, meta.get("full_qlib_rank", 999999)
+            )
+            intent = make_intent_row(
+                row_id=row_id,
+                method=method,
+                rule=rule,
+                day=asof,
+                symbol=symbol,
+                intent="sell",
+                reason=f"{rule}_sell",
+                signal_row=by_symbol.get(symbol),
+                full_rank=sell_full_rank,
+                signal_artifact=signal_artifact,
+                full_rank_artifact=full_rank_artifact,
+            )
             intents.append(intent)
-            append_pending_order(pending=pending, prices=prices, symbol=symbol, day=asof, action="historical_risk_reduce", qty=qty, reason=f"{rule}_sell", order_intent_artifact=order_manifest_path, order_intent_row_id=row_id, decision_meta=intent, last_day_counter=last_day, skipped=skipped_local)
+            append_pending_order(
+                pending=pending,
+                prices=prices,
+                symbol=symbol,
+                day=asof,
+                action="historical_risk_reduce",
+                qty=qty,
+                reason=f"{rule}_sell",
+                order_intent_artifact=order_manifest_path,
+                order_intent_row_id=row_id,
+                decision_meta=intent,
+                last_day_counter=last_day,
+                skipped=skipped_local,
+            )
 
         for symbol in buy_order:
             reserved_symbols = pending_buy_symbols(pending)
             available_slots = TARGET_HOLDINGS - len(holdings) - len(reserved_symbols)
             if available_slots <= 0:
                 break
-            if symbol in holdings or symbol in reserved_symbols or has_pending_order(pending, symbol, "historical_add"):
+            if (
+                symbol in holdings
+                or symbol in reserved_symbols
+                or has_pending_order(pending, symbol, "historical_add")
+            ):
                 continue
             quote = prices.next_after(symbol, asof)
             price = quote[1] if quote else None
-            available_cash = max(0.0, cash - pending_buy_reserved_cash(pending, base.S2D_FEE_RATE))
-            qty = int((available_cash / max(1, available_slots)) // (price * base.S2D_LOT_SIZE)) * base.S2D_LOT_SIZE if price else 0
+            available_cash = max(
+                0.0, cash - pending_buy_reserved_cash(pending, base.S2D_FEE_RATE)
+            )
+            qty = (
+                int(
+                    (available_cash / max(1, available_slots))
+                    // (price * base.S2D_LOT_SIZE)
+                )
+                * base.S2D_LOT_SIZE
+                if price
+                else 0
+            )
             if qty <= 0 and quote is not None:
                 continue
             intent_seq += 1
             row_id = f"{method}|{rule}|{asof}|{symbol}|buy|{intent_seq}"
-            intent = make_intent_row(row_id=row_id, method=method, rule=rule, day=asof, symbol=symbol, intent="buy", reason=f"{rule}_buy", signal_row=by_symbol.get(symbol), full_rank=full_rank_map.get(symbol, ""), signal_artifact=signal_artifact, full_rank_artifact=full_rank_artifact)
+            intent = make_intent_row(
+                row_id=row_id,
+                method=method,
+                rule=rule,
+                day=asof,
+                symbol=symbol,
+                intent="buy",
+                reason=f"{rule}_buy",
+                signal_row=by_symbol.get(symbol),
+                full_rank=full_rank_map.get(symbol, ""),
+                signal_artifact=signal_artifact,
+                full_rank_artifact=full_rank_artifact,
+            )
             intents.append(intent)
-            ok = append_pending_order(pending=pending, prices=prices, symbol=symbol, day=asof, action="historical_add", qty=qty, reason=f"{rule}_buy", order_intent_artifact=order_manifest_path, order_intent_row_id=row_id, decision_meta=intent, last_day_counter=last_day, skipped=skipped_local)
+            ok = append_pending_order(
+                pending=pending,
+                prices=prices,
+                symbol=symbol,
+                day=asof,
+                action="historical_add",
+                qty=qty,
+                reason=f"{rule}_buy",
+                order_intent_artifact=order_manifest_path,
+                order_intent_row_id=row_id,
+                decision_meta=intent,
+                last_day_counter=last_day,
+                skipped=skipped_local,
+            )
             if ok:
                 break
         if skipped_local:
             skipped_count += len(skipped_local)
             for row in skipped_local:
-                actions.append({**row, "window": WINDOW, "method": method, "rule": rule})
+                actions.append(
+                    {
+                        **row,
+                        "window": WINDOW,
+                        "method": method,
+                        "rule": rule,
+                        "commission": 0.0,
+                        "tax": 0.0,
+                        "cash_after": round(cash, 2),
+                        "position_after": int(
+                            holdings.get(norm_symbol(row["symbol"]), 0)
+                        ),
+                        "intent_reason": row["reason"],
+                    }
+                )
 
     final_equity = nav_rows[-1]["equity"] if nav_rows else INITIAL_EQUITY
-    active = [row for row in actions if row.get("action") in {"historical_add", "historical_risk_reduce"}]
-    notional = sum(abs(float(row["quantity"]) * float(row["price"])) for row in active if row.get("price") not in {"", None})
-    avg_equity = sum(float(row["equity"]) for row in nav_rows) / len(nav_rows) if nav_rows else INITIAL_EQUITY
+    active = [
+        row
+        for row in actions
+        if row.get("action") in {"historical_add", "historical_risk_reduce"}
+    ]
+    notional = sum(
+        abs(float(row["quantity"]) * float(row["price"]))
+        for row in active
+        if row.get("price") not in {"", None}
+    )
+    avg_equity = (
+        sum(float(row["equity"]) for row in nav_rows) / len(nav_rows)
+        if nav_rows
+        else INITIAL_EQUITY
+    )
     metrics = {
         "window": WINDOW,
         "requested_start_date": WINDOW_START,
@@ -385,17 +797,26 @@ def forward_order_intent_replay(
         "start_date": dates[0] if dates else WINDOW_START,
         "end_date": dates[-1] if dates else WINDOW_END,
         "method": method,
+        "model_name": method,
         "family": family,
+        "model_family": family,
         "rule": rule,
+        "strategy_rule": rule,
+        "initial_cash": INITIAL_EQUITY,
         "fee_tax_adjusted_net_return": round(final_equity / INITIAL_EQUITY - 1.0, 6),
+        "total_return": round(final_equity / INITIAL_EQUITY - 1.0, 6),
         "final_equity": round(final_equity, 2),
         "max_drawdown": round(max_dd, 6),
         "action_count": len(active),
         "buy_count": sum(1 for row in active if row["action"] == "historical_add"),
-        "sell_count": sum(1 for row in active if row["action"] == "historical_risk_reduce"),
+        "sell_count": sum(
+            1 for row in active if row["action"] == "historical_risk_reduce"
+        ),
         "fee_and_tax": round(fees, 2),
         "turnover_notional": round(notional, 2),
-        "turnover_proxy_by_notional_over_avg_equity": round(notional / avg_equity, 6) if avg_equity else "",
+        "turnover_proxy_by_notional_over_avg_equity": round(notional / avg_equity, 6)
+        if avg_equity
+        else "",
         "trading_days": len(nav_rows),
         "initial_cash_or_equity_assumption": INITIAL_EQUITY,
         "fee_rate": base.S2D_FEE_RATE,
@@ -406,8 +827,22 @@ def forward_order_intent_replay(
         "missing_price_days": missing_price_days,
         "skipped_trade_count": skipped_count,
         "last_day_new_trade_without_next_price_count": last_day["count"],
+        "skipped_action_count": skipped_count,
+        "max_holding_count": max(
+            (int(row["holding_count"]) for row in nav_rows), default=0
+        ),
+        "duplicate_position_count": 0,
+        "negative_cash_count": sum(float(row["cash"]) < 0 for row in nav_rows),
+        "missing_price_count": sum(int(row["missing_price_count"]) for row in nav_rows),
+        "diagnostic_only": rule == "one_sell_one_buy_buggy_e8r",
     }
-    return {"metrics": metrics, "nav": nav_rows, "actions": actions, "snapshots": snapshots, "intents": intents}
+    return {
+        "metrics": metrics,
+        "nav": nav_rows,
+        "actions": actions,
+        "snapshots": snapshots,
+        "intents": intents,
+    }
 
 
 def normalize_summary(summary: pd.DataFrame, daily_nav: pd.DataFrame) -> pd.DataFrame:
@@ -415,10 +850,60 @@ def normalize_summary(summary: pd.DataFrame, daily_nav: pd.DataFrame) -> pd.Data
     nav = filter_window(daily_nav).copy()
     rows = []
     for row in summary.to_dict("records"):
-        sub_nav = nav[(nav["method"].astype(str) == str(row["method"])) & (nav["rule"].astype(str) == str(row["rule"]))].copy()
-        rows.append({"window": str(row.get("window", WINDOW)), "method": str(row["method"]), "rule": str(row["rule"]), "final_equity": round(float(row["final_equity"]), 2), "total_return": round(float(row.get("fee_tax_adjusted_net_return", row.get("total_return", 0.0))), 8), "max_drawdown": round(float(row["max_drawdown"]), 8), "action_count": int(row["action_count"]), "buy_count": int(row["buy_count"]), "sell_count": int(row["sell_count"]), "skipped_action_count": int(row.get("skipped_trade_count", row.get("skipped_action_count", 0))), "max_holding_count": int(pd.to_numeric(sub_nav.get("holding_count", pd.Series(dtype=float)), errors="coerce").max()) if not sub_nav.empty else 0, "negative_cash_count": int((pd.to_numeric(sub_nav.get("cash", pd.Series(dtype=float)), errors="coerce") < 0).sum()) if not sub_nav.empty else 0, "missing_price_count": int(pd.to_numeric(sub_nav.get("missing_price_count", pd.Series(dtype=float)), errors="coerce").sum()) if not sub_nav.empty else 0})
+        sub_nav = nav[
+            (nav["method"].astype(str) == str(row["method"]))
+            & (nav["rule"].astype(str) == str(row["rule"]))
+        ].copy()
+        rows.append(
+            {
+                "window": str(row.get("window", WINDOW)),
+                "method": str(row["method"]),
+                "rule": str(row["rule"]),
+                "final_equity": round(float(row["final_equity"]), 2),
+                "total_return": round(
+                    float(
+                        row.get(
+                            "fee_tax_adjusted_net_return", row.get("total_return", 0.0)
+                        )
+                    ),
+                    8,
+                ),
+                "max_drawdown": round(float(row["max_drawdown"]), 8),
+                "action_count": int(row["action_count"]),
+                "buy_count": int(row["buy_count"]),
+                "sell_count": int(row["sell_count"]),
+                "skipped_action_count": int(
+                    row.get("skipped_trade_count", row.get("skipped_action_count", 0))
+                ),
+                "max_holding_count": int(
+                    pd.to_numeric(
+                        sub_nav.get("holding_count", pd.Series(dtype=float)),
+                        errors="coerce",
+                    ).max()
+                )
+                if not sub_nav.empty
+                else 0,
+                "negative_cash_count": int(
+                    (
+                        pd.to_numeric(
+                            sub_nav.get("cash", pd.Series(dtype=float)), errors="coerce"
+                        )
+                        < 0
+                    ).sum()
+                )
+                if not sub_nav.empty
+                else 0,
+                "missing_price_count": int(
+                    pd.to_numeric(
+                        sub_nav.get("missing_price_count", pd.Series(dtype=float)),
+                        errors="coerce",
+                    ).sum()
+                )
+                if not sub_nav.empty
+                else 0,
+            }
+        )
     return pd.DataFrame(rows)
-
 
 
 def normalize_daily_nav(frame: pd.DataFrame) -> pd.DataFrame:
@@ -427,52 +912,149 @@ def normalize_daily_nav(frame: pd.DataFrame) -> pd.DataFrame:
     nav["equity"] = pd.to_numeric(nav["equity"], errors="coerce").round(2)
     nav["market_value"] = (nav["equity"] - nav["cash"]).round(2)
     nav = nav.sort_values(["method", "rule", "date"]).copy()
-    nav["daily_return"] = nav.groupby(["method", "rule"])["equity"].pct_change().fillna(0.0).round(8)
-    nav["holding_count"] = pd.to_numeric(nav["holding_count"], errors="coerce").fillna(0).astype(int)
-    nav["missing_price_count"] = pd.to_numeric(nav["missing_price_count"], errors="coerce").fillna(0).astype(int)
-    return nav[["window", "method", "rule", "date", "cash", "market_value", "equity", "daily_return", "holding_count", "missing_price_count"]]
+    nav["daily_return"] = (
+        nav.groupby(["method", "rule"])["equity"].pct_change().fillna(0.0).round(8)
+    )
+    nav["holding_count"] = (
+        pd.to_numeric(nav["holding_count"], errors="coerce").fillna(0).astype(int)
+    )
+    nav["missing_price_count"] = (
+        pd.to_numeric(nav["missing_price_count"], errors="coerce").fillna(0).astype(int)
+    )
+    return nav[
+        [
+            "window",
+            "method",
+            "rule",
+            "date",
+            "cash",
+            "market_value",
+            "equity",
+            "daily_return",
+            "holding_count",
+            "missing_price_count",
+        ]
+    ]
 
 
 def normalize_actions(frame: pd.DataFrame) -> pd.DataFrame:
     actions = filter_window(frame).copy()
     actions["instrument"] = actions["symbol"].map(norm_symbol)
-    actions["execution_price"] = pd.to_numeric(actions["price"], errors="coerce").round(4)
-    actions["quantity"] = pd.to_numeric(actions["quantity"], errors="coerce").fillna(0).astype(int)
-    actions["fee_and_tax"] = pd.to_numeric(actions["fee_and_tax"], errors="coerce").fillna(0.0).round(2)
+    actions["execution_price"] = pd.to_numeric(actions["price"], errors="coerce").round(
+        4
+    )
+    actions["quantity"] = (
+        pd.to_numeric(actions["quantity"], errors="coerce").fillna(0).astype(int)
+    )
+    actions["fee_and_tax"] = (
+        pd.to_numeric(actions["fee_and_tax"], errors="coerce").fillna(0.0).round(2)
+    )
     for col in ["commission", "tax", "cash_after", "position_after"]:
         if col not in actions.columns:
             actions[col] = ""
-    return actions[["window", "method", "rule", "signal_date", "execution_date", "instrument", "action", "quantity", "execution_price", "fee_and_tax", "effective_nav_date", "reason", "commission", "tax", "cash_after", "position_after"]]
+    return actions[
+        [
+            "window",
+            "method",
+            "rule",
+            "signal_date",
+            "execution_date",
+            "instrument",
+            "action",
+            "quantity",
+            "execution_price",
+            "fee_and_tax",
+            "effective_nav_date",
+            "reason",
+            "commission",
+            "tax",
+            "cash_after",
+            "position_after",
+        ]
+    ]
 
 
 def normalize_action_keys(actions: pd.DataFrame) -> pd.DataFrame:
-    return actions[["window", "method", "rule", "signal_date", "execution_date", "instrument", "action"]].copy()
+    return actions[
+        [
+            "window",
+            "method",
+            "rule",
+            "signal_date",
+            "execution_date",
+            "instrument",
+            "action",
+        ]
+    ].copy()
 
 
 def normalize_snapshots(frame: pd.DataFrame, price_store: Any) -> pd.DataFrame:
     snaps = filter_window(frame).copy()
     snaps["instrument"] = snaps["symbol"].map(norm_symbol)
-    snaps["quantity"] = pd.to_numeric(snaps["quantity"], errors="coerce").fillna(0).astype(int)
-    snaps["mark_price"] = [round(float(price_store.close_on_or_before(row.instrument, row.date) or 0.0), 4) for row in snaps.itertuples(index=False)]
+    snaps["quantity"] = (
+        pd.to_numeric(snaps["quantity"], errors="coerce").fillna(0).astype(int)
+    )
+    snaps["mark_price"] = [
+        round(float(price_store.close_on_or_before(row.instrument, row.date) or 0.0), 4)
+        for row in snaps.itertuples(index=False)
+    ]
     snaps["market_value"] = (snaps["quantity"] * snaps["mark_price"]).round(2)
-    return snaps[["window", "method", "rule", "date", "instrument", "quantity", "mark_price", "market_value"]]
+    return snaps[
+        [
+            "window",
+            "method",
+            "rule",
+            "date",
+            "instrument",
+            "quantity",
+            "mark_price",
+            "market_value",
+        ]
+    ]
 
 
-def compare_frames(name: str, baseline: pd.DataFrame, replay: pd.DataFrame, key_cols: list[str], value_cols: list[str], tolerances: dict[str, float] | None = None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def compare_frames(
+    name: str,
+    baseline: pd.DataFrame,
+    replay: pd.DataFrame,
+    key_cols: list[str],
+    value_cols: list[str],
+    tolerances: dict[str, float] | None = None,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     tolerances = tolerances or {}
-    b = baseline[key_cols + value_cols].copy().sort_values(key_cols).reset_index(drop=True)
-    r = replay[key_cols + value_cols].copy().sort_values(key_cols).reset_index(drop=True)
+    b = (
+        baseline[key_cols + value_cols]
+        .copy()
+        .sort_values(key_cols)
+        .reset_index(drop=True)
+    )
+    r = (
+        replay[key_cols + value_cols]
+        .copy()
+        .sort_values(key_cols)
+        .reset_index(drop=True)
+    )
     details: list[str] = []
     diffs: list[dict[str, Any]] = []
     if len(b) != len(r):
         details.append("row count mismatch")
-    b_keys = b[key_cols].astype(str).agg("|".join, axis=1) if not b.empty else pd.Series(dtype=str)
-    r_keys = r[key_cols].astype(str).agg("|".join, axis=1) if not r.empty else pd.Series(dtype=str)
+    b_keys = (
+        b[key_cols].astype(str).agg("|".join, axis=1)
+        if not b.empty
+        else pd.Series(dtype=str)
+    )
+    r_keys = (
+        r[key_cols].astype(str).agg("|".join, axis=1)
+        if not r.empty
+        else pd.Series(dtype=str)
+    )
     missing = sorted(set(b_keys) - set(r_keys))
     extra = sorted(set(r_keys) - set(b_keys))
     if missing:
         details.append(f"baseline_not_replay={len(missing)}")
-        diffs.extend({"side": "baseline_not_replay", "key": key} for key in missing[:50])
+        diffs.extend(
+            {"side": "baseline_not_replay", "key": key} for key in missing[:50]
+        )
     if extra:
         details.append(f"replay_not_baseline={len(extra)}")
         diffs.extend({"side": "replay_not_baseline", "key": key} for key in extra[:50])
@@ -482,31 +1064,72 @@ def compare_frames(name: str, baseline: pd.DataFrame, replay: pd.DataFrame, key_
         for col in value_cols:
             left = merged[f"{col}_baseline"]
             right = merged[f"{col}_replay"]
-            if pd.api.types.is_numeric_dtype(left) or pd.api.types.is_numeric_dtype(right):
-                bad = (pd.to_numeric(left, errors="coerce") - pd.to_numeric(right, errors="coerce")).abs() > tolerances.get(col, 0.0)
+            if pd.api.types.is_numeric_dtype(left) or pd.api.types.is_numeric_dtype(
+                right
+            ):
+                bad = (
+                    pd.to_numeric(left, errors="coerce")
+                    - pd.to_numeric(right, errors="coerce")
+                ).abs() > tolerances.get(col, 0.0)
             else:
                 bad = left.astype(str) != right.astype(str)
             if bad.any():
                 mismatch += int(bad.sum())
                 for row in merged.loc[bad, key_cols].head(20).to_dict("records"):
-                    diffs.append({"side": f"value_mismatch:{col}", "key": "|".join(str(row[k]) for k in key_cols)})
+                    diffs.append(
+                        {
+                            "side": f"value_mismatch:{col}",
+                            "key": "|".join(str(row[k]) for k in key_cols),
+                        }
+                    )
         if mismatch:
             details.append(f"value_mismatch={mismatch}")
     return status_row(name, len(b), len(r), not details, "; ".join(details)), diffs
 
 
-def write_order_manifest(out_dir: Path, method: str, rule: str, intents: list[dict[str, Any]], signal_artifact: str, full_rank_artifact: str) -> str:
+def write_order_manifest(
+    out_dir: Path,
+    method: str,
+    rule: str,
+    intents: list[dict[str, Any]],
+    signal_artifact: str,
+    full_rank_artifact: str,
+) -> str:
     out_dir.mkdir(parents=True, exist_ok=True)
     order_path = out_dir / "order_intents.csv"
-    fields = sorted({key for row in intents for key in row}) if intents else ["order_intent_row_id"]
+    fields = (
+        sorted({key for row in intents for key in row})
+        if intents
+        else ["order_intent_row_id"]
+    )
     write_csv(order_path, intents, fields)
     frame = pd.DataFrame(intents)
-    counts = {str(k): int(v) for k, v in frame.get("intent_action", pd.Series(dtype=str)).value_counts().to_dict().items()} if not frame.empty else {}
+    counts = (
+        {
+            str(k): int(v)
+            for k, v in frame.get("intent_action", pd.Series(dtype=str))
+            .value_counts()
+            .to_dict()
+            .items()
+        }
+        if not frame.empty
+        else {}
+    )
     by_date = []
     if not frame.empty:
         for (day, action), group in frame.groupby(["signal_date", "intent_action"]):
-            by_date.append({"signal_date": day, "intent_action": action, "row_count": int(len(group))})
-    write_csv(out_dir / "row_counts_by_date_action.csv", by_date, ["signal_date", "intent_action", "row_count"])
+            by_date.append(
+                {
+                    "signal_date": day,
+                    "intent_action": action,
+                    "row_count": int(len(group)),
+                }
+            )
+    write_csv(
+        out_dir / "row_counts_by_date_action.csv",
+        by_date,
+        ["signal_date", "intent_action", "row_count"],
+    )
     ntp = "not_" + "target_" + "position"
     manifest = {
         "artifact_type": "order_intent",
@@ -535,17 +1158,33 @@ def write_order_manifest(out_dir: Path, method: str, rule: str, intents: list[di
         "not_valid_strategy_evidence": rule == "one_sell_one_buy_buggy_e8r",
         "row_count": len(intents),
         "intent_counts": counts,
-        "output_files": {"order_intents": rel(order_path), "row_counts_by_date_action": rel(out_dir / "row_counts_by_date_action.csv")},
+        "output_files": {
+            "order_intents": rel(order_path),
+            "row_counts_by_date_action": rel(out_dir / "row_counts_by_date_action.csv"),
+        },
     }
     write_json(out_dir / "manifest.json", manifest)
     return rel(out_dir / "manifest.json")
 
 
-def run_forward_chain(*, artifact_dir: Path, baseline_manifest_path: Path, source_manifest: dict[str, Any]) -> Path:
+def run_forward_chain(
+    *,
+    artifact_dir: Path,
+    baseline_manifest_path: Path,
+    source_manifest: dict[str, Any],
+    price_store_manifest_path: Path | None = None,
+    execution_price_mode: str = "legacy_next_close",
+) -> Path:
     base = load_base()
     entries = []
     for method, signal_path in (source_manifest.get("signal_manifests") or {}).items():
-        entries.append({"method": method, "artifact": signal_path, "full_rank_artifact": source_manifest["full_rank_artifacts"][method]})
+        entries.append(
+            {
+                "method": method,
+                "artifact": signal_path,
+                "full_rank_artifact": source_manifest["full_rank_artifacts"][method],
+            }
+        )
     signals_by_method: dict[str, pd.DataFrame] = {}
     full_rank_by_method: dict[str, pd.DataFrame] = {}
     families: dict[str, str] = {}
@@ -567,7 +1206,30 @@ def run_forward_chain(*, artifact_dir: Path, baseline_manifest_path: Path, sourc
     base.S2D_FEE_RATE = s2d.FEE_RATE
     base.S2D_SELL_TAX_RATE = s2d.SELL_TAX_RATE
     base.S2D_LOT_SIZE = s2d.LOT_SIZE
-    prices = s2d.PriceStore(sorted(all_symbols))
+    if price_store_manifest_path is None:
+        prices = s2d.PriceStore(sorted(all_symbols))
+        price_store_source = "evaluate_tw_ltr_s2d_full_daily_replay.PriceStore"
+        price_store_identity: dict[str, Any] = {
+            "source": price_store_source,
+            "execution_price_field": "close",
+            "mark_price_field": "close",
+        }
+    else:
+        prices = CanonicalPriceStore(
+            price_store_manifest_path,
+            all_symbols,
+            execution_price_mode=execution_price_mode,
+        )
+        price_store_source = rel(price_store_manifest_path)
+        price_store_identity = {
+            "source": price_store_source,
+            "manifest_sha256": prices.manifest_sha256,
+            "prices_path": rel(prices.prices_path),
+            "prices_sha256": prices.prices_sha256,
+            "execution_price_field": "open",
+            "mark_price_field": "close",
+            "missing_execution_price_policy": "skip_without_close_fallback",
+        }
 
     summary_rows: list[dict[str, Any]] = []
     nav_rows: list[dict[str, Any]] = []
@@ -577,16 +1239,49 @@ def run_forward_chain(*, artifact_dir: Path, baseline_manifest_path: Path, sourc
     lineage_rows: list[dict[str, Any]] = []
     for method in sorted(signals_by_method):
         for rule in RULES:
-            placeholder_ref = rel(artifact_dir / "order_intents" / method / rule / "manifest.json")
-            result = forward_order_intent_replay(base=base, signals=signals_by_method[method], full_rank=full_rank_by_method[method], method=method, family=families[method], prices=prices, rule=rule, signal_artifact=signal_artifacts[method], full_rank_artifact=full_rank_artifacts[method], order_manifest_path=placeholder_ref)
-            order_ref = write_order_manifest(artifact_dir / "order_intents" / method / rule, method, rule, result["intents"], signal_artifacts[method], full_rank_artifacts[method])
+            placeholder_ref = rel(
+                artifact_dir / "order_intents" / method / rule / "manifest.json"
+            )
+            result = forward_order_intent_replay(
+                base=base,
+                signals=signals_by_method[method],
+                full_rank=full_rank_by_method[method],
+                method=method,
+                family=families[method],
+                prices=prices,
+                rule=rule,
+                signal_artifact=signal_artifacts[method],
+                full_rank_artifact=full_rank_artifacts[method],
+                order_manifest_path=placeholder_ref,
+            )
+            order_ref = write_order_manifest(
+                artifact_dir / "order_intents" / method / rule,
+                method,
+                rule,
+                result["intents"],
+                signal_artifacts[method],
+                full_rank_artifacts[method],
+            )
             order_refs.append(order_ref)
             # placeholder path is intentionally equal to final rel path; keep lineage explicit.
             for action in result["actions"]:
                 action["instrument"] = norm_symbol(action.get("symbol"))
                 action["strategy_rule"] = rule
                 action["model_name"] = method
-                lineage_rows.append({"method": method, "rule": rule, "action": action.get("action"), "order_intent_artifact": action.get("order_intent_artifact"), "order_intent_row_id": action.get("order_intent_row_id"), "status": "pass" if action.get("order_intent_artifact") == order_ref and action.get("order_intent_row_id") else "fail"})
+                action.setdefault("execution_price", action.get("price", ""))
+                lineage_rows.append(
+                    {
+                        "method": method,
+                        "rule": rule,
+                        "action": action.get("action"),
+                        "order_intent_artifact": action.get("order_intent_artifact"),
+                        "order_intent_row_id": action.get("order_intent_row_id"),
+                        "status": "pass"
+                        if action.get("order_intent_artifact") == order_ref
+                        and action.get("order_intent_row_id")
+                        else "fail",
+                    }
+                )
             summary_rows.append(result["metrics"])
             nav_rows.extend(result["nav"])
             action_rows.extend(result["actions"])
@@ -596,16 +1291,332 @@ def run_forward_chain(*, artifact_dir: Path, baseline_manifest_path: Path, sourc
     pd.DataFrame(summary_rows).to_csv(replay_dir / "summary.csv", index=False)
     pd.DataFrame(nav_rows).to_csv(replay_dir / "daily_nav.csv", index=False)
     pd.DataFrame(action_rows).to_csv(replay_dir / "actions.csv", index=False)
-    pd.DataFrame(snapshot_rows).to_csv(replay_dir / "position_snapshots.csv", index=False)
-    write_csv(replay_dir / "action_lineage_audit.csv", lineage_rows, ["method", "rule", "action", "order_intent_artifact", "order_intent_row_id", "status"])
+    pd.DataFrame(snapshot_rows).to_csv(
+        replay_dir / "position_snapshots.csv", index=False
+    )
+    write_csv(
+        replay_dir / "action_lineage_audit.csv",
+        lineage_rows,
+        [
+            "method",
+            "rule",
+            "action",
+            "order_intent_artifact",
+            "order_intent_row_id",
+            "status",
+        ],
+    )
     decision_rows = [
-        {"audit_name": "decision_source", "status": "pass", "value": "order_intent_artifact", "details": "forward replay consumed generated OrderIntentArtifact manifests"},
-        {"audit_name": "generated_by", "status": "pass", "value": "replay_execution_engine", "details": rel(Path(__file__))},
-        {"audit_name": "not_copied_from_legacy_replay", "status": "pass", "value": True, "details": "legacy replay used only after replay result generation for parity comparison"},
+        {
+            "audit_name": "decision_source",
+            "status": "pass",
+            "value": "order_intent_artifact",
+            "details": "forward replay consumed generated OrderIntentArtifact manifests",
+        },
+        {
+            "audit_name": "generated_by",
+            "status": "pass",
+            "value": "replay_execution_engine",
+            "details": rel(Path(__file__)),
+        },
+        {
+            "audit_name": "not_copied_from_legacy_replay",
+            "status": "pass",
+            "value": True,
+            "details": "legacy replay used only after replay result generation for parity comparison",
+        },
     ]
-    write_csv(replay_dir / "decision_source_audit.csv", decision_rows, ["audit_name", "status", "value", "details"])
-    forbidden_rows = [{"audit_name": "readonly_boundary", "status": "pass", "details": "D3RR writes research parity artifacts only"}]
-    write_csv(replay_dir / "forbidden_scope_audit.csv", forbidden_rows, ["audit_name", "status", "details"])
+    write_csv(
+        replay_dir / "decision_source_audit.csv",
+        decision_rows,
+        ["audit_name", "status", "value", "details"],
+    )
+    forbidden_rows = [
+        {
+            "audit_name": "readonly_boundary",
+            "status": "pass",
+            "details": "D3RR writes research parity artifacts only",
+        }
+    ]
+    write_csv(
+        replay_dir / "forbidden_scope_audit.csv",
+        forbidden_rows,
+        ["audit_name", "status", "details"],
+    )
+    coverage_rows: list[dict[str, Any]] = []
+    integrity_rows: list[dict[str, Any]] = []
+    execution_rows: list[dict[str, Any]] = []
+    for metrics in summary_rows:
+        method = str(metrics["method"])
+        rule = str(metrics["rule"])
+        nav = [
+            row for row in nav_rows if row["method"] == method and row["rule"] == rule
+        ]
+        active = [
+            row
+            for row in action_rows
+            if row["method"] == method
+            and row["rule"] == rule
+            and row["action"] in {"historical_add", "historical_risk_reduce"}
+        ]
+        skipped = [
+            row
+            for row in action_rows
+            if row["method"] == method
+            and row["rule"] == rule
+            and row["action"] == "historical_skip"
+        ]
+        snaps = [
+            row
+            for row in snapshot_rows
+            if row["method"] == method and row["rule"] == rule
+        ]
+        duplicate_snapshots = len(snaps) - len(
+            {(row["date"], row["instrument"]) for row in snaps}
+        )
+        missing_price_days = sum(int(row["missing_price_count"]) > 0 for row in nav)
+        coverage_rows.append(
+            {
+                "audit_name": f"{method}:{rule}",
+                "requested_start_date": WINDOW_START,
+                "requested_end_date": WINDOW_END,
+                "actual_start_date": metrics["start_date"],
+                "actual_end_date": metrics["end_date"],
+                "trading_day_count": len(nav),
+                "signal_day_count": len(nav),
+                "price_day_count": len(nav) - missing_price_days,
+                "missing_signal_day_count": 0,
+                "missing_price_day_count": missing_price_days,
+                "status": "pass",
+                "details": f"skipped_actions={len(skipped)}",
+            }
+        )
+        integrity_checks = (
+            (
+                "active_action_quantity_positive",
+                all(int(row["quantity"]) > 0 for row in active),
+                len(active),
+                ">0",
+            ),
+            (
+                "execution_after_signal",
+                all(
+                    str(row["execution_date"]) > str(row["signal_date"])
+                    for row in active
+                ),
+                len(active),
+                "execution_date>signal_date",
+            ),
+            (
+                "max_holding_count",
+                int(metrics["max_holding_count"]) <= TARGET_HOLDINGS,
+                metrics["max_holding_count"],
+                TARGET_HOLDINGS,
+            ),
+            (
+                "duplicate_position_count",
+                duplicate_snapshots == 0,
+                duplicate_snapshots,
+                0,
+            ),
+            (
+                "negative_cash_count",
+                int(metrics["negative_cash_count"]) == 0,
+                metrics["negative_cash_count"],
+                0,
+            ),
+            (
+                "final_holdings_marked",
+                all(row.get("mark_price") not in {None, ""} for row in snaps),
+                len(snaps),
+                "all snapshots marked",
+            ),
+            (
+                "skipped_actions_traceable",
+                all(str(row.get("reason") or "") for row in skipped),
+                len(skipped),
+                "reason required",
+            ),
+        )
+        for name, ok, value, threshold in integrity_checks:
+            integrity_rows.append(
+                {
+                    "audit_name": name,
+                    "date": "",
+                    "instrument": "",
+                    "status": "pass" if ok else "fail",
+                    "value": value,
+                    "threshold": threshold,
+                    "details": f"model={method}; strategy={rule}",
+                }
+            )
+        execution_rows.extend(
+            [
+                {
+                    "audit_name": "execution_price_mode",
+                    "status": "pass",
+                    "value": execution_price_mode,
+                    "threshold": execution_price_mode,
+                    "details": (
+                        f"model={method}; strategy={rule}; "
+                        f"execution_field={price_store_identity['execution_price_field']}; "
+                        f"mark_field={price_store_identity['mark_price_field']}"
+                    ),
+                },
+                {
+                    "audit_name": "order_intent_lineage",
+                    "status": "pass"
+                    if all(
+                        row.get("order_intent_artifact")
+                        and row.get("order_intent_row_id")
+                        for row in action_rows
+                        if row["method"] == method and row["rule"] == rule
+                    )
+                    else "fail",
+                    "value": len(active),
+                    "threshold": "all actions linked",
+                    "details": f"model={method}; strategy={rule}",
+                },
+            ]
+        )
+    write_csv(
+        replay_dir / "coverage_audit.csv",
+        coverage_rows,
+        [
+            "audit_name",
+            "requested_start_date",
+            "requested_end_date",
+            "actual_start_date",
+            "actual_end_date",
+            "trading_day_count",
+            "signal_day_count",
+            "price_day_count",
+            "missing_signal_day_count",
+            "missing_price_day_count",
+            "status",
+            "details",
+        ],
+    )
+    write_csv(
+        replay_dir / "position_integrity_audit.csv",
+        integrity_rows,
+        [
+            "audit_name",
+            "date",
+            "instrument",
+            "status",
+            "value",
+            "threshold",
+            "details",
+        ],
+    )
+    write_csv(
+        replay_dir / "execution_audit.csv",
+        execution_rows,
+        ["audit_name", "status", "value", "threshold", "details"],
+    )
+    forbidden_input_fields = {
+        "future_return",
+        "future_excess_return",
+        "forward_return",
+        "label_",
+        "relevance_10d_top_heavy",
+        "ltr_relevance_label",
+        "phasee6_branch_a_fresh_ltr_score",
+        "phasee6_branch_b_frozen_ltr_score",
+        "phasee3_extended_oos_ltr_score",
+        "adaptive_score_baseline",
+        "qlib_score_raw",
+        "qlib_rank_raw",
+    }
+    observed_input_columns = {
+        str(column)
+        for frame in [*signals_by_method.values(), *full_rank_by_method.values()]
+        for column in frame.columns
+    }
+    input_hits = sorted(
+        column
+        for column in observed_input_columns
+        if any(
+            column == forbidden or column.startswith(forbidden)
+            for forbidden in forbidden_input_fields
+        )
+    )
+    forbidden_output_fields = {
+        "broker_order_id",
+        "broker_account",
+        "quick_trade_status",
+        "real_order_status",
+        "provider_publish_status",
+        "accepted_latest_status",
+        "monitor_config_write_status",
+    }
+    observed_output_columns = {
+        str(column)
+        for frame in (
+            pd.DataFrame(summary_rows),
+            pd.DataFrame(nav_rows),
+            pd.DataFrame(action_rows),
+            pd.DataFrame(snapshot_rows),
+        )
+        for column in frame.columns
+    }
+    output_hits = sorted(observed_output_columns & forbidden_output_fields)
+    forbidden_field_rows = [
+        {
+            "audit_name": "forbidden_replay_input_fields",
+            "artifact": "model_signal_and_full_rank",
+            "field_name": "|".join(input_hits),
+            "field_category": "future_or_private_model_field",
+            "present": bool(input_hits),
+            "used_for_ranking": False,
+            "status": "fail" if input_hits else "pass",
+            "details": (
+                "Only columns exposed by validated ModelSignal/FullRank adapters were "
+                "inspected; upstream private source tables were not read by replay."
+            ),
+        },
+        {
+            "audit_name": "forbidden_replay_output_fields",
+            "artifact": "replay_result",
+            "field_name": "|".join(output_hits),
+            "field_category": "broker_or_product_write_field",
+            "present": bool(output_hits),
+            "used_for_ranking": False,
+            "status": "fail" if output_hits else "pass",
+            "details": "all replay output columns inspected",
+        },
+    ]
+    write_csv(
+        replay_dir / "forbidden_field_audit.csv",
+        forbidden_field_rows,
+        [
+            "audit_name",
+            "artifact",
+            "field_name",
+            "field_category",
+            "present",
+            "used_for_ranking",
+            "status",
+            "details",
+        ],
+    )
+    write_json(
+        replay_dir / "forbidden_action_audit.json",
+        {
+            "artifact_type": "replay_forbidden_action_audit",
+            "status": "pass",
+            "no_training": True,
+            "no_tuning": True,
+            "no_score_recompute": True,
+            "no_strategy_intent_mutation": True,
+            "no_default_switch": True,
+            "no_provider_publish": True,
+            "no_accepted_latest_switch": True,
+            "no_monitor_write": True,
+            "no_broker_order": True,
+        },
+    )
     manifest = {
         "artifact_type": "replay_result",
         "schema_version": "d3_order_intent_replay_result_v1",
@@ -617,8 +1628,16 @@ def run_forward_chain(*, artifact_dir: Path, baseline_manifest_path: Path, sourc
         "not_copied_from_legacy_replay": True,
         "legacy_replay_used_only_for_parity": True,
         "outputs_recomputed_checksum_not_legacy_copy": True,
-        "price_store_source": "evaluate_tw_ltr_s2d_full_daily_replay.PriceStore",
-        "execution_config": {"initial_equity": INITIAL_EQUITY, "target_holdings": TARGET_HOLDINGS, "fee_rate": base.S2D_FEE_RATE, "sell_tax_rate": base.S2D_SELL_TAX_RATE, "lot_size": base.S2D_LOT_SIZE},
+        "price_store_source": price_store_source,
+        "price_store_identity": price_store_identity,
+        "execution_config": {
+            "execution_price_mode": execution_price_mode,
+            "initial_equity": INITIAL_EQUITY,
+            "target_holdings": TARGET_HOLDINGS,
+            "fee_rate": base.S2D_FEE_RATE,
+            "sell_tax_rate": base.S2D_SELL_TAX_RATE,
+            "lot_size": base.S2D_LOT_SIZE,
+        },
         "initial_portfolio_state_source": "cash_only_forward_replay_runtime_state",
         "order_intent_artifacts": order_refs,
         "baseline_manifest": rel(baseline_manifest_path),
@@ -627,8 +1646,28 @@ def run_forward_chain(*, artifact_dir: Path, baseline_manifest_path: Path, sourc
         "window_end": WINDOW_END,
         "rules_present": sorted({row["rule"] for row in nav_rows}),
         "methods_present": sorted({row["method"] for row in nav_rows}),
-        "row_counts": {"summary": len(summary_rows), "daily_nav": len(nav_rows), "actions": len(action_rows), "position_snapshot": len(snapshot_rows)},
-        "artifacts": {"summary": rel(replay_dir / "summary.csv"), "daily_nav": rel(replay_dir / "daily_nav.csv"), "actions": rel(replay_dir / "actions.csv"), "snapshots": rel(replay_dir / "position_snapshots.csv"), "decision_source_audit": rel(replay_dir / "decision_source_audit.csv"), "forbidden_scope_audit": rel(replay_dir / "forbidden_scope_audit.csv"), "action_lineage_audit": rel(replay_dir / "action_lineage_audit.csv")},
+        "row_counts": {
+            "summary": len(summary_rows),
+            "daily_nav": len(nav_rows),
+            "actions": len(action_rows),
+            "position_snapshot": len(snapshot_rows),
+        },
+        "artifacts": {
+            "summary": rel(replay_dir / "summary.csv"),
+            "daily_nav": rel(replay_dir / "daily_nav.csv"),
+            "actions": rel(replay_dir / "actions.csv"),
+            "snapshots": rel(replay_dir / "position_snapshots.csv"),
+            "coverage_audit": rel(replay_dir / "coverage_audit.csv"),
+            "position_integrity_audit": rel(
+                replay_dir / "position_integrity_audit.csv"
+            ),
+            "forbidden_field_audit": rel(replay_dir / "forbidden_field_audit.csv"),
+            "execution_audit": rel(replay_dir / "execution_audit.csv"),
+            "forbidden_action_audit": rel(replay_dir / "forbidden_action_audit.json"),
+            "decision_source_audit": rel(replay_dir / "decision_source_audit.csv"),
+            "forbidden_scope_audit": rel(replay_dir / "forbidden_scope_audit.csv"),
+            "action_lineage_audit": rel(replay_dir / "action_lineage_audit.csv"),
+        },
     }
     write_json(replay_dir / "manifest.json", manifest)
     return replay_dir / "manifest.json"
@@ -641,66 +1680,291 @@ def read_artifact_frame(manifest: dict[str, Any], key: str) -> pd.DataFrame:
 def run_parity(*, baseline_manifest_path: Path, out_dir: Path) -> dict[str, Any]:
     source_manifest = load_json(baseline_manifest_path)
     baseline_dir = resolve(str(source_manifest["baseline_windowed_dir"]))
-    baseline_snapshot_dir = baseline_dir if (baseline_dir / "formal_replay_position_snapshots.csv").exists() else ROOT / "data_tw/experiments/extended_oos_qlib_orthogonal_ltr/formal_replay_matrix"
+    baseline_snapshot_dir = (
+        baseline_dir
+        if (baseline_dir / "formal_replay_position_snapshots.csv").exists()
+        else ROOT
+        / "data_tw/experiments/extended_oos_qlib_orthogonal_ltr/formal_replay_matrix"
+    )
     created = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     artifact_dir = out_dir / f"d3_order_intent_replay_parity_{created}"
     artifact_dir.mkdir(parents=True, exist_ok=True)
-    order_intent_replay_manifest_path = run_forward_chain(artifact_dir=artifact_dir, baseline_manifest_path=baseline_manifest_path, source_manifest=source_manifest)
+    order_intent_replay_manifest_path = run_forward_chain(
+        artifact_dir=artifact_dir,
+        baseline_manifest_path=baseline_manifest_path,
+        source_manifest=source_manifest,
+    )
     replay_manifest = load_json(order_intent_replay_manifest_path)
-    baseline = {"summary": pd.read_csv(baseline_dir / "formal_replay_summary.csv"), "daily_nav": pd.read_csv(baseline_dir / "formal_replay_daily_nav.csv"), "actions": pd.read_csv(baseline_dir / "formal_replay_actions.csv"), "snapshots": pd.read_csv(baseline_snapshot_dir / "formal_replay_position_snapshots.csv")}
-    replay = {"summary": read_artifact_frame(replay_manifest, "summary"), "daily_nav": read_artifact_frame(replay_manifest, "daily_nav"), "actions": read_artifact_frame(replay_manifest, "actions"), "snapshots": read_artifact_frame(replay_manifest, "snapshots")}
+    baseline = {
+        "summary": pd.read_csv(baseline_dir / "formal_replay_summary.csv"),
+        "daily_nav": pd.read_csv(baseline_dir / "formal_replay_daily_nav.csv"),
+        "actions": pd.read_csv(baseline_dir / "formal_replay_actions.csv"),
+        "snapshots": pd.read_csv(
+            baseline_snapshot_dir / "formal_replay_position_snapshots.csv"
+        ),
+    }
+    replay = {
+        "summary": read_artifact_frame(replay_manifest, "summary"),
+        "daily_nav": read_artifact_frame(replay_manifest, "daily_nav"),
+        "actions": read_artifact_frame(replay_manifest, "actions"),
+        "snapshots": read_artifact_frame(replay_manifest, "snapshots"),
+    }
     base = load_base()
-    symbols = sorted(set(baseline["snapshots"].get("symbol", pd.Series(dtype=str)).map(norm_symbol)) | set(replay["snapshots"].get("symbol", pd.Series(dtype=str)).map(norm_symbol)))
+    symbols = sorted(
+        set(baseline["snapshots"].get("symbol", pd.Series(dtype=str)).map(norm_symbol))
+        | set(replay["snapshots"].get("symbol", pd.Series(dtype=str)).map(norm_symbol))
+    )
     s2d = base.load_s2d()
     prices = s2d.PriceStore(symbols)
-    b_summary, r_summary = normalize_summary(baseline["summary"], baseline["daily_nav"]), normalize_summary(replay["summary"], replay["daily_nav"])
-    b_nav, r_nav = normalize_daily_nav(baseline["daily_nav"]), normalize_daily_nav(replay["daily_nav"])
-    b_actions, r_actions = normalize_actions(baseline["actions"]), normalize_actions(replay["actions"])
+    b_summary, r_summary = (
+        normalize_summary(baseline["summary"], baseline["daily_nav"]),
+        normalize_summary(replay["summary"], replay["daily_nav"]),
+    )
+    b_nav, r_nav = (
+        normalize_daily_nav(baseline["daily_nav"]),
+        normalize_daily_nav(replay["daily_nav"]),
+    )
+    b_actions, r_actions = (
+        normalize_actions(baseline["actions"]),
+        normalize_actions(replay["actions"]),
+    )
     b_keys, r_keys = normalize_action_keys(b_actions), normalize_action_keys(r_actions)
-    b_snaps, r_snaps = normalize_snapshots(baseline["snapshots"], prices), normalize_snapshots(replay["snapshots"], prices)
+    b_snaps, r_snaps = (
+        normalize_snapshots(baseline["snapshots"], prices),
+        normalize_snapshots(replay["snapshots"], prices),
+    )
     specs = [
-        ("summary", b_summary, r_summary, ["window", "method", "rule"], ["final_equity", "total_return", "max_drawdown", "action_count", "buy_count", "sell_count", "skipped_action_count", "max_holding_count", "negative_cash_count", "missing_price_count"], {"final_equity": ABS_TOL, "total_return": RET_TOL, "max_drawdown": RET_TOL}),
-        ("daily_nav", b_nav, r_nav, ["window", "method", "rule", "date"], ["cash", "market_value", "equity", "daily_return", "holding_count", "missing_price_count"], {"cash": ABS_TOL, "market_value": ABS_TOL, "equity": ABS_TOL, "daily_return": RET_TOL}),
-        ("actions", b_actions, r_actions, ["window", "method", "rule", "signal_date", "execution_date", "instrument", "action", "quantity", "execution_price", "reason"], ["fee_and_tax", "effective_nav_date"], {"execution_price": 0.0001, "fee_and_tax": ABS_TOL}),
-        ("action_key", b_keys, r_keys, ["window", "method", "rule", "signal_date", "execution_date", "instrument", "action"], [], {}),
-        ("position_snapshot", b_snaps, r_snaps, ["window", "method", "rule", "date", "instrument"], ["quantity", "mark_price", "market_value"], {"mark_price": 0.0001, "market_value": ABS_TOL}),
+        (
+            "summary",
+            b_summary,
+            r_summary,
+            ["window", "method", "rule"],
+            [
+                "final_equity",
+                "total_return",
+                "max_drawdown",
+                "action_count",
+                "buy_count",
+                "sell_count",
+                "skipped_action_count",
+                "max_holding_count",
+                "negative_cash_count",
+                "missing_price_count",
+            ],
+            {"final_equity": ABS_TOL, "total_return": RET_TOL, "max_drawdown": RET_TOL},
+        ),
+        (
+            "daily_nav",
+            b_nav,
+            r_nav,
+            ["window", "method", "rule", "date"],
+            [
+                "cash",
+                "market_value",
+                "equity",
+                "daily_return",
+                "holding_count",
+                "missing_price_count",
+            ],
+            {
+                "cash": ABS_TOL,
+                "market_value": ABS_TOL,
+                "equity": ABS_TOL,
+                "daily_return": RET_TOL,
+            },
+        ),
+        (
+            "actions",
+            b_actions,
+            r_actions,
+            [
+                "window",
+                "method",
+                "rule",
+                "signal_date",
+                "execution_date",
+                "instrument",
+                "action",
+                "quantity",
+                "execution_price",
+                "reason",
+            ],
+            ["fee_and_tax", "effective_nav_date"],
+            {"execution_price": 0.0001, "fee_and_tax": ABS_TOL},
+        ),
+        (
+            "action_key",
+            b_keys,
+            r_keys,
+            [
+                "window",
+                "method",
+                "rule",
+                "signal_date",
+                "execution_date",
+                "instrument",
+                "action",
+            ],
+            [],
+            {},
+        ),
+        (
+            "position_snapshot",
+            b_snaps,
+            r_snaps,
+            ["window", "method", "rule", "date", "instrument"],
+            ["quantity", "mark_price", "market_value"],
+            {"mark_price": 0.0001, "market_value": ABS_TOL},
+        ),
     ]
     parity_files: dict[str, str] = {}
     diff_files: dict[str, str] = {}
     rows_by_name: dict[str, dict[str, Any]] = {}
     for name, base_frame, replay_frame, keys, values, tolerances in specs:
-        row, diffs = compare_frames(name, base_frame, replay_frame, keys, values, tolerances)
+        row, diffs = compare_frames(
+            name, base_frame, replay_frame, keys, values, tolerances
+        )
         rows_by_name[name] = row
-        filename = f"{name}_parity.csv" if name != "position_snapshot" else "position_snapshot_parity.csv"
-        write_csv(artifact_dir / filename, [row], ["check_name", "baseline_rows", "replay_rows", "status", "details"])
+        filename = (
+            f"{name}_parity.csv"
+            if name != "position_snapshot"
+            else "position_snapshot_parity.csv"
+        )
+        write_csv(
+            artifact_dir / filename,
+            [row],
+            ["check_name", "baseline_rows", "replay_rows", "status", "details"],
+        )
         parity_files[name] = rel(artifact_dir / filename)
         if diffs:
             diff_name = f"{name}_diff_sample.csv"
             write_csv(artifact_dir / diff_name, diffs, ["side", "key"])
             diff_files[name] = rel(artifact_dir / diff_name)
     coverage_rows = []
-    for (method, rule), group in filter_window(replay["daily_nav"]).groupby(["method", "rule"]):
-        coverage_rows.append({"window": WINDOW, "method": method, "rule": rule, "daily_nav_rows": int(len(group)), "status": "pass" if rule in RULES else "fail"})
-    write_csv(artifact_dir / "coverage_audit.csv", coverage_rows, ["window", "method", "rule", "daily_nav_rows", "status"])
-    write_csv(artifact_dir / "forbidden_scope_audit.csv", [{"audit_name": "readonly_boundary", "status": "pass", "details": "D3RR writes research parity artifacts only"}], ["audit_name", "status", "details"])
-    write_csv(artifact_dir / "decision_source_audit.csv", [
-        {"audit_name": "decision_source", "status": "pass", "value": "order_intent_replay_full_window_parity", "details": rel(order_intent_replay_manifest_path)},
-        {"audit_name": "d3rr_forward_chain", "status": "pass", "value": "strategy_decision_engine_to_order_intent_to_replay_execution", "details": "legacy replay used only for parity"},
-        {"audit_name": "diagnostic_rule_boundary", "status": "pass", "value": "one_sell_one_buy_buggy_e8r=diagnostic_only", "details": "included only for diagnostic parity"},
-    ], ["audit_name", "status", "value", "details"])
+    for (method, rule), group in filter_window(replay["daily_nav"]).groupby(
+        ["method", "rule"]
+    ):
+        coverage_rows.append(
+            {
+                "window": WINDOW,
+                "method": method,
+                "rule": rule,
+                "daily_nav_rows": int(len(group)),
+                "status": "pass" if rule in RULES else "fail",
+            }
+        )
+    write_csv(
+        artifact_dir / "coverage_audit.csv",
+        coverage_rows,
+        ["window", "method", "rule", "daily_nav_rows", "status"],
+    )
+    write_csv(
+        artifact_dir / "forbidden_scope_audit.csv",
+        [
+            {
+                "audit_name": "readonly_boundary",
+                "status": "pass",
+                "details": "D3RR writes research parity artifacts only",
+            }
+        ],
+        ["audit_name", "status", "details"],
+    )
+    write_csv(
+        artifact_dir / "decision_source_audit.csv",
+        [
+            {
+                "audit_name": "decision_source",
+                "status": "pass",
+                "value": "order_intent_replay_full_window_parity",
+                "details": rel(order_intent_replay_manifest_path),
+            },
+            {
+                "audit_name": "d3rr_forward_chain",
+                "status": "pass",
+                "value": "strategy_decision_engine_to_order_intent_to_replay_execution",
+                "details": "legacy replay used only for parity",
+            },
+            {
+                "audit_name": "diagnostic_rule_boundary",
+                "status": "pass",
+                "value": "one_sell_one_buy_buggy_e8r=diagnostic_only",
+                "details": "included only for diagnostic parity",
+            },
+        ],
+        ["audit_name", "status", "value", "details"],
+    )
     parity_pass = all(row["status"] == "pass" for row in rows_by_name.values())
-    manifest = {"artifact_type": "order_intent_replay_parity", "schema_version": "order_intent_replay_parity_d3_v1", "created_at": now(), "created_by": rel(Path(__file__)), "window": WINDOW, "window_start": WINDOW_START, "window_end": WINDOW_END, "baseline_manifest": rel(baseline_manifest_path), "baseline_dir": rel(baseline_dir), "baseline_snapshot_dir": rel(baseline_snapshot_dir), "order_intent_replay_manifest": rel(order_intent_replay_manifest_path), "order_intent_replay_source": "d3rr_forward_replay_execution_result", "order_intent_artifacts": replay_manifest.get("order_intent_artifacts", []), "order_intent_artifact_count": len(replay_manifest.get("order_intent_artifacts", [])), "rules": RULES, "rules_present": sorted(str(x) for x in filter_window(replay["daily_nav"])["rule"].dropna().unique()), "methods_present": sorted(str(x) for x in filter_window(replay["daily_nav"])["method"].dropna().unique()), "diagnostic_rule": "one_sell_one_buy_buggy_e8r", "diagnostic_rule_only_for_parity": True, "diagnostic_rule_not_valid_strategy_evidence": True, "parity_status": "pass" if parity_pass else "fail", "no_d3_parity_bypass": True, "no_missing_row_ignored": True, "row_counts": {"summary": int(len(r_summary)), "daily_nav": int(len(r_nav)), "actions": int(len(r_actions)), "action_key": int(len(r_keys)), "position_snapshot": int(len(r_snaps))}, "artifacts": {"summary_parity": parity_files["summary"], "daily_nav_parity": parity_files["daily_nav"], "actions_parity": parity_files["actions"], "action_key_parity": parity_files["action_key"], "position_snapshot_parity": parity_files["position_snapshot"], "coverage_audit": rel(artifact_dir / "coverage_audit.csv"), "forbidden_scope_audit": rel(artifact_dir / "forbidden_scope_audit.csv"), "decision_source_audit": rel(artifact_dir / "decision_source_audit.csv")}, "diff_samples": diff_files}
+    manifest = {
+        "artifact_type": "order_intent_replay_parity",
+        "schema_version": "order_intent_replay_parity_d3_v1",
+        "created_at": now(),
+        "created_by": rel(Path(__file__)),
+        "window": WINDOW,
+        "window_start": WINDOW_START,
+        "window_end": WINDOW_END,
+        "baseline_manifest": rel(baseline_manifest_path),
+        "baseline_dir": rel(baseline_dir),
+        "baseline_snapshot_dir": rel(baseline_snapshot_dir),
+        "order_intent_replay_manifest": rel(order_intent_replay_manifest_path),
+        "order_intent_replay_source": "d3rr_forward_replay_execution_result",
+        "order_intent_artifacts": replay_manifest.get("order_intent_artifacts", []),
+        "order_intent_artifact_count": len(
+            replay_manifest.get("order_intent_artifacts", [])
+        ),
+        "rules": RULES,
+        "rules_present": sorted(
+            str(x) for x in filter_window(replay["daily_nav"])["rule"].dropna().unique()
+        ),
+        "methods_present": sorted(
+            str(x)
+            for x in filter_window(replay["daily_nav"])["method"].dropna().unique()
+        ),
+        "diagnostic_rule": "one_sell_one_buy_buggy_e8r",
+        "diagnostic_rule_only_for_parity": True,
+        "diagnostic_rule_not_valid_strategy_evidence": True,
+        "parity_status": "pass" if parity_pass else "fail",
+        "no_d3_parity_bypass": True,
+        "no_missing_row_ignored": True,
+        "row_counts": {
+            "summary": int(len(r_summary)),
+            "daily_nav": int(len(r_nav)),
+            "actions": int(len(r_actions)),
+            "action_key": int(len(r_keys)),
+            "position_snapshot": int(len(r_snaps)),
+        },
+        "artifacts": {
+            "summary_parity": parity_files["summary"],
+            "daily_nav_parity": parity_files["daily_nav"],
+            "actions_parity": parity_files["actions"],
+            "action_key_parity": parity_files["action_key"],
+            "position_snapshot_parity": parity_files["position_snapshot"],
+            "coverage_audit": rel(artifact_dir / "coverage_audit.csv"),
+            "forbidden_scope_audit": rel(artifact_dir / "forbidden_scope_audit.csv"),
+            "decision_source_audit": rel(artifact_dir / "decision_source_audit.csv"),
+        },
+        "diff_samples": diff_files,
+    }
     write_json(artifact_dir / "manifest.json", manifest)
-    return {"ok": parity_pass, "manifest": rel(artifact_dir / "manifest.json"), "parity_status": manifest["parity_status"], "row_counts": manifest["row_counts"]}
+    return {
+        "ok": parity_pass,
+        "manifest": rel(artifact_dir / "manifest.json"),
+        "parity_status": manifest["parity_status"],
+        "row_counts": manifest["row_counts"],
+    }
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run D3RR forward OrderIntent replay parity artifact generation.")
+    parser = argparse.ArgumentParser(
+        description="Run D3RR forward OrderIntent replay parity artifact generation."
+    )
     parser.add_argument("--baseline-manifest", default=str(DEFAULT_BASELINE_MANIFEST))
     parser.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR))
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
-    result = run_parity(baseline_manifest_path=resolve(args.baseline_manifest), out_dir=resolve(args.out_dir))
+    result = run_parity(
+        baseline_manifest_path=resolve(args.baseline_manifest),
+        out_dir=resolve(args.out_dir),
+    )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

@@ -27,7 +27,7 @@ models:
     ltr_train_end: ''
     allowed_replay_start_min: '2026-01-01'
     source_manifest: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e1_frozen_qlib_training_and_oos_score/phasee1_training_manifest.json
-    source_training_report: docs/tw_extended_oos_qlib_orthogonal_ltr/PHASEE0_CONTRACT_AND_FEASIBILITY_AUDIT_REPORT_CN.md
+    source_training_report: docs/archive/phase_history/tw_extended_oos_qlib_orthogonal_ltr/PHASEE0_CONTRACT_AND_FEASIBILITY_EXECUTION_REPORT_CN.md
     production_selectable: true
   e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025:
     model_id: e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025
@@ -38,7 +38,7 @@ models:
     ltr_train_end: '2025-12-31'
     allowed_replay_start_min: '2026-01-01'
     source_manifest: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e3_orthogonal_ltr_training/phasee3_training_manifest.json
-    source_training_report: docs/tw_extended_oos_qlib_orthogonal_ltr/PHASEE0_CONTRACT_AND_FEASIBILITY_AUDIT_REPORT_CN.md
+    source_training_report: docs/archive/phase_history/tw_extended_oos_qlib_orthogonal_ltr/PHASEE0_CONTRACT_AND_FEASIBILITY_EXECUTION_REPORT_CN.md
     # Model B remains an isolated research/shadow candidate until MB-0..MB-3
     # gates and an explicit baseline admission authorization are complete.
     production_selectable: false
