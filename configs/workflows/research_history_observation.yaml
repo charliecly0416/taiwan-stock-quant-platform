@@ -1,0 +1,24 @@
+schema_version: tw.workflow.spec.v1
+workflow_id: research_history.model_a_observation
+version: "1"
+nodes:
+  - id: observe_model_a_input
+    module: research_history.observe
+    policy: required
+    config:
+      artifact_type: ModelInferenceInput
+      model_id: e4_frozen_qlib_2018_2022
+      status: READY
+      min_count: 1
+
+  - id: observe_model_a_signal
+    module: research_history.observe
+    needs:
+      - observe_model_a_input
+    policy: required
+    config:
+      artifact_type: ModelSignalArtifact
+      model_id: e4_frozen_qlib_2018_2022
+      status: READY
+      min_count: 1
+      require_same_run_id: true

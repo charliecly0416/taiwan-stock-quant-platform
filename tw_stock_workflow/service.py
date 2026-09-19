@@ -1,0 +1,31 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from .artifacts import ArtifactResolver, ResearchHistoryAdapter
+from .engine import WorkflowEngine, WorkflowRunResult
+from .modules import ModuleRegistry, ResearchHistoryObservation
+from .spec import WorkflowSpec
+from .types import ExecutionContext
+
+
+def build_default_engine(
+    repo_root: Path, history_index: Path | None = None
+) -> WorkflowEngine:
+    resolver = ArtifactResolver(repo_root)
+    resolver.register(ResearchHistoryAdapter(repo_root, history_index))
+    modules = ModuleRegistry()
+    modules.register(ResearchHistoryObservation())
+    return WorkflowEngine(modules, resolver)
+
+
+def run_workflow(
+    *,
+    repo_root: Path,
+    spec_path: Path,
+    context: ExecutionContext,
+    history_index: Path | None = None,
+) -> WorkflowRunResult:
+    spec = WorkflowSpec.load(spec_path)
+    engine = build_default_engine(repo_root, history_index)
+    return engine.run(spec, context)

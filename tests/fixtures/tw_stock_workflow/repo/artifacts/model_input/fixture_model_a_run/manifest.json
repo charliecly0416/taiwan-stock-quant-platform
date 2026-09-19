@@ -1,0 +1,8 @@
+{
+  "artifact_type": "ModelInferenceInput",
+  "model_id": "e4_frozen_qlib_2018_2022",
+  "asof": "2026-09-18",
+  "status": "READY",
+  "run_id": "fixture_model_a_run",
+  "decision_cutoff": "2026-09-18T10:30:00+00:00"
+}

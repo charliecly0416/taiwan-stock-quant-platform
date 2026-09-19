@@ -1,0 +1,41 @@
+{
+  "schema_version": "tw.research_data_history.index.v1",
+  "available_from": "2026-09-18",
+  "available_to": "2026-09-18",
+  "day_count": 1,
+  "days": {
+    "2026-09-18": {
+      "asof": "2026-09-18",
+      "status": "READY_MODELA_ONLY",
+      "model_a": {
+        "model_id": "e4_frozen_qlib_2018_2022",
+        "asof": "2026-09-18",
+        "status": "READY",
+        "storage_policy": "REFERENCE_EXISTING_CANONICAL_ARTIFACTS",
+        "inference_input": {
+          "artifact_type": "ModelInferenceInput",
+          "path": "artifacts/model_input/fixture_model_a_run",
+          "run_id": "fixture_model_a_run",
+          "files": {
+            "manifest.json": {
+              "path": "artifacts/model_input/fixture_model_a_run/manifest.json",
+              "sha256": "6b89992a9b613b53fa31bc8b3df785afa2e4bdad03eafea0e8866991fe8e0c9e"
+            }
+          }
+        },
+        "signal": {
+          "artifact_type": "ModelSignalArtifact",
+          "path": "artifacts/model_signal/fixture_model_a_run",
+          "run_id": "fixture_model_a_run",
+          "files": {
+            "manifest.json": {
+              "path": "artifacts/model_signal/fixture_model_a_run/manifest.json",
+              "sha256": "c6474081fde95290c201fa1c87c7536c89a94cc4d0a9c4bd96df8b13463da23f"
+            }
+          }
+        }
+      },
+      "model_b": null
+    }
+  }
+}
