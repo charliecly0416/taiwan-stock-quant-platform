@@ -15,8 +15,13 @@ assert.match(workflow, /tests\/unit\/tw-stock-monitor-static-check\.mjs/)
 assert.match(workflow, /tests\/unit\/tw-stock-monitor-qlib-ops-check\.mjs/)
 assert.match(workflow, /node tests\/unit\/tw-stock-monitor-static-check\.mjs/)
 assert.match(workflow, /node tests\/unit\/tw-stock-monitor-workflow-check\.mjs/)
+assert.match(workflow, /uses:\s*pnpm\/action-setup@v4/)
+assert.match(workflow, /version:\s*10\.33\.4/)
 assert.match(workflow, /pnpm install --frozen-lockfile/)
 assert.match(workflow, /pnpm build/)
+const pnpmSetupIndex = workflow.indexOf('pnpm/action-setup@v4')
+const nodeSetupIndex = workflow.indexOf('actions/setup-node@v4')
+assert.ok(pnpmSetupIndex >= 0 && pnpmSetupIndex < nodeSetupIndex, 'pnpm must be installed before setup-node initializes the pnpm cache')
 
 for (const forbidden of [
   'verify_tw_stock_research_stack',
