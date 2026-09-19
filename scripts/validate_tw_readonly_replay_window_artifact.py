@@ -36,6 +36,7 @@ REQUIRED_COLUMNS = {
         "start_date",
         "end_date",
         "initial_cash",
+        "fee_and_tax",
         "final_equity",
         "total_return",
         "max_drawdown",
@@ -58,6 +59,7 @@ REQUIRED_COLUMNS = {
         "execution_price",
         "commission",
         "tax",
+        "fee_and_tax",
         "cash_after",
         "position_after",
         "intent_reason",
@@ -195,7 +197,98 @@ def bool_false(value: Any) -> bool:
     return type(value) is bool and value is False
 
 
-def validate_checksums(manifest: dict[str, Any]) -> tuple[bool, str]:
+def normalized_ref(value: Any) -> str:
+    return rel(resolve(str(value or ""))) if value else ""
+
+
+def referenced_output_paths(payload: dict[str, Any]) -> list[Path]:
+    outputs = payload.get("output_files") or {}
+    if not isinstance(outputs, dict):
+        return []
+    return [
+        resolve(value) for value in outputs.values() if isinstance(value, str) and value
+    ]
+
+
+def derive_checksum_closure(
+    manifest_path: Path, manifest: dict[str, Any]
+) -> tuple[set[str], list[str]]:
+    paths: set[Path] = {manifest_path.resolve()}
+    errors: list[str] = []
+
+    def add_ref(value: Any, label: str) -> Path | None:
+        if not isinstance(value, str) or not value:
+            errors.append(f"missing_ref:{label}")
+            return None
+        path = resolve(value)
+        paths.add(path)
+        return path
+
+    artifacts = manifest.get("artifacts") or {}
+    if not isinstance(artifacts, dict):
+        errors.append("invalid_ref:artifacts")
+        artifacts = {}
+    for name, value in artifacts.items():
+        add_ref(value, f"artifacts.{name}")
+
+    order_refs = manifest.get("order_intent_artifacts") or []
+    if not isinstance(order_refs, list) or not order_refs:
+        errors.append("missing_ref:order_intent_artifacts")
+    else:
+        for index, value in enumerate(order_refs):
+            order_path = add_ref(value, f"order_intent_artifacts[{index}]")
+            if order_path is not None:
+                order_manifest = load_json(order_path)
+                outputs = referenced_output_paths(order_manifest)
+                if not outputs:
+                    errors.append(f"missing_outputs:{rel(order_path)}")
+                paths.update(outputs)
+
+    price_manifest_path = add_ref(
+        manifest.get("canonical_price_store_manifest"),
+        "canonical_price_store_manifest",
+    )
+    if price_manifest_path is not None:
+        price_manifest = load_json(price_manifest_path)
+        add_ref(price_manifest.get("prices_path"), "price_store.prices_path")
+
+    for field in (
+        "replay_window_policy",
+        "model_registry",
+        "baseline_descriptor",
+        "baseline_manifest",
+    ):
+        add_ref(manifest.get(field), field)
+
+    validation = manifest.get("replay_window_policy_validation") or {}
+    add_ref(validation.get("source_training_report"), "source_training_report")
+
+    identity = manifest.get("model_source_identity") or {}
+    training_path = add_ref(
+        identity.get("canonical_training_manifest"), "canonical_training_manifest"
+    )
+    if training_path is not None:
+        training = load_json(training_path)
+        add_ref(training.get("model_path"), "training.model_path")
+        add_ref(training.get("raw_oos_score_path"), "training.raw_oos_score_path")
+
+    for field in ("signal_manifest", "full_rank_manifest"):
+        lineage_path = add_ref(identity.get(field), field)
+        if lineage_path is not None:
+            lineage = load_json(lineage_path)
+            outputs = referenced_output_paths(lineage)
+            if not outputs:
+                errors.append(f"missing_outputs:{rel(lineage_path)}")
+            paths.update(outputs)
+
+    missing = sorted(rel(path) for path in paths if not path.is_file())
+    errors.extend(f"missing_file:{path}" for path in missing)
+    return {rel(path) for path in paths}, errors
+
+
+def validate_checksums(
+    manifest_path: Path, manifest: dict[str, Any]
+) -> tuple[bool, str]:
     checksum_path = resolve(str(manifest.get("checksum_manifest") or ""))
     checksum = load_json(checksum_path)
     if (
@@ -223,11 +316,156 @@ def validate_checksums(manifest: dict[str, Any]) -> tuple[bool, str]:
             or item.get("sha256") != sha256_file(path)
         ):
             bad.append(key)
-    required = set(str(path) for path in manifest.get("checksum_required_files") or [])
+    required, closure_errors = derive_checksum_closure(manifest_path, manifest)
+    self_declared = {
+        normalized_ref(path) for path in manifest.get("checksum_required_files") or []
+    }
     missing = sorted(required - set(declared))
     extra = sorted(set(declared) - required)
-    ok = bool(required) and not bad and not missing and not extra
-    return ok, f"checked={len(declared)}; bad={bad}; missing={missing}; extra={extra}"
+    self_missing = sorted(required - self_declared)
+    self_extra = sorted(self_declared - required)
+    ok = (
+        bool(required)
+        and not bad
+        and not closure_errors
+        and not missing
+        and not extra
+        and not self_missing
+        and not self_extra
+    )
+    details = (
+        f"checked={len(declared)}; bad={bad}; closure_errors={closure_errors}; "
+        f"missing={missing}; extra={extra}; self_missing={self_missing}; "
+        f"self_extra={self_extra}"
+    )
+    return ok, details
+
+
+def validate_e1_lineage(manifest: dict[str, Any]) -> tuple[bool, str]:
+    model_id = str(manifest.get("model_id") or "")
+    strategy_rule = str(manifest.get("strategy_rule") or "")
+    identity = manifest.get("model_source_identity") or {}
+    registry = load_yaml(resolve(str(manifest.get("model_registry") or "")))
+    descriptor = load_yaml(resolve(str(manifest.get("baseline_descriptor") or "")))
+    policy = load_yaml(resolve(str(manifest.get("replay_window_policy") or "")))
+    validation = manifest.get("replay_window_policy_validation") or {}
+
+    canonical = (
+        (registry.get("production_models") or {}).get("production_selectable") or {}
+    ).get(model_id)
+    active = (descriptor.get("active_baseline") or {}).get("model_a") or {}
+    policy_model = (policy.get("models") or {}).get(model_id) or {}
+    source_key = str(identity.get("source_key") or "")
+    deprecated = (
+        (registry.get("production_models") or {}).get("deprecated") or {}
+    ).get(source_key)
+
+    training_path = resolve(str(identity.get("canonical_training_manifest") or ""))
+    training = load_json(training_path)
+    model_path = resolve(str(training.get("model_path") or ""))
+    raw_ref = str(training.get("raw_oos_score_path") or "")
+    raw_path = resolve(raw_ref)
+    signal_path = resolve(str(identity.get("signal_manifest") or ""))
+    signal = load_json(signal_path)
+    full_rank_path = resolve(str(identity.get("full_rank_manifest") or ""))
+    full_rank = load_json(full_rank_path)
+    source_audit_path = resolve(
+        str((manifest.get("artifacts") or {}).get("source_identity_audit") or "")
+    )
+    source_audit = load_json(source_audit_path)
+
+    signal_sources = {
+        normalized_ref(value) for value in signal.get("source_artifacts") or []
+    }
+    signal_hashes = signal.get("input_hashes") or {}
+    declared_raw_hash = next(
+        (
+            value
+            for key, value in signal_hashes.items()
+            if normalized_ref(key) == normalized_ref(raw_ref)
+        ),
+        None,
+    )
+    identity_fields = (
+        "canonical_model_id",
+        "source_key",
+        "registry_alias_reason",
+        "canonical_training_manifest",
+        "canonical_training_report",
+        "canonical_model_artifact",
+        "canonical_model_sha256",
+        "raw_oos_score",
+        "raw_oos_score_sha256",
+        "signal_manifest",
+        "signal_manifest_sha256",
+        "full_rank_manifest",
+        "full_rank_manifest_sha256",
+        "identity_adaptation",
+    )
+    source_audit_matches = all(
+        source_audit.get(field) == identity.get(field) for field in identity_fields
+    )
+    output_files_exist = all(
+        path.is_file()
+        for path in [
+            *referenced_output_paths(signal),
+            *referenced_output_paths(full_rank),
+        ]
+    )
+    checks = {
+        "canonical_registry": isinstance(canonical, dict)
+        and normalized_ref(canonical.get("source_manifest")) == rel(training_path)
+        and canonical.get("production_default") is True,
+        "baseline_descriptor": active.get("model_id") == model_id
+        and normalized_ref(active.get("artifact_path")) == rel(model_path)
+        and model_path.is_file()
+        and active.get("artifact_sha256") == sha256_file(model_path)
+        and (descriptor.get("active_baseline") or {}).get("strategy_rule")
+        == strategy_rule
+        and (descriptor.get("active_baseline") or {}).get("execution_price_mode")
+        == "next_open",
+        "policy": policy.get("default_model_id") == model_id
+        and policy.get("default_strategy_rule") == strategy_rule
+        and normalized_ref(policy_model.get("source_manifest")) == rel(training_path)
+        and normalized_ref(policy_model.get("source_training_report"))
+        == normalized_ref(identity.get("canonical_training_report"))
+        and normalized_ref(validation.get("source_manifest")) == rel(training_path)
+        and normalized_ref(validation.get("source_training_report"))
+        == normalized_ref(identity.get("canonical_training_report")),
+        "explicit_alias": identity.get("canonical_model_id") == model_id
+        and source_key
+        and isinstance(deprecated, dict)
+        and deprecated.get("reason") == f"legacy id replaced by {model_id}"
+        and identity.get("registry_alias_reason") == deprecated.get("reason")
+        and identity.get("identity_adaptation")
+        == "explicit_registry_replacement_with_shared_e1_lineage",
+        "training_outputs": training_path.is_file()
+        and normalized_ref(identity.get("canonical_model_artifact")) == rel(model_path)
+        and identity.get("canonical_model_sha256") == sha256_file(model_path)
+        and raw_path.is_file()
+        and normalized_ref(identity.get("raw_oos_score")) == rel(raw_path)
+        and identity.get("raw_oos_score_sha256") == sha256_file(raw_path),
+        "model_signal": signal.get("artifact_type") == "model_signal"
+        and signal.get("model_name") == source_key
+        and normalized_ref(raw_ref) in signal_sources
+        and raw_path.is_file()
+        and declared_raw_hash == sha256_file(raw_path)
+        and identity.get("signal_manifest_sha256") == sha256_file(signal_path),
+        "full_rank": full_rank.get("artifact_type") == "full_rank"
+        and normalized_ref(full_rank.get("source_artifact")) == rel(raw_path)
+        and full_rank.get("source_rank_column") == "qlib_rank_raw"
+        and identity.get("full_rank_manifest_sha256") == sha256_file(full_rank_path),
+        "lineage_outputs": bool(referenced_output_paths(signal))
+        and bool(referenced_output_paths(full_rank))
+        and output_files_exist,
+        "source_audit": source_audit.get("artifact_type")
+        == "canonical_model_source_identity_audit"
+        and source_audit.get("schema_version") == "wf2a_source_identity_v1"
+        and source_audit.get("status") == "pass"
+        and source_audit_matches,
+    }
+    failed = sorted(name for name, ok in checks.items() if not ok)
+    return not failed, f"failed={failed}"
 
 
 def validate_artifact(manifest_path: Path) -> dict[str, Any]:
@@ -252,7 +490,8 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
         for key, columns in REQUIRED_COLUMNS.items()
     }
     missing_columns = {key: value for key, value in missing_columns.items() if value}
-    checksum_ok, checksum_details = validate_checksums(manifest)
+    checksum_ok, checksum_details = validate_checksums(manifest_path, manifest)
+    lineage_ok, lineage_details = validate_e1_lineage(manifest)
     validation = manifest.get("replay_window_policy_validation") or {}
     checks = [
         check("artifact_type", manifest.get("artifact_type") == "replay_result"),
@@ -312,6 +551,7 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
         ),
         check("required_columns", not missing_columns, str(missing_columns)),
         check("checksum_all_required_files", checksum_ok, checksum_details),
+        check("canonical_e1_semantic_lineage", lineage_ok, lineage_details),
     ]
     if missing_artifacts or missing_columns:
         return {"ok": False, "artifact": rel(manifest_path), "checks": checks}
@@ -346,7 +586,7 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
     ]
     action_numeric_ok = all(
         pd.to_numeric(active[column], errors="coerce").notna().all()
-        for column in numeric_action_columns
+        for column in [*numeric_action_columns, "fee_and_tax"]
     )
     checks.append(check("active_action_accounting_present", action_numeric_ok))
     checks.append(
@@ -361,7 +601,8 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
     order_paths = [
         resolve(str(path)) for path in manifest.get("order_intent_artifacts") or []
     ]
-    order_rows: dict[str, set[str]] = {}
+    intent_records: dict[tuple[str, str], dict[str, Any]] = {}
+    intent_instruments: set[str] = set()
     order_contract_ok = bool(order_paths)
     for path in order_paths:
         order_manifest = load_json(path)
@@ -369,27 +610,32 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
             str((order_manifest.get("output_files") or {}).get("order_intents") or "")
         )
         intents = read_csv(intent_path)
-        ids = set(intents.get("order_intent_row_id", pd.Series(dtype=str)).astype(str))
-        order_rows[rel(path)] = ids
-        order_rows[str(path)] = ids
+        required_intent_columns = {
+            "order_intent_row_id",
+            "signal_date",
+            "instrument",
+            "intent_action",
+            "intent_reason",
+            "strategy_rule",
+            "model_name",
+        }
+        manifest_ref = rel(path)
         order_contract_ok = order_contract_ok and (
             order_manifest.get("artifact_type") == "order_intent"
             and order_manifest.get("generation_source") == "strategy_decision_engine"
             and order_manifest.get("not_generated_from_replay_actions") is True
             and order_manifest.get("not_generated_from_replay_snapshots") is True
             and not intents.empty
+            and required_intent_columns.issubset(intents.columns)
         )
-    lineage_ok = order_contract_ok
-    for row in actions[["order_intent_artifact", "order_intent_row_id"]].to_dict(
-        "records"
-    ):
-        reference = str(row["order_intent_artifact"])
-        if str(row["order_intent_row_id"]) not in order_rows.get(reference, set()):
-            lineage_ok = False
-            break
-    checks.append(
-        check("order_intent_lineage", lineage_ok, f"count={len(order_paths)}")
-    )
+        if required_intent_columns.issubset(intents.columns):
+            for row in intents.to_dict("records"):
+                key = (manifest_ref, str(row["order_intent_row_id"]))
+                if key in intent_records:
+                    order_contract_ok = False
+                intent_records[key] = row
+                intent_instruments.add(str(row["instrument"]))
+    checks.append(check("order_intent_contract", order_contract_ok))
 
     price_manifest_path = resolve(
         str(manifest.get("canonical_price_store_manifest") or "")
@@ -417,8 +663,10 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
     checks.append(check("canonical_price_store_binding", price_store_ok))
     price_rows = pd.DataFrame()
     if price_store_ok:
-        instruments = set(actions["instrument"].astype(str)) | set(
-            snapshots["instrument"].astype(str)
+        instruments = (
+            set(actions["instrument"].astype(str))
+            | set(snapshots["instrument"].astype(str))
+            | intent_instruments
         )
         chunks = []
         for chunk in pd.read_csv(
@@ -446,6 +694,11 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
         (str(row.instrument), str(row.price_date)): row
         for row in price_rows.itertuples(index=False)
     }
+    price_dates_by_instrument: dict[str, list[str]] = {}
+    for instrument, group in price_rows.groupby("instrument"):
+        price_dates_by_instrument[str(instrument)] = sorted(
+            group["price_date"].astype(str).unique().tolist()
+        )
     action_price_ok = price_store_ok and not active.empty
     for row in active.itertuples(index=False):
         quote = price_index.get((str(row.instrument), str(row.execution_date)))
@@ -470,12 +723,114 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
         check("next_open_execution_from_tradable_price_store", action_price_ok)
     )
 
-    initial_cash = float(
-        pd.to_numeric(summary["initial_cash"], errors="coerce").iloc[0]
+    action_rows_by_intent: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in actions.to_dict("records"):
+        key = (
+            normalized_ref(row.get("order_intent_artifact")),
+            str(row.get("order_intent_row_id") or ""),
+        )
+        action_rows_by_intent.setdefault(key, []).append(row)
+    action_map = {"buy": "historical_add", "sell": "historical_risk_reduce"}
+    window_end = str(manifest.get("window_end") or "")
+    semantic_ok = order_contract_ok
+    in_scope_count = 0
+    for key, intent in intent_records.items():
+        signal_date = str(intent.get("signal_date") or "")
+        instrument = str(intent.get("instrument") or "")
+        next_dates = [
+            day
+            for day in price_dates_by_instrument.get(instrument, [])
+            if day > signal_date
+        ]
+        in_scope = bool(next_dates and next_dates[0] <= window_end)
+        outputs = action_rows_by_intent.get(key, [])
+        if in_scope:
+            in_scope_count += 1
+            semantic_ok = semantic_ok and len(outputs) == 1
+        else:
+            semantic_ok = semantic_ok and len(outputs) == 0
+        if len(outputs) != 1:
+            continue
+        output = outputs[0]
+        expected_action = action_map.get(str(intent.get("intent_action") or ""))
+        actual_action = str(output.get("action") or "")
+        action_semantic_ok = actual_action == expected_action or (
+            actual_action == "historical_skip"
+            and bool(str(output.get("reason") or "").strip())
+        )
+        if actual_action in ACTIVE_ACTIONS:
+            action_semantic_ok = action_semantic_ok and (
+                str(output.get("execution_date") or "") == next_dates[0]
+            )
+        semantic_ok = semantic_ok and bool(expected_action) and action_semantic_ok
+        semantic_ok = semantic_ok and all(
+            str(output.get(output_field) or "") == str(intent.get(intent_field) or "")
+            for intent_field, output_field in (
+                ("signal_date", "signal_date"),
+                ("instrument", "instrument"),
+                ("intent_reason", "intent_reason"),
+                ("strategy_rule", "strategy_rule"),
+                ("model_name", "model_name"),
+            )
+        )
+    semantic_ok = semantic_ok and set(action_rows_by_intent).issubset(
+        set(intent_records)
     )
+    semantic_ok = semantic_ok and all(
+        len(rows) == 1 for rows in action_rows_by_intent.values()
+    )
+    checks.append(
+        check(
+            "order_intent_semantic_bijection",
+            semantic_ok,
+            (
+                f"intents={len(intent_records)}; in_scope={in_scope_count}; "
+                f"outputs={len(action_rows_by_intent)}"
+            ),
+        )
+    )
+
+    execution_config = manifest.get("execution_config") or {}
+    try:
+        configured_initial_cash = float(execution_config.get("initial_equity"))
+        fee_rate = float(execution_config.get("fee_rate"))
+        sell_tax_rate = float(execution_config.get("sell_tax_rate"))
+        target_holdings = int(execution_config.get("target_holdings"))
+        lot_size = int(execution_config.get("lot_size"))
+        execution_config_ok = (
+            execution_config.get("execution_price_mode") == "next_open"
+            and manifest.get("execution_price_mode") == "next_open"
+            and configured_initial_cash > 0
+            and fee_rate > 0
+            and sell_tax_rate > 0
+            and target_holdings > 0
+            and lot_size > 0
+            and float(execution_config.get("target_holdings")) == target_holdings
+            and float(execution_config.get("lot_size")) == lot_size
+        )
+    except (TypeError, ValueError):
+        configured_initial_cash = float("nan")
+        fee_rate = float("nan")
+        sell_tax_rate = float("nan")
+        target_holdings = 0
+        lot_size = 0
+        execution_config_ok = False
+    initial_cash_values = pd.to_numeric(summary["initial_cash"], errors="coerce")
+    initial_cash = (
+        float(initial_cash_values.iloc[0])
+        if len(summary) == 1 and initial_cash_values.notna().all()
+        else float("nan")
+    )
+    execution_config_ok = execution_config_ok and (
+        abs(initial_cash - configured_initial_cash) <= 0.000001
+    )
+    checks.append(check("execution_config_recomputed", execution_config_ok))
+
     replay_cash = initial_cash
     replay_positions: dict[str, int] = {}
     action_accounting_ok = True
+    action_fee_math_ok = execution_config_ok
+    expected_fee_total = 0.0
     ordered_actions = active.assign(
         _execution_sort=active["execution_date"]
         .astype(str)
@@ -490,15 +845,32 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
         commission = float(row.commission)
         tax = float(row.tax)
         action = str(row.action)
+        expected_commission = quantity * price * fee_rate
+        expected_tax = (
+            quantity * price * sell_tax_rate
+            if action == "historical_risk_reduce"
+            else 0.0
+        )
+        action_fee_math_ok = action_fee_math_ok and (
+            quantity % lot_size == 0
+            and abs(commission - expected_commission) <= 0.00001
+            and abs(tax - expected_tax) <= 0.00001
+            and abs(float(row.fee_and_tax) - expected_commission - expected_tax)
+            <= 0.005
+        )
+        expected_fee_total += expected_commission + expected_tax
         if action == "historical_add":
-            replay_cash -= quantity * price + commission + tax
+            replay_cash -= quantity * price + expected_commission + expected_tax
             replay_positions[instrument] = (
                 replay_positions.get(instrument, 0) + quantity
             )
         elif action == "historical_risk_reduce":
-            replay_cash += quantity * price - commission - tax
+            replay_cash += quantity * price - expected_commission - expected_tax
             replay_positions[instrument] = (
                 replay_positions.get(instrument, 0) - quantity
+            )
+            action_fee_math_ok = (
+                action_fee_math_ok and replay_positions[instrument] >= 0
             )
         if abs(float(row.cash_after) - replay_cash) > 0.02:
             action_accounting_ok = False
@@ -513,6 +885,7 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
                 if position > 0
             }
     checks.append(check("action_cash_and_position_recomputed", action_accounting_ok))
+    checks.append(check("action_fee_and_tax_recomputed", action_fee_math_ok))
 
     snapshots_numeric = snapshots.copy()
     for column in [
@@ -624,12 +997,25 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
     checks.append(
         check(
             "holding_limit",
-            bool((nav_numeric["holding_count"] <= 10).all()),
+            execution_config_ok
+            and bool((nav_numeric["holding_count"] <= target_holdings).all()),
         )
     )
     summary_row = summary.iloc[0]
+    equity_values = nav_numeric["equity"].astype(float)
+    equity_with_initial = pd.Series(
+        [initial_cash, *equity_values.tolist()], dtype=float
+    )
+    drawdowns = equity_with_initial / equity_with_initial.cummax() - 1.0
+    recomputed_max_drawdown = float(drawdowns.min())
     summary_ok = (
-        int(summary_row["action_count"]) == len(active)
+        len(summary) == 1
+        and str(summary_row["model_name"]) == str(manifest.get("model_id"))
+        and str(summary_row["strategy_rule"]) == str(manifest.get("strategy_rule"))
+        and abs(float(summary_row["initial_cash"]) - configured_initial_cash)
+        <= 0.000001
+        and abs(float(summary_row["fee_and_tax"]) - expected_fee_total) <= 0.005
+        and int(summary_row["action_count"]) == len(active)
         and int(summary_row["buy_count"])
         == int((active["action"] == "historical_add").sum())
         and int(summary_row["sell_count"])
@@ -640,6 +1026,11 @@ def validate_artifact(manifest_path: Path) -> dict[str, Any]:
         == int((nav_numeric["cash"] < 0).sum())
         and int(summary_row["missing_price_count"])
         == int(nav_numeric["missing_price_count"].sum())
+        and int(summary_row["max_holding_count"])
+        == int(nav_numeric["holding_count"].max())
+        and int(summary_row["max_holding_count"]) <= target_holdings
+        and abs(float(summary_row["max_drawdown"]) - recomputed_max_drawdown)
+        <= 0.000002
         and abs(
             float(summary_row["final_equity"]) - float(nav_numeric.iloc[-1]["equity"])
         )

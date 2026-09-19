@@ -65,27 +65,92 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
     raw_score = root / "raw_score.csv"
     signal_manifest = root / "signal_manifest.json"
     full_rank_manifest = root / "full_rank_manifest.json"
+    signal_output = root / "signals.csv"
+    full_rank_output = root / "full_rank.csv"
+    policy = root / "policy.yaml"
+    baseline_descriptor = root / "baseline_descriptor.yaml"
+    baseline_manifest = root / "baseline_manifest.json"
     for path, content in (
-        (training_manifest, "{}\n"),
         (training_report, "# training trace\n"),
         (model, "frozen-model"),
         (raw_score, "date,instrument,score\n2026-01-02,TW0001,1\n"),
-        (signal_manifest, "{}\n"),
-        (full_rank_manifest, "{}\n"),
+        (signal_output, "date,instrument,score\n2026-01-02,TW0001,1\n"),
+        (full_rank_output, "date,instrument,rank\n2026-01-02,TW0001,1\n"),
     ):
         path.write_text(content, encoding="utf-8")
+    write_json(
+        training_manifest,
+        {"model_path": str(model), "raw_oos_score_path": str(raw_score)},
+    )
+    write_json(
+        signal_manifest,
+        {
+            "artifact_type": "model_signal",
+            "model_name": "frozen_qlib_2018_2022",
+            "source_artifacts": [str(raw_score)],
+            "input_hashes": {str(raw_score): sha256(raw_score)},
+            "output_files": {"signals": str(signal_output)},
+        },
+    )
+    write_json(
+        full_rank_manifest,
+        {
+            "artifact_type": "full_rank",
+            "source_artifact": str(raw_score),
+            "source_rank_column": "qlib_rank_raw",
+            "output_files": {"full_rank": str(full_rank_output)},
+        },
+    )
+    write_json(baseline_manifest, {"artifact_type": "baseline_fixture"})
 
     registry = root / "registry.yaml"
     registry.write_text(
         yaml.safe_dump(
             {
                 "production_models": {
+                    "production_selectable": {
+                        "e4_frozen_qlib_2018_2022": {
+                            "source_manifest": str(training_manifest),
+                            "production_default": True,
+                        }
+                    },
                     "deprecated": {
                         "frozen_qlib_2018_2022": {
                             "reason": "legacy id replaced by e4_frozen_qlib_2018_2022"
                         }
-                    }
+                    },
                 }
+            }
+        ),
+        encoding="utf-8",
+    )
+    baseline_descriptor.write_text(
+        yaml.safe_dump(
+            {
+                "active_baseline": {
+                    "model_a": {
+                        "model_id": "e4_frozen_qlib_2018_2022",
+                        "artifact_path": str(model),
+                        "artifact_sha256": sha256(model),
+                    },
+                    "strategy_rule": "top50_exit_one_worst_sell",
+                    "execution_price_mode": "next_open",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy.write_text(
+        yaml.safe_dump(
+            {
+                "default_model_id": "e4_frozen_qlib_2018_2022",
+                "default_strategy_rule": "top50_exit_one_worst_sell",
+                "models": {
+                    "e4_frozen_qlib_2018_2022": {
+                        "source_manifest": str(training_manifest),
+                        "source_training_report": str(training_report),
+                    }
+                },
             }
         ),
         encoding="utf-8",
@@ -138,6 +203,8 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
                 "instrument": "TW0001",
                 "intent_action": "buy",
                 "intent_reason": "fixture_buy",
+                "strategy_rule": "top50_exit_one_worst_sell",
+                "model_name": "e4_frozen_qlib_2018_2022",
             }
         ],
     )
@@ -164,6 +231,7 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
                 "start_date": "2026-01-02",
                 "end_date": "2026-01-05",
                 "initial_cash": 1000.0,
+                "fee_and_tax": 0.01,
                 "final_equity": 1000.99,
                 "total_return": 0.00099,
                 "max_drawdown": 0.0,
@@ -192,6 +260,7 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
                 "execution_price": 10.0,
                 "commission": 0.01,
                 "tax": 0.0,
+                "fee_and_tax": 0.01,
                 "cash_after": 989.99,
                 "position_after": 1,
                 "intent_reason": "fixture_buy",
@@ -316,7 +385,6 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         },
     )
     source_audit = root / "source_identity_audit.json"
-    write_json(source_audit, {"status": "pass"})
     artifacts = {
         "summary": summary,
         "daily_nav": nav,
@@ -339,12 +407,26 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         "signal_manifest_sha256": sha256(signal_manifest),
         "full_rank_manifest": str(full_rank_manifest),
         "full_rank_manifest_sha256": sha256(full_rank_manifest),
+        "canonical_training_report": str(training_report),
+        "registry_alias_reason": "legacy id replaced by e4_frozen_qlib_2018_2022",
     }
+    write_json(
+        source_audit,
+        {
+            "artifact_type": "canonical_model_source_identity_audit",
+            "schema_version": "wf2a_source_identity_v1",
+            "status": "pass",
+            **source_identity,
+        },
+    )
     manifest_path = root / "manifest.json"
     checksum_path = root / "checksum_manifest.json"
     required_files = [
         manifest_path,
         registry,
+        policy,
+        baseline_descriptor,
+        baseline_manifest,
         price_manifest,
         prices,
         order_manifest,
@@ -354,7 +436,9 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         model,
         raw_score,
         signal_manifest,
+        signal_output,
         full_rank_manifest,
+        full_rank_output,
         *artifacts.values(),
     ]
     manifest = {
@@ -366,6 +450,7 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         "window_start": "2026-01-02",
         "window_end": "2026-01-05",
         "model_id": "e4_frozen_qlib_2018_2022",
+        "strategy_rule": "top50_exit_one_worst_sell",
         "readonly_only": True,
         "simulation_only": True,
         "not_order": True,
@@ -384,6 +469,14 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         "decision_source": "order_intent_artifact",
         "not_copied_from_legacy_replay": True,
         "execution_price_mode": "next_open",
+        "execution_config": {
+            "execution_price_mode": "next_open",
+            "initial_equity": 1000.0,
+            "target_holdings": 10,
+            "fee_rate": 0.001,
+            "sell_tax_rate": 0.003,
+            "lot_size": 1,
+        },
         "replay_window_policy_validation": {
             "ok": True,
             "model_training_windows_traceable": True,
@@ -402,6 +495,9 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         },
         "model_source_identity": source_identity,
         "model_registry": str(registry),
+        "baseline_descriptor": str(baseline_descriptor),
+        "replay_window_policy": str(policy),
+        "baseline_manifest": str(baseline_manifest),
         "artifacts": {key: str(path) for key, path in artifacts.items()},
         "checksum_manifest": str(checksum_path),
         "checksum_required_files": sorted(str(path) for path in required_files),
@@ -419,6 +515,8 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
     write_json(checksum_path, checksum)
     return manifest_path, {
         "actions": actions,
+        "order_intents": order_intents,
+        "order_manifest": order_manifest,
         "coverage_audit": audit_paths["coverage_audit"],
         "daily_nav": nav,
         "summary": summary,
@@ -427,6 +525,12 @@ def build_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         "forbidden_action_audit": forbidden_action,
         "prices": prices,
         "price_manifest": price_manifest,
+        "training_manifest": training_manifest,
+        "signal_manifest": signal_manifest,
+        "full_rank_manifest": full_rank_manifest,
+        "source_identity_audit": source_audit,
+        "registry": registry,
+        "baseline_descriptor": baseline_descriptor,
     }
 
 
@@ -451,7 +555,7 @@ def test_static_complete_replay_fixture_passes(tmp_path: Path) -> None:
         ("quantity", 0, "active_quantity_positive"),
         ("cash_after", 900.0, "action_cash_and_position_recomputed"),
         ("execution_price", 11.0, "next_open_execution_from_tradable_price_store"),
-        ("order_intent_row_id", "missing", "order_intent_lineage"),
+        ("order_intent_row_id", "missing", "order_intent_semantic_bijection"),
     ],
 )
 def test_validator_rejects_mutated_actions(
@@ -544,6 +648,124 @@ def test_validator_rejects_unchecksummed_mutation(tmp_path: Path) -> None:
     result = validator.validate_artifact(manifest)
     assert result["ok"] is False
     assert statuses(result)["checksum_all_required_files"] == "fail"
+
+
+@pytest.mark.parametrize(
+    ("file_key", "column", "value"),
+    [
+        ("actions", "signal_date", "2026-01-03"),
+        ("actions", "intent_reason", "substituted_reason"),
+        ("actions", "strategy_rule", "other_strategy"),
+        ("order_intents", "intent_action", "sell"),
+        ("order_intents", "model_name", "other_model"),
+    ],
+)
+def test_intent_action_semantics_reject_coherent_checksum(
+    tmp_path: Path, file_key: str, column: str, value: str
+) -> None:
+    manifest, paths = build_fixture(tmp_path)
+    mutate_csv(paths[file_key], lambda frame: frame.assign(**{column: value}))
+    refresh_checksum(manifest, paths[file_key])
+    result = validator.validate_artifact(manifest)
+    assert statuses(result)["checksum_all_required_files"] == "pass"
+    assert statuses(result)["order_intent_semantic_bijection"] == "fail"
+
+
+def test_extra_intent_without_action_rejected_after_checksum_refresh(
+    tmp_path: Path,
+) -> None:
+    manifest, paths = build_fixture(tmp_path)
+    mutate_csv(
+        paths["order_intents"],
+        lambda frame: pd.concat(
+            [frame, frame.assign(order_intent_row_id="intent-extra")],
+            ignore_index=True,
+        ),
+    )
+    refresh_checksum(manifest, paths["order_intents"])
+    result = validator.validate_artifact(manifest)
+    assert statuses(result)["checksum_all_required_files"] == "pass"
+    assert statuses(result)["order_intent_semantic_bijection"] == "fail"
+
+
+@pytest.mark.parametrize(
+    ("file_key", "column", "value", "expected_check"),
+    [
+        ("actions", "commission", 0.0, "action_fee_and_tax_recomputed"),
+        ("actions", "tax", 1.0, "action_fee_and_tax_recomputed"),
+        ("summary", "fee_and_tax", 0.0, "summary_recomputed"),
+        ("summary", "max_drawdown", -0.25, "summary_recomputed"),
+        ("summary", "max_holding_count", 2, "summary_recomputed"),
+        ("summary", "initial_cash", 2000.0, "execution_config_recomputed"),
+    ],
+)
+def test_accounting_rejects_checksum_consistent_mutation(
+    tmp_path: Path, file_key: str, column: str, value: Any, expected_check: str
+) -> None:
+    manifest, paths = build_fixture(tmp_path)
+    mutate_csv(paths[file_key], lambda frame: frame.assign(**{column: value}))
+    refresh_checksum(manifest, paths[file_key])
+    result = validator.validate_artifact(manifest)
+    assert statuses(result)["checksum_all_required_files"] == "pass"
+    assert statuses(result)[expected_check] == "fail"
+
+
+def test_execution_config_rejects_zero_fee_with_valid_checksum(tmp_path: Path) -> None:
+    manifest, _paths = build_fixture(tmp_path)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["execution_config"]["fee_rate"] = 0
+    write_json(manifest, payload)
+    refresh_checksum(manifest, manifest)
+    result = validator.validate_artifact(manifest)
+    assert statuses(result)["checksum_all_required_files"] == "pass"
+    assert statuses(result)["execution_config_recomputed"] == "fail"
+
+
+def test_checksum_closure_rejects_self_consistent_omission(tmp_path: Path) -> None:
+    manifest, paths = build_fixture(tmp_path)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    missing = str(paths["order_intents"])
+    payload["checksum_required_files"].remove(missing)
+    write_json(manifest, payload)
+    checksum_path = Path(payload["checksum_manifest"])
+    checksum = json.loads(checksum_path.read_text(encoding="utf-8"))
+    checksum["files"] = [row for row in checksum["files"] if row["path"] != missing]
+    write_json(checksum_path, checksum)
+    refresh_checksum(manifest, manifest)
+    result = validator.validate_artifact(manifest)
+    assert statuses(result)["checksum_all_required_files"] == "fail"
+
+
+@pytest.mark.parametrize(
+    ("file_key", "field", "value"),
+    [
+        ("signal_manifest", "source_artifacts", ["other/raw.csv"]),
+        ("full_rank_manifest", "source_rank_column", "future_rank"),
+        ("training_manifest", "raw_oos_score_path", "other/raw.csv"),
+    ],
+)
+def test_e1_semantic_substitution_rejected_with_resealed_hashes(
+    tmp_path: Path, file_key: str, field: str, value: Any
+) -> None:
+    manifest, paths = build_fixture(tmp_path)
+    lineage_path = paths[file_key]
+    lineage = json.loads(lineage_path.read_text(encoding="utf-8"))
+    lineage[field] = value
+    write_json(lineage_path, lineage)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    digest_key = {
+        "signal_manifest": "signal_manifest_sha256",
+        "full_rank_manifest": "full_rank_manifest_sha256",
+    }.get(file_key)
+    if digest_key:
+        payload["model_source_identity"][digest_key] = sha256(lineage_path)
+        source_audit = json.loads(paths["source_identity_audit"].read_text())
+        source_audit[digest_key] = sha256(lineage_path)
+        write_json(paths["source_identity_audit"], source_audit)
+    write_json(manifest, payload)
+    refresh_checksum(manifest, lineage_path, paths["source_identity_audit"], manifest)
+    result = validator.validate_artifact(manifest)
+    assert statuses(result)["canonical_e1_semantic_lineage"] == "fail"
 
 
 def test_validator_rejects_forged_coverage_with_valid_checksum(tmp_path: Path) -> None:
