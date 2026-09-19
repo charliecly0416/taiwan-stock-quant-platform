@@ -1,6 +1,6 @@
 # 通用 Workflow Kernel 与迁移顺序
 
-状态：WF-0 独立内核与 WF-1 replay observation sidecar。均未接入 daily、replay execution 或任何发布链路。
+状态：WF-0 独立内核、WF-1 replay observation sidecar 与 WF-2B 隔离 replay candidate execution module 已完成。均未接入 daily、cron 或任何发布链路。
 
 ## 目标与边界
 
@@ -41,6 +41,28 @@ WF-2A 使用既有 canonical PriceStore manifest，并绑定 manifest 与 `price
 
 v4 候选完整 validator 当前通过，但 manifest 固定为 `status=CANDIDATE_HOLD`、`product_index_admission=false`。这只证明候选达到完整合同 gate，不会修改当前 D6/D7/latest、Model A baseline、daily/cron、provider、API 或前端。产品 index admission 需要后续独立审查与单独决定；WF-1 对当前正式 D6 的三项历史 gap 仍保持原判。
 
+## WF-2B 隔离 Workflow Execution Module
+
+WF-2B 已将同一 canonical Model A 固定窗口 builder 和完整 validator 包装为显式注册的 `replay_candidate.build_validate` module。独立 spec 位于：
+
+```text
+configs/workflows/model_a_replay_candidate_execution.yaml
+```
+
+module 只接受 Model A `e4_frozen_qlib_2018_2022`、默认策略 `top50_exit_one_worst_sell` 和固定窗口 `2026-01-01..2026-05-07`，要求 `artifact.read` 与 `replay.candidate.write` 两项权限。B19R2R、其他模型、策略或窗口覆盖以及自定义输出路径均 fail closed。
+
+`ReplayCandidateInputAdapter` 每次解析输入时先运行 WF-2A 完整 validator，再绑定 v4 candidate 的 39-file checksum closure，并额外绑定 workflow execution module、builder、完整 validator 与实际 replay runner 的 SHA256。workflow run identity 因此覆盖 baseline descriptor、module registry、replay policy、baseline source、PriceStore manifest 与 prices、E1 training manifest/model/raw score、ModelSignal/FullRank manifests 及其 outputs、source identity audit、ReplayResult 合同文件和执行代码版本。kernel 在 module 调用前后重新解析这些 refs；任一输入或执行代码变化都会形成不同 identity 和 implementation digest，TOCTOU 则使节点失败。
+
+输出目录由 module 固定在显式 `ExecutionContext.workspace` 下：
+
+```text
+<workspace>/artifacts/wf2b_model_a_replay_candidate/implementation_<digest>/
+```
+
+workspace 必须位于 repository 外，解析后的输出仍必须在 workspace 内，因此不能写入正式 D6/D7/latest 或借 symlink 逃逸。implementation digest 由上述四个实现文件的路径、SHA256 与大小规范化重算；相同实现可在完整验证后复用同一隔离 candidate，任一实现哈希变化则写入新的命名空间，不能复用旧实现生成的 candidate。输出继续固定为 `CANDIDATE_HOLD` 和 `product_index_admission=false`。
+
+WF-2B 只是隔离 candidate execution module 完成，不代表产品 index admission、baseline 切换或正式 replay execution 切换。该 spec 未登记到 daily orchestrator 或 cron，也不触发训练、真实数据抓取、provider、accepted latest、paper account、broker 或订单路径。
+
 ## 合同
 
 - `ExecutionContext` 明确声明 `mode`、`asof`、带时区的 `decision_cutoff`、隔离 `workspace` 和权限集合。
@@ -69,7 +91,7 @@ PYTHONPATH=. python3 scripts/run_tw_stock_workflow.py \
 ## 后续迁移顺序
 
 1. **Replay observation（WF-1 已完成 sidecar）**：专用只读 adapter 和 observation module 用固定 fixture、历史 manifest 与 backend index parity 验证，不替换现有 replay runner。完整 ReplayResult admission 仍为 HOLD。
-2. **Replay execution（WF-2A candidate gate 已完成，workflow module 未开始）**：canonical Model A 固定窗口 candidate 已由同一 D3RR 前向引擎生成并通过完整 validator，但仍为 HOLD，未登记 D7。独立审查和 admission 通过后，才可另行设计 execution module。输出继续写隔离目录，保留旧入口并做一段时间双跑比对。
+2. **Replay execution（WF-2A candidate gate 与 WF-2B isolated module 已完成）**：canonical Model A 固定窗口 candidate 已由同一 D3RR 前向引擎生成并通过完整 validator，workflow module 也可在显式外部 workspace 中幂等构建和验证候选；结果仍为 HOLD，未登记 D7。产品 admission 与正式切换仍需独立决定，旧入口继续保留。
 3. **Daily shadow orchestration**：仅在 replay 迁移稳定后，将无写入的 daily preflight/observation 作为 optional shadow DAG 接入；不得改变 pending、latest 或主线返回码。
 4. **Daily stage migration**：逐阶段迁移 data、feature、Model A signal、strategy、snapshot，每阶段都保留现有合同、artifact validator 和回退入口。Model B 始终是非阻断 optional branch。
 5. **切换与清理**：只有完整模块回归、M3 validator、readonly deployment acceptance 和连续自然调度证据均通过后，才另行提出切换决定。旧执行路径的删除需要独立影响闭包、备份和恢复验证。

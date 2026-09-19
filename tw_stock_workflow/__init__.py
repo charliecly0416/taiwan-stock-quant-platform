@@ -5,6 +5,7 @@ from .engine import StageResult, WorkflowEngine, WorkflowRunResult
 from .modules import Module, ModuleBlocked, ModuleRegistry, ResearchHistoryObservation
 from .run_registry import RunRegistry
 from .replay import ReadonlyReplayWindowAdapter, ReadonlyReplayWindowObservation
+from .replay_execution import ReplayCandidateExecution, ReplayCandidateInputAdapter
 from .spec import WorkflowNode, WorkflowSpec
 from .types import ExecutionContext
 
@@ -19,6 +20,8 @@ __all__ = [
     "ResearchHistoryObservation",
     "ReadonlyReplayWindowAdapter",
     "ReadonlyReplayWindowObservation",
+    "ReplayCandidateExecution",
+    "ReplayCandidateInputAdapter",
     "RunRegistry",
     "StageResult",
     "WorkflowEngine",

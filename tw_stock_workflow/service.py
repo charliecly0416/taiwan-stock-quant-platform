@@ -6,6 +6,7 @@ from .artifacts import ArtifactResolver, ResearchHistoryAdapter
 from .engine import WorkflowEngine, WorkflowRunResult
 from .modules import ModuleRegistry, ResearchHistoryObservation
 from .replay import ReadonlyReplayWindowAdapter, ReadonlyReplayWindowObservation
+from .replay_execution import ReplayCandidateExecution
 from .spec import WorkflowSpec
 from .types import ExecutionContext
 
@@ -20,6 +21,7 @@ def build_default_engine(
     modules.register(
         ReadonlyReplayWindowObservation(ReadonlyReplayWindowAdapter(repo_root))
     )
+    modules.register(ReplayCandidateExecution(repo_root))
     return WorkflowEngine(modules, resolver)
 
 
