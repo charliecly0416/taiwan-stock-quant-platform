@@ -38,6 +38,41 @@ GET /api/tw-stock/current-strategy-context
 configs/tw_product_artifact_registry.yaml
 ```
 
+### 2026-09-19 数据治理接入
+
+日更 `finalize_job()` 默认运行非阻断的 research data history 物化步骤。它把当日已验证的 Model A inference input 与 signal 按路径、SHA256、run ID、source acquisition run 和 cutoff 登记到统一索引；这些产物本来就是 canonical artifact，因此不会再复制一份。
+
+若 B19R2R 当日达到 `READY_RESEARCH_SHADOW`，该步骤会再次校验 78F、TW7769、validator、Model A 绑定关系和 research-only 安全标志，并把小体积的 feature/signal/audit bundle 固化到：
+
+```text
+data_tw/canonical/research_history/modelb_b19r2r_lambdarank_exact50_78f_v2/{asof}/{content_digest}/
+```
+
+统一索引位于：
+
+```text
+data_tw/catalog/research_data_history/index.json
+data_tw/catalog/research_data_history/latest.json
+data_tw/catalog/research_data_history/{asof}/{job_id}.json
+```
+
+该步骤满足以下边界：
+
+- 失败只记录 `ERROR_NONBLOCKING`，不改变日更退出码、Model A pending 或产品 latest；
+- 只有 Model A READY 才推进 research history latest；
+- B19 失败或缺失时仍可记录 Model A；若同日此前 READY B19 绑定的是同一份 Model A，则不会被后续观察覆盖；
+- 所有 JSON 指针使用原子替换，index 更新使用进程锁；
+- B19 始终 `production_allowed=false`、`no_apply=true`，不会进入 provider、paper portfolio、broker 或 order。
+
+事故隔离时可显式停用：
+
+```text
+--disable-research-data-history
+TW_DAILY_AUTO_DISABLE_RESEARCH_DATA_HISTORY=true
+```
+
+治理策略见 `configs/tw_data_governance.yaml`。当前自动链路只做增量登记和小文件固化，不自动删除历史数据；物理删除仍要求引用闭包、仓库外备份、逐文件 SHA256、凭据扫描和隔离恢复全部通过。
+
 ## 2. 当前安全边界
 
 默认日更是 research-only / readonly orchestrator，不是实盘交易脚本。

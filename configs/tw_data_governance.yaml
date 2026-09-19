@@ -1,0 +1,38 @@
+schema_version: tw.data_governance.v1
+mode: append_only_research_history
+daily_auto:
+  enabled_by_default: true
+  mainline_blocking: false
+  model_a_storage: reference_existing_canonical_artifacts
+  model_b_storage: copy_validated_small_shadow_bundle
+  failure_policy: retain_previous_good_and_warn
+retention:
+  reference_closure_precedes_age: true
+  accepted_artifacts: permanent
+  training_freezes: permanent
+  source_and_canonical_hot_days: 180
+  successful_temporary_workspace_days: 30
+  failed_or_blocked_evidence_days: 90
+  wait_and_noop_detail_days: 14
+  replay_cache_days: 90
+deletion:
+  automatic_apply_enabled: false
+  required_sequence:
+    - build_reference_closure
+    - create_external_backup
+    - write_sha256_manifest
+    - scan_backup_for_credentials
+    - verify_isolated_restore
+    - quarantine
+    - delete
+  protected_classes:
+    - latest_and_previous_ready
+    - baseline_and_registry_dependencies
+    - training_and_test_snapshots
+    - replay_lineage
+    - unsettled_prospective_events
+    - pending_or_running_jobs
+safety:
+  production_allowed: false
+  no_apply: true
+  model_b_research_shadow_only: true

@@ -46,6 +46,7 @@ from tw_daily_runtime_stages import (
     runtime_truth,
 )
 from tw_daily_stage_adapters import build_named_stage_adapters, stage_contract_summary
+from tw_research_data_history import materialize_daily_research_history
 
 # ARCH-2: the descriptor is the single source for runtime model identity and
 # baseline policy.  Legacy orchestration functions below remain unchanged and
@@ -1808,6 +1809,37 @@ def write_daily_source_inventory(job: dict[str, Any], *, job_dir: Path, asof: st
 def finalize_job(job: dict[str, Any], *, job_dir: Path, asof: str, args: argparse.Namespace) -> None:
     write_daily_source_inventory(job, job_dir=job_dir, asof=asof)
     write_daily_full_capture_accounting(job, job_dir=job_dir, asof=asof, args=args)
+    if bool(getattr(args, "disable_research_data_history", False)):
+        job["research_data_history"] = {
+            "enabled": False,
+            "attempted": False,
+            "ok": True,
+            "status": "DISABLED_EXPLICITLY",
+            "mainline_blocking": False,
+            "production_allowed": False,
+            "no_apply": True,
+        }
+    else:
+        try:
+            job["research_data_history"] = materialize_daily_research_history(
+                repo_root=ROOT,
+                asof=asof,
+                job_id=str(job.get("job_id") or job_dir.name),
+                job=job,
+                job_dir=job_dir,
+            )
+        except Exception as exc:
+            job["research_data_history"] = {
+                "enabled": True,
+                "attempted": True,
+                "ok": False,
+                "status": "ERROR_NONBLOCKING",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "mainline_blocking": False,
+                "production_allowed": False,
+                "no_apply": True,
+            }
     write_json(job_dir / "job.json", job)
     attach_daily_readiness_dashboard(job, job_dir=job_dir, asof=asof, args=args)
     write_dng13_daily_chain_artifacts(job, job_dir=job_dir, asof=asof, args=args)
@@ -7171,6 +7203,12 @@ def main() -> int:
         help="Build and validate the DNG6 catalog/readiness dashboard as a static finalize-step observation.",
     )
     parser.add_argument(
+        "--disable-research-data-history",
+        action="store_true",
+        default=env_flag("TW_DAILY_AUTO_DISABLE_RESEARCH_DATA_HISTORY", False),
+        help="Incident-isolation switch for the default-on, non-blocking research history finalize step.",
+    )
+    parser.add_argument(
         "--enable-model-signal-gate",
         action="store_true",
         default=env_flag("TW_DAILY_AUTO_ENABLE_MODEL_SIGNAL_GATE", False),
@@ -7440,6 +7478,7 @@ def main() -> int:
         "data_catalog_dashboard_enabled": bool(args.enable_data_catalog_dashboard),
         "data_catalog_dashboard_path": rel_path(DATA_CATALOG_DASHBOARD),
         "data_catalog_dashboard_validation_path": rel_path(DNG6_DATA_CATALOG_DASHBOARD_VALIDATION),
+        "research_data_history_enabled": not bool(args.disable_research_data_history),
         "model_signal_gate_enabled": bool(args.enable_model_signal_gate),
         "mbcds3_daily_shadow_enabled": bool(args.enable_mbcds3_daily_shadow),
         "mbcds3_daily_shadow_attempted": False,
