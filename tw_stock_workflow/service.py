@@ -7,6 +7,7 @@ from .engine import WorkflowEngine, WorkflowRunResult
 from .modules import ModuleRegistry, ResearchHistoryObservation
 from .replay import ReadonlyReplayWindowAdapter, ReadonlyReplayWindowObservation
 from .replay_execution import ReplayCandidateExecution
+from .readonly_snapshot import ReadonlyStrategySnapshotObservation
 from .spec import WorkflowSpec
 from .types import ExecutionContext
 
@@ -20,6 +21,9 @@ def build_default_engine(
     modules.register(ResearchHistoryObservation())
     modules.register(
         ReadonlyReplayWindowObservation(ReadonlyReplayWindowAdapter(repo_root))
+    )
+    modules.register(
+        ReadonlyStrategySnapshotObservation(repo_root)
     )
     modules.register(ReplayCandidateExecution(repo_root))
     return WorkflowEngine(modules, resolver)

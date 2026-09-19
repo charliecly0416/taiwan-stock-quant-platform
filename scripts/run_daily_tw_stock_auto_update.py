@@ -48,6 +48,7 @@ from tw_daily_runtime_stages import (
 )
 from tw_daily_stage_adapters import build_named_stage_adapters, stage_contract_summary
 from tw_daily_model_a_signal_shadow import run_daily_model_a_signal_shadow
+from tw_daily_readonly_snapshot_shadow import run_daily_readonly_snapshot_shadow
 from tw_daily_workflow_readonly_shadow import run_daily_workflow_readonly_shadow
 from tw_research_data_history import materialize_daily_research_history
 
@@ -75,6 +76,10 @@ WORKFLOW_MODELA_SIGNAL_SHADOW_SPEC = (
     ROOT / "configs/workflows/research_history_observation.yaml"
 )
 WORKFLOW_MODELA_SIGNAL_SHADOW_RUNNER = ROOT / "scripts/run_tw_stock_workflow.py"
+WORKFLOW_READONLY_SNAPSHOT_SHADOW_SPEC = (
+    ROOT / "configs/workflows/readonly_strategy_snapshot_observation.yaml"
+)
+WORKFLOW_READONLY_SNAPSHOT_SHADOW_RUNNER = ROOT / "scripts/run_tw_stock_workflow.py"
 INSTALLED_DAILY_CRON = OPS_ROOT / "tw-daily-auto-update.installed.cron"
 READONLY_SNAPSHOT_ROOT = ROOT / "data_tw/artifacts/publish/readonly_strategy_snapshot"
 READONLY_SNAPSHOT_LATEST = READONLY_SNAPSHOT_ROOT / "latest.json"
@@ -1870,6 +1875,23 @@ def finalize_job(job: dict[str, Any], *, job_dir: Path, asof: str, args: argpars
         python_executable=PYTHON,
         workflow_runner_path=WORKFLOW_MODELA_SIGNAL_SHADOW_RUNNER,
         spec_path=WORKFLOW_MODELA_SIGNAL_SHADOW_SPEC,
+        expected_model_id=MODELA_MODEL_ID,
+        protected_paths=workflow_protected_paths,
+        pending_path=PENDING_ASOF,
+        installed_cron_path=INSTALLED_DAILY_CRON,
+        command_runner=run_cmd,
+    )
+    job["workflow_readonly_snapshot_shadow"] = run_daily_readonly_snapshot_shadow(
+        job=job,
+        job_dir=job_dir,
+        asof=asof,
+        enabled=bool(
+            getattr(args, "enable_workflow_readonly_snapshot_shadow", False)
+        ),
+        repo_root=ROOT,
+        python_executable=PYTHON,
+        workflow_runner_path=WORKFLOW_READONLY_SNAPSHOT_SHADOW_RUNNER,
+        spec_path=WORKFLOW_READONLY_SNAPSHOT_SHADOW_SPEC,
         expected_model_id=MODELA_MODEL_ID,
         protected_paths=workflow_protected_paths,
         pending_path=PENDING_ASOF,
@@ -7275,6 +7297,14 @@ def main() -> int:
         help="Explicit non-default WF-4A gate for readonly Model A input/signal observation.",
     )
     parser.add_argument(
+        "--enable-workflow-readonly-snapshot-shadow",
+        action="store_true",
+        default=env_flag(
+            "TW_DAILY_AUTO_ENABLE_WORKFLOW_READONLY_SNAPSHOT_SHADOW", False
+        ),
+        help="Explicit non-default WF-4B gate for readonly Model A product snapshot observation.",
+    )
+    parser.add_argument(
         "--enable-model-signal-gate",
         action="store_true",
         default=env_flag("TW_DAILY_AUTO_ENABLE_MODEL_SIGNAL_GATE", False),
@@ -7571,6 +7601,23 @@ def main() -> int:
             "status": (
                 "NOT_ATTEMPTED"
                 if args.enable_workflow_model_a_signal_shadow
+                else "DISABLED_BY_DEFAULT"
+            ),
+            "mainline_blocking": False,
+            "production_allowed": False,
+            "no_apply": True,
+        },
+        "workflow_readonly_snapshot_shadow_enabled": bool(
+            args.enable_workflow_readonly_snapshot_shadow
+        ),
+        "workflow_readonly_snapshot_shadow": {
+            "schema_version": "daily.workflow_readonly_snapshot_shadow.v1",
+            "enabled": bool(args.enable_workflow_readonly_snapshot_shadow),
+            "attempted": False,
+            "ok": not bool(args.enable_workflow_readonly_snapshot_shadow),
+            "status": (
+                "NOT_ATTEMPTED"
+                if args.enable_workflow_readonly_snapshot_shadow
                 else "DISABLED_BY_DEFAULT"
             ),
             "mainline_blocking": False,

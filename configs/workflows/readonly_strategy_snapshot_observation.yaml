@@ -1,0 +1,13 @@
+schema_version: tw.workflow.spec.v1
+workflow_id: readonly_strategy_snapshot.model_a_observation
+version: "1"
+nodes:
+  - id: observe_model_a_readonly_snapshot
+    module: readonly_strategy_snapshot.observe
+    policy: required
+    config:
+      artifact_type: ReadonlyStrategySnapshot
+      model_id: e4_frozen_qlib_2018_2022
+      status: VALIDATED_READONLY
+      min_count: 1
+      require_candidate_only: true

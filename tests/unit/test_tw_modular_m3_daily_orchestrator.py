@@ -181,6 +181,21 @@ def test_m3_daily_auto_update_script_audit_passes_only_when_legacy_path_is_gated
     assert audit["workflow_model_a_signal_shadow_finalize_call_count"] == 1
     assert audit["workflow_model_a_signal_shadow_after_materialization"] is True
     assert audit["workflow_model_a_signal_shadow_shared_safety"] is True
+    assert audit["workflow_snapshot_shadow_gate_present"] is True
+    assert audit["workflow_snapshot_shadow_gate_default_disabled"] is True
+    assert audit["workflow_snapshot_shadow_spec_exact"] is True
+    assert audit["workflow_snapshot_shadow_modules"] == [
+        "readonly_strategy_snapshot.observe"
+    ]
+    assert audit["workflow_snapshot_shadow_only_artifact_read"] is True
+    assert audit["workflow_snapshot_shadow_current_dapr18_bound"] is True
+    assert audit["workflow_snapshot_shadow_candidate_only_not_strategy"] is True
+    assert audit["workflow_snapshot_shadow_precondition_forwarded"] is True
+    assert audit["workflow_snapshot_shadow_precondition_before_runner"] is True
+    assert audit["workflow_snapshot_shadow_evidence_path_guard"] is True
+    assert audit["workflow_snapshot_shadow_finalize_call_count"] == 1
+    assert audit["workflow_snapshot_shadow_after_model_a"] is True
+    assert audit["workflow_snapshot_shadow_shared_safety"] is True
     assert audit["legacy_provider_block_guarded"] is True
     assert audit["default_provider_refresh_reachable"] is False
     assert audit["default_provider_publish_reachable"] is False
@@ -252,6 +267,52 @@ def test_wf4a_missing_finalize_call_is_reported_as_audit_error(tmp_path: Path) -
     assert any(error["code"] == "workflow_model_a_signal_shadow_order_invalid" for error in audit["errors"])
 
 
+def test_wf4b_daily_wiring_is_default_off_artifact_read_and_dapr18_bound() -> None:
+    source = DAILY_SCRIPT.read_text(encoding="utf-8")
+    helper = (ROOT / "scripts/tw_daily_readonly_snapshot_shadow.py").read_text(
+        encoding="utf-8"
+    )
+    finalizer = source[
+        source.index("def finalize_job(") : source.index("\ndef env_flag(")
+    ]
+
+    assert "TW_DAILY_AUTO_ENABLE_WORKFLOW_READONLY_SNAPSHOT_SHADOW" in source
+    assert source.count("run_daily_readonly_snapshot_shadow(") == 1
+    assert finalizer.index("run_daily_model_a_signal_shadow(") < finalizer.index(
+        "run_daily_readonly_snapshot_shadow("
+    )
+    assert 'WORKFLOW_PERMISSION = "artifact.read"' in helper
+    assert 'workspace_name="workflow_readonly_snapshot_shadow"' in helper
+    assert "_dapr18_current_snapshot" in helper
+    assert "auto_publish_idempotent_noop_already_current" in helper
+    assert "stable_state_before != stable_state_after" in helper
+    assert 'state_before.get("controlled_signal_run_id")' in helper
+    assert 'state_after.get("controlled_signal_run_id") != expected_source_run_id' in helper
+    assert "full_strategy_admission" in helper
+    assert "model_training_triggered" not in helper
+    assert "model_scoring_triggered" not in helper
+
+
+def test_wf4b_m3_audit_rejects_removed_wrapper_precondition(
+    tmp_path: Path, monkeypatch
+) -> None:
+    validator = load_validator_module()
+    source = (ROOT / "scripts/tw_daily_readonly_snapshot_shadow.py").read_text(
+        encoding="utf-8"
+    )
+    source = source.replace("        precondition=precondition,\n", "", 1)
+    helper_path = tmp_path / "tw_daily_readonly_snapshot_shadow.py"
+    helper_path.write_text(source, encoding="utf-8")
+    monkeypatch.setattr(validator, "WORKFLOW_SNAPSHOT_SHADOW_HELPER", helper_path)
+
+    audit = validator.audit_script(DAILY_SCRIPT)
+
+    assert audit["ok"] is False
+    assert "workflow_snapshot_shadow_precondition_not_forwarded" in {
+        error["code"] for error in audit["errors"]
+    }
+
+
 @pytest.mark.parametrize(
     ("mutation", "expected_code"),
     [
@@ -321,6 +382,7 @@ def test_daily_entrypoint_help_loads_without_external_pythonpath() -> None:
     assert completed.returncode == 0, completed.stderr
     assert "--enable-workflow-readonly-shadow" in completed.stdout
     assert "--enable-workflow-model-a-signal-shadow" in completed.stdout
+    assert "--enable-workflow-readonly-snapshot-shadow" in completed.stdout
 
 
 def test_pbpr0_daily_chain_blocked_case_emits_dasf_fields() -> None:

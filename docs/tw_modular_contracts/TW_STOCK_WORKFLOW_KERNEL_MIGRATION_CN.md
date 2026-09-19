@@ -1,6 +1,6 @@
 # 通用 Workflow Kernel 与迁移顺序
 
-状态：WF-0 独立内核、WF-1 replay observation、WF-2B 隔离 replay candidate execution module、WF-3 日更 replay 只读 shadow 与 WF-4A 日更 Model A 输入/信号只读 shadow 已完成。WF-3/WF-4A 仅以源码默认关闭的非阻断 sidecar 接入 daily finalizer；未修改 installed cron，也未接入任何发布链路。
+状态：WF-0 独立内核、WF-1 replay observation、WF-2B 隔离 replay candidate execution module、WF-3 日更 replay 只读 shadow、WF-4A 日更 Model A 输入/信号只读 shadow 与 WF-4B 日更 readonly snapshot 只读 shadow 已完成。WF-3/WF-4A/WF-4B 仅以源码默认关闭的非阻断 sidecar 接入 daily finalizer；未修改 installed cron，也未接入任何发布链路。
 
 ## 目标与边界
 
@@ -81,6 +81,16 @@ WF-4A 在 `materialize_daily_research_history()` 之后，以独立 sidecar 运�
 
 成功记录必须通过官方 `validate_run_record`，且正好包含 Model A input/signal 两个节点和各一个 READY ref。两个 ref 必须同日、同 model、同 run_id，并共同绑定本次 day manifest；adapter、artifact manifest、全部 declared files、安全字段和节点输出 query 也必须一致。WF-4A 固定超时 60 秒，并复用 WF-3 的受保护指针、pending、installed cron 和 mainline status 前后指纹。任何 workflow 阻断、失败、超时、异常或证据漂移均为非阻断证据，不触发训练、打分、replay、恢复、latest/pending 写入或交易。
 
+## WF-4B Daily Readonly Snapshot Shadow
+
+WF-4B 观察 DAPR18 已经完成发布或严格同日幂等验证的 Model A candidate-only `ReadonlyStrategySnapshot`。固定 spec 为 `configs/workflows/readonly_strategy_snapshot_observation.yaml`，唯一 module 为 `readonly_strategy_snapshot.observe`，唯一权限为 `artifact.read`。开关为 `--enable-workflow-readonly-snapshot-shadow` / `TW_DAILY_AUTO_ENABLE_WORKFLOW_READONLY_SNAPSHOT_SHADOW`，源码默认关闭，workspace 固定在当前 job 的 `workflow_readonly_snapshot_shadow` 下；本阶段未修改 installed cron。
+
+专用 adapter 从产品 registry 的 `readonly_strategy_latest` 取得权威入口，并绑定 active baseline descriptor、latest pointer、target manifest、snapshot payload、validation report、forbidden-scope audit、checksum manifest、全部 checksum 声明文件以及 canonical controlled Model A signal manifest/CSV。路径必须是 repository 内 canonical regular file，不接受 symlink；源 signal 只能位于 `data_tw/artifacts/signals/<model_id>/<run_id>/`，且 `run_id` 必须是单一安全 path segment。latest 的日期、candidate-only 标记、source SHA256 和 planned manifest SHA256 必须与实际 artifact 一致；snapshot payload 的 model、日期、策略占位语义、candidate boundary、ranking source 和全部只读安全字段必须与 manifest 一致。重签 checksum 不能把私有 experiment、其他模型或完整策略语义伪装成产品 snapshot。
+
+daily 前置条件不采信“latest 恰好同日”这一项。正常发布必须有当前 job 的 DAPR18 success 和唯一 DAPR13 成功输出，并精确指向同一 manifest；幂等路径必须证明 publish 前后都已是同一 target asof、同一 manifest，且 chain 明确为 `idempotent_noop`。DAPR18 失败、旧 latest、同日 metadata 漂移或缺少本轮证据都会在 runner 前 `BLOCKED_NONBLOCKING`。adapter/config 初始化失败也被共享边界归一化为非阻断错误；gate 关闭时不会构造 adapter 或读取 snapshot 配置。
+
+WF-4B 只证明 daily 产品展示 artifact 可以由通用 kernel 读取、形成身份并留下持久化 run evidence。当前 snapshot 明确保持 `candidate_only=true`、`strategy_rule=candidate_only_no_strategy_replay`、`full_strategy_status=NOT_BUILT` 和 `full_strategy_admission=false`；它不等于 `OrderIntentArtifact`，不证明 `top50_exit_one_worst_sell` 的策略执行已经迁入 kernel。daily/backtest 真正共享策略计算需由后续阶段先建立 canonical daily OrderIntent producer。
+
 ## 合同
 
 - `ExecutionContext` 明确声明 `mode`、`asof`、带时区的 `decision_cutoff`、隔离 `workspace` 和权限集合。
@@ -112,7 +122,8 @@ PYTHONPATH=. python3 scripts/run_tw_stock_workflow.py \
 2. **Replay execution（WF-2A candidate gate 与 WF-2B isolated module 已完成）**：canonical Model A 固定窗口 candidate 已由同一 D3RR 前向引擎生成并通过完整 validator，workflow module 也可在显式外部 workspace 中幂等构建和验证候选；结果仍为 HOLD，未登记 D7。产品 admission 与正式切换仍需独立决定，旧入口继续保留。
 3. **Daily shadow orchestration（WF-3 已完成、源码默认关闭）**：固定 replay observation 已作为非阻断 sidecar 接入统一 finalizer；是否加入 installed cron 和连续自然调度观察仍需独立运维决定。
 4. **Model A input/signal shadow（WF-4A 已完成、源码默认关闭）**：只观察本次 finalizer 成功物化的 Model A 输入与信号，不执行模型；是否加入 installed cron 和连续自然调度观察仍需独立运维决定。
-5. **Daily stage migration**：逐阶段迁移 data、feature、strategy、snapshot，每阶段都保留现有合同、artifact validator 和回退入口。Model B 始终是非阻断 optional branch。
-6. **切换与清理**：只有完整模块回归、M3 validator、readonly deployment acceptance 和连续自然调度证据均通过后，才另行提出切换决定。旧执行路径的删除需要独立影响闭包、备份和恢复验证。
+5. **Readonly snapshot shadow（WF-4B 已完成、源码默认关闭）**：只观察当前 DAPR18 成功或严格同日幂等绑定的 candidate-only 产品 snapshot，不发布 snapshot、不生成策略或 replay；是否加入 installed cron 仍需独立运维决定。
+6. **Strategy migration**：先建立 canonical daily `OrderIntentArtifact` producer，再让 daily 与 replay 共用同一个 strategy module。不得把 WF-4B candidate-only snapshot 当作完整策略证据。data/feature 后续迁移也必须保留现有合同、validator 和回退入口；Model B 始终是非阻断 optional branch。
+7. **切换与清理**：只有完整模块回归、M3 validator、readonly deployment acceptance 和连续自然调度证据均通过后，才另行提出切换决定。旧执行路径的删除需要独立影响闭包、备份和恢复验证。
 
 任何迁移都不得通过 workflow 私下读取实验文件；依赖必须来自 registry 允许的标准 artifact。生产默认、provider/accepted latest 和 cron 变更需要单独授权，本文件不构成授权。

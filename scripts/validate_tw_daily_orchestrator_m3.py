@@ -49,6 +49,10 @@ WORKFLOW_MODELA_SIGNAL_SHADOW_GATE_FLAG = "--enable-workflow-model-a-signal-shad
 WORKFLOW_MODELA_SIGNAL_SHADOW_GATE_ENV = "TW_DAILY_AUTO_ENABLE_WORKFLOW_MODELA_SIGNAL_SHADOW"
 WORKFLOW_MODELA_SIGNAL_SHADOW_SPEC = ROOT / "configs/workflows/research_history_observation.yaml"
 WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER = ROOT / "scripts/tw_daily_model_a_signal_shadow.py"
+WORKFLOW_SNAPSHOT_SHADOW_GATE_FLAG = "--enable-workflow-readonly-snapshot-shadow"
+WORKFLOW_SNAPSHOT_SHADOW_GATE_ENV = "TW_DAILY_AUTO_ENABLE_WORKFLOW_READONLY_SNAPSHOT_SHADOW"
+WORKFLOW_SNAPSHOT_SHADOW_SPEC = ROOT / "configs/workflows/readonly_strategy_snapshot_observation.yaml"
+WORKFLOW_SNAPSHOT_SHADOW_HELPER = ROOT / "scripts/tw_daily_readonly_snapshot_shadow.py"
 PBPR0_DAILY_CHAIN_REQUIRED_PATTERNS = {
     "state",
     "required_inputs",
@@ -412,9 +416,11 @@ def function_nodes(function: ast.FunctionDef) -> list[ast.AST]:
 
 
 def workflow_shadow_wiring_audit(
-    model_a_helper_tree: ast.AST, shared_helper_tree: ast.AST
+    helper_tree: ast.AST,
+    shared_helper_tree: ast.AST,
+    wrapper_function_name: str = "run_daily_model_a_signal_shadow",
 ) -> dict[str, bool]:
-    wrapper = function_node(model_a_helper_tree, "run_daily_model_a_signal_shadow")
+    wrapper = function_node(helper_tree, wrapper_function_name)
     shared = function_node(shared_helper_tree, "run_daily_workflow_shadow")
     wrapper_calls = named_calls(wrapper, "run_daily_workflow_shadow")
     precondition_forwarded = len(wrapper_calls) == 1 and any(
@@ -557,11 +563,41 @@ def workflow_model_a_signal_spec_audit() -> dict[str, Any]:
     return {"spec_exact": payload == expected, "modules": modules}
 
 
+def workflow_snapshot_spec_audit() -> dict[str, Any]:
+    try:
+        payload = yaml.safe_load(WORKFLOW_SNAPSHOT_SHADOW_SPEC.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return {"spec_exact": False, "modules": []}
+    nodes = payload.get("nodes") if isinstance(payload, dict) else None
+    modules = [str(node.get("module") or "") for node in nodes or [] if isinstance(node, dict)]
+    expected = {
+        "schema_version": "tw.workflow.spec.v1",
+        "workflow_id": "readonly_strategy_snapshot.model_a_observation",
+        "version": "1",
+        "nodes": [
+            {
+                "id": "observe_model_a_readonly_snapshot",
+                "module": "readonly_strategy_snapshot.observe",
+                "policy": "required",
+                "config": {
+                    "artifact_type": "ReadonlyStrategySnapshot",
+                    "model_id": "e4_frozen_qlib_2018_2022",
+                    "status": "VALIDATED_READONLY",
+                    "min_count": 1,
+                    "require_candidate_only": True,
+                },
+            }
+        ],
+    }
+    return {"spec_exact": payload == expected, "modules": modules}
+
+
 def audit_script(script_path: Path) -> dict[str, Any]:
     text = script_path.read_text(encoding="utf-8")
     helper_text = WORKFLOW_READONLY_SHADOW_HELPER.read_text(encoding="utf-8")
     shared_helper_text = WORKFLOW_SHADOW_SHARED_HELPER.read_text(encoding="utf-8")
     model_a_helper_text = WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER.read_text(encoding="utf-8")
+    snapshot_helper_text = WORKFLOW_SNAPSHOT_SHADOW_HELPER.read_text(encoding="utf-8")
     checked = [
         rel(script_path),
         rel(WORKFLOW_READONLY_SHADOW_SPEC),
@@ -569,11 +605,14 @@ def audit_script(script_path: Path) -> dict[str, Any]:
         rel(WORKFLOW_SHADOW_SHARED_HELPER),
         rel(WORKFLOW_MODELA_SIGNAL_SHADOW_SPEC),
         rel(WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER),
+        rel(WORKFLOW_SNAPSHOT_SHADOW_SPEC),
+        rel(WORKFLOW_SNAPSHOT_SHADOW_HELPER),
     ]
     tree = ast.parse(text)
     helper_tree = ast.parse(helper_text)
     shared_helper_tree = ast.parse(shared_helper_text)
     model_a_helper_tree = ast.parse(model_a_helper_text)
+    snapshot_helper_tree = ast.parse(snapshot_helper_text)
     production_provider_refresh_path_present = "run_option_c_yahoo_scrapling_refresh.py" in text
     production_provider_publish_path_present = (
         "provider_publish_triggered" in text and "publish_option_c_yahoo_scrapling_refresh.py" in text
@@ -592,6 +631,10 @@ def audit_script(script_path: Path) -> dict[str, Any]:
         WORKFLOW_MODELA_SIGNAL_SHADOW_GATE_FLAG in text
         and WORKFLOW_MODELA_SIGNAL_SHADOW_GATE_ENV in text
     )
+    workflow_snapshot_shadow_gate_present = (
+        WORKFLOW_SNAPSHOT_SHADOW_GATE_FLAG in text
+        and WORKFLOW_SNAPSHOT_SHADOW_GATE_ENV in text
+    )
     workflow_shadow_function = function_text(
         helper_text, helper_tree, "run_daily_workflow_readonly_shadow"
     )
@@ -599,11 +642,18 @@ def audit_script(script_path: Path) -> dict[str, Any]:
     finalize_function = function_text(text, tree, "finalize_job")
     workflow_spec_audit = workflow_readonly_shadow_spec_audit()
     model_a_spec_audit = workflow_model_a_signal_spec_audit()
+    snapshot_spec_audit = workflow_snapshot_spec_audit()
     workflow_shadow_wiring = workflow_shadow_wiring_audit(
         model_a_helper_tree, shared_helper_tree
     )
+    snapshot_shadow_wiring = workflow_shadow_wiring_audit(
+        snapshot_helper_tree,
+        shared_helper_tree,
+        "run_daily_readonly_snapshot_shadow",
+    )
     history_materialization_offset = finalize_function.find('job["research_data_history"] = materialize_daily_research_history(')
     model_a_shadow_offset = finalize_function.find('job["workflow_model_a_signal_shadow"] = run_daily_model_a_signal_shadow(')
+    snapshot_shadow_offset = finalize_function.find('job["workflow_readonly_snapshot_shadow"] = run_daily_readonly_snapshot_shadow(')
     daily_full_capture_patterns_present = sorted([pattern for pattern in DAILY_FULL_CAPTURE_REQUIRED_PATTERNS if pattern in text])
     daily_full_capture_missing_patterns = sorted(DAILY_FULL_CAPTURE_REQUIRED_PATTERNS - set(daily_full_capture_patterns_present))
     pbpr0_daily_chain_patterns_present = sorted([pattern for pattern in PBPR0_DAILY_CHAIN_REQUIRED_PATTERNS if pattern in text])
@@ -724,6 +774,19 @@ def audit_script(script_path: Path) -> dict[str, Any]:
         "workflow_model_a_signal_shadow_finalize_call_count": finalize_function.count("run_daily_model_a_signal_shadow("),
         "workflow_model_a_signal_shadow_after_materialization": history_materialization_offset >= 0 and model_a_shadow_offset >= 0 and history_materialization_offset < model_a_shadow_offset,
         "workflow_model_a_signal_shadow_shared_safety": all(pattern in (model_a_helper_text + shared_helper_text) for pattern in ('workspace_name="workflow_model_a_signal_shadow"', "WORKFLOW_TIMEOUT_SECONDS = TIMEOUT_SECONDS", "TIMEOUT_SECONDS = 60", "validate_run_record", "SUCCEEDED_NONBLOCKING", "BLOCKED_NONBLOCKING", "FAILED_NONBLOCKING", "TIMEOUT_NONBLOCKING", "ERROR_NONBLOCKING", '"mainline_blocking": False', '"model_training_triggered": False', '"model_scoring_triggered": False', '"latest_pointer_write_performed": False', '"trading_triggered": False')) and all(workflow_shadow_wiring.values()),
+        "workflow_snapshot_shadow_gate_present": workflow_snapshot_shadow_gate_present,
+        "workflow_snapshot_shadow_gate_default_disabled": env_gate_default_disabled_by_ast(tree, WORKFLOW_SNAPSHOT_SHADOW_GATE_FLAG, WORKFLOW_SNAPSHOT_SHADOW_GATE_ENV),
+        "workflow_snapshot_shadow_spec_exact": snapshot_spec_audit["spec_exact"],
+        "workflow_snapshot_shadow_modules": snapshot_spec_audit["modules"],
+        "workflow_snapshot_shadow_only_artifact_read": 'WORKFLOW_PERMISSION = "artifact.read"' in snapshot_helper_text and '"replay.read"' not in snapshot_helper_text,
+        "workflow_snapshot_shadow_current_dapr18_bound": all(pattern in snapshot_helper_text for pattern in ("_dapr18_current_snapshot", '"auto_publish_chain_completed"', '"auto_publish_idempotent_noop_already_current"', 'output.get("snapshot_manifest") != expected_manifest', 'state_before.get("all_product_latest_match_target") is not False', "stable_state_before == stable_state_after", "stable_state_before != stable_state_after", 'state_before.get("controlled_signal_run_id")', 'state_after.get("controlled_signal_run_id") != expected_source_run_id', 'expected_source_run_id=str(expected_ref.get("run_id") or "")', "current_ref() != expected_ref", "verify_current_ref")),
+        "workflow_snapshot_shadow_candidate_only_not_strategy": all(pattern in snapshot_helper_text for pattern in ('metadata.get("candidate_only") is not True', 'metadata.get("full_strategy_status") != "NOT_BUILT"', 'output.get("full_strategy_admission") is not False')),
+        "workflow_snapshot_shadow_precondition_forwarded": snapshot_shadow_wiring["precondition_forwarded"],
+        "workflow_snapshot_shadow_precondition_before_runner": snapshot_shadow_wiring["precondition_before_runner"],
+        "workflow_snapshot_shadow_evidence_path_guard": snapshot_shadow_wiring["evidence_path_guard"],
+        "workflow_snapshot_shadow_finalize_call_count": finalize_function.count("run_daily_readonly_snapshot_shadow("),
+        "workflow_snapshot_shadow_after_model_a": model_a_shadow_offset >= 0 and snapshot_shadow_offset > model_a_shadow_offset,
+        "workflow_snapshot_shadow_shared_safety": all(pattern in (snapshot_helper_text + shared_helper_text) for pattern in ('workspace_name="workflow_readonly_snapshot_shadow"', "WORKFLOW_TIMEOUT_SECONDS = TIMEOUT_SECONDS", "TIMEOUT_SECONDS = 60", "validate_run_record", "SUCCEEDED_NONBLOCKING", "BLOCKED_NONBLOCKING", "FAILED_NONBLOCKING", "TIMEOUT_NONBLOCKING", "ERROR_NONBLOCKING", '"mainline_blocking": False', '"model_training_triggered": False', '"model_scoring_triggered": False', '"latest_pointer_write_performed": False', '"trading_triggered": False')) and all(snapshot_shadow_wiring.values()),
         "workflow_readonly_shadow_dng9_early_exit_precedes_job": (
             "if args.dng9_model_signal_gate_dry_run_summary:" in text
             and "job: dict[str, Any] = {" in text
@@ -863,6 +926,32 @@ def audit_script(script_path: Path) -> dict[str, Any]:
         errors.append(err("workflow_model_a_signal_shadow_order_invalid", "WF-4A must run after daily research-history materialization", script_path, "finalize_job"))
     if not findings["workflow_model_a_signal_shadow_shared_safety"]:
         errors.append(err("workflow_model_a_signal_shadow_shared_safety_missing", "WF-4A shared runner/workspace/timeout/nonblocking/persisted-record safety is incomplete", WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER, "shared_workflow_shadow"))
+    if not findings["workflow_snapshot_shadow_gate_present"]:
+        errors.append(err("workflow_snapshot_shadow_gate_missing", "WF-4B readonly snapshot gate is missing", script_path, "enable_workflow_readonly_snapshot_shadow"))
+    if workflow_snapshot_shadow_gate_present and not findings["workflow_snapshot_shadow_gate_default_disabled"]:
+        errors.append(err("workflow_snapshot_shadow_gate_default_enabled", "WF-4B gate must default to disabled", script_path, "enable_workflow_readonly_snapshot_shadow"))
+    if not findings["workflow_snapshot_shadow_spec_exact"]:
+        errors.append(err("workflow_snapshot_shadow_spec_invalid", "WF-4B must use the exact readonly snapshot observation spec", WORKFLOW_SNAPSHOT_SHADOW_SPEC, "readonly_strategy_snapshot.observe"))
+    if findings["workflow_snapshot_shadow_modules"] != ["readonly_strategy_snapshot.observe"]:
+        errors.append(err("workflow_snapshot_shadow_module_invalid", "WF-4B may only run readonly_strategy_snapshot.observe", WORKFLOW_SNAPSHOT_SHADOW_SPEC, "nodes.module"))
+    if not findings["workflow_snapshot_shadow_only_artifact_read"]:
+        errors.append(err("workflow_snapshot_shadow_permission_invalid", "WF-4B may only grant artifact.read", WORKFLOW_SNAPSHOT_SHADOW_HELPER, "permissions"))
+    if not findings["workflow_snapshot_shadow_current_dapr18_bound"]:
+        errors.append(err("workflow_snapshot_shadow_dapr18_unbound", "WF-4B must bind the current successful or exact idempotent DAPR18 snapshot", WORKFLOW_SNAPSHOT_SHADOW_HELPER, "dapr18_controlled_latest_orchestration"))
+    if not findings["workflow_snapshot_shadow_candidate_only_not_strategy"]:
+        errors.append(err("workflow_snapshot_shadow_strategy_boundary_missing", "WF-4B must preserve candidate-only and full-strategy-not-built semantics", WORKFLOW_SNAPSHOT_SHADOW_HELPER, "full_strategy_admission"))
+    if not findings["workflow_snapshot_shadow_precondition_forwarded"]:
+        errors.append(err("workflow_snapshot_shadow_precondition_not_forwarded", "WF-4B wrapper must pass its DAPR18 precondition to the shared runner", WORKFLOW_SNAPSHOT_SHADOW_HELPER, "precondition"))
+    if not findings["workflow_snapshot_shadow_precondition_before_runner"]:
+        errors.append(err("workflow_snapshot_shadow_precondition_not_invoked", "shared workflow shadow must invoke the WF-4B precondition before command_runner", WORKFLOW_SHADOW_SHARED_HELPER, "precondition"))
+    if not findings["workflow_snapshot_shadow_evidence_path_guard"]:
+        errors.append(err("workflow_snapshot_shadow_evidence_path_guard_missing", "shared workflow shadow must protect WF-4B stdout/stderr evidence paths", WORKFLOW_SHADOW_SHARED_HELPER, "stdout_stderr"))
+    if findings["workflow_snapshot_shadow_finalize_call_count"] != 1:
+        errors.append(err("workflow_snapshot_shadow_finalize_integration_invalid", "WF-4B must have exactly one integration call in finalize_job", script_path, "finalize_job"))
+    if not findings["workflow_snapshot_shadow_after_model_a"]:
+        errors.append(err("workflow_snapshot_shadow_order_invalid", "WF-4B must run after the Model A observation in finalization", script_path, "finalize_job"))
+    if not findings["workflow_snapshot_shadow_shared_safety"]:
+        errors.append(err("workflow_snapshot_shadow_shared_safety_missing", "WF-4B shared runner/workspace/timeout/nonblocking/persisted-record safety is incomplete", WORKFLOW_SNAPSHOT_SHADOW_HELPER, "shared_workflow_shadow"))
     if model_signal_gate_present and not findings["model_signal_gate_dry_run_summary_present"]:
         errors.append(err("model_signal_gate_dry_run_summary_missing", "DNG9 model signal gate must emit dry-run summary evidence", script_path, "model_signal_gate_summary"))
     if model_signal_gate_present and not findings["model_signal_gate_summary_validation_present"]:
