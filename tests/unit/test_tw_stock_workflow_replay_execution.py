@@ -20,7 +20,7 @@ from tw_stock_workflow.replay_execution import (
     _execution_implementation_digest,
 )
 from tw_stock_workflow.spec import WorkflowSpec
-from tw_stock_workflow.types import ExecutionContext
+from tw_stock_workflow.types import ExecutionContext, WorkflowError
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -361,6 +361,50 @@ def test_same_identity_reuses_run_and_does_not_rebuild(tmp_path: Path) -> None:
     assert second.idempotent_reuse is True
     assert first.run_id == second.run_id
     assert builder.calls == 1
+
+
+def test_terminal_success_with_deleted_manifest_fails_cached_revalidation(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adapter = FixtureInputAdapter(repo)
+    builder = FixtureBuilder()
+    service = engine(repo, adapter, builder)
+    run_context = context(tmp_path / "workspace")
+    first = service.run(workflow(), run_context)
+    output = first.record["nodes"]["candidate"]["output"]
+    manifest = run_context.workspace / output["manifest"]
+    manifest.unlink()
+
+    with pytest.raises(WorkflowError, match="cached output validation failed.*missing"):
+        service.run(workflow(), run_context)
+
+    assert builder.calls == 1
+    assert not manifest.exists()
+
+
+def test_terminal_success_with_tampered_manifest_fails_cached_revalidation(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adapter = FixtureInputAdapter(repo)
+    builder = FixtureBuilder()
+    service = engine(repo, adapter, builder)
+    run_context = context(tmp_path / "workspace")
+    first = service.run(workflow(), run_context)
+    output = first.record["nodes"]["candidate"]["output"]
+    manifest = run_context.workspace / output["manifest"]
+    write_json(manifest, {"tampered": True})
+
+    with pytest.raises(
+        WorkflowError, match="cached output validation failed.*identity"
+    ):
+        service.run(workflow(), run_context)
+
+    assert builder.calls == 1
+    assert json.loads(manifest.read_text(encoding="utf-8")) == {"tampered": True}
 
 
 def test_same_implementation_reuses_valid_candidate_for_new_run(

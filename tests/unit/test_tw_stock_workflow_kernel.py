@@ -151,6 +151,32 @@ class ManifestTamperingModule:
         return {"ordinary_result": True}
 
 
+@dataclass
+class CacheValidatingModule:
+    module_id: str
+    execute_calls: list[str]
+    validation_calls: list[dict[str, Any]]
+    required_permissions: frozenset[str] = frozenset()
+    outcome: str = "success"
+    cached_output_valid: bool = True
+
+    def resolve_artifact_inputs(self, context, config, resolver):
+        return []
+
+    def execute(self, context, config, inputs, resolver):
+        self.execute_calls.append(self.module_id)
+        if self.outcome == "blocked":
+            raise ModuleBlocked("fixture blocked")
+        if self.outcome == "failed":
+            raise ValueError("fixture failed")
+        return {"artifact": "fixture.json"}
+
+    def validate_cached_output(self, context, config, output, resolver):
+        self.validation_calls.append(dict(output))
+        if not self.cached_output_valid:
+            raise WorkflowError("fixture cached output is invalid")
+
+
 def engine_for(repo: Path, *modules: RecordingModule) -> WorkflowEngine:
     registry = ModuleRegistry()
     for module in modules:
@@ -189,6 +215,66 @@ def test_dag_has_stable_topological_execution_order(tmp_path: Path) -> None:
 
     assert result.status == "SUCCEEDED"
     assert calls == ["first", "last", "side"]
+
+
+def test_terminal_success_calls_cached_output_validator_before_reuse(
+    tmp_path: Path,
+) -> None:
+    execute_calls: list[str] = []
+    validation_calls: list[dict[str, Any]] = []
+    module = CacheValidatingModule("fixture.cached", execute_calls, validation_calls)
+    service = engine_for(tmp_path, module)
+    workflow = spec(
+        [{"id": "cached", "module": "fixture.cached", "policy": "required"}]
+    )
+    run_context = context(tmp_path / "workspace")
+
+    first = service.run(workflow, run_context)
+    second = service.run(workflow, run_context)
+
+    assert first.status == "SUCCEEDED"
+    assert second.idempotent_reuse is True
+    assert execute_calls == ["fixture.cached"]
+    assert validation_calls == [{"artifact": "fixture.json"}]
+
+
+def test_terminal_success_cached_output_validator_fails_closed(
+    tmp_path: Path,
+) -> None:
+    module = CacheValidatingModule("fixture.cached", [], [], cached_output_valid=False)
+    service = engine_for(tmp_path, module)
+    workflow = spec(
+        [{"id": "cached", "module": "fixture.cached", "policy": "required"}]
+    )
+    run_context = context(tmp_path / "workspace")
+    first = service.run(workflow, run_context)
+
+    with pytest.raises(
+        WorkflowError, match="cached output validation failed.*fixture cached output"
+    ):
+        service.run(workflow, run_context)
+
+    assert first.status == "SUCCEEDED"
+    assert len(module.validation_calls) == 1
+
+
+@pytest.mark.parametrize("outcome", ["blocked", "failed"])
+def test_non_success_terminal_reuse_does_not_validate_cached_output(
+    tmp_path: Path, outcome: str
+) -> None:
+    module = CacheValidatingModule("fixture.cached", [], [], outcome=outcome)
+    service = engine_for(tmp_path, module)
+    workflow = spec(
+        [{"id": "cached", "module": "fixture.cached", "policy": "required"}]
+    )
+    run_context = context(tmp_path / "workspace")
+
+    first = service.run(workflow, run_context)
+    second = service.run(workflow, run_context)
+
+    assert first.status == ("BLOCKED" if outcome == "blocked" else "FAILED")
+    assert second.idempotent_reuse is True
+    assert module.validation_calls == []
 
 
 @pytest.mark.parametrize(

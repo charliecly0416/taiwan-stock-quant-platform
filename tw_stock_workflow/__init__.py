@@ -2,7 +2,13 @@
 
 from .artifacts import ArtifactRef, ArtifactResolver, ResearchHistoryAdapter
 from .engine import StageResult, WorkflowEngine, WorkflowRunResult
-from .modules import Module, ModuleBlocked, ModuleRegistry, ResearchHistoryObservation
+from .modules import (
+    CachedOutputValidator,
+    Module,
+    ModuleBlocked,
+    ModuleRegistry,
+    ResearchHistoryObservation,
+)
 from .run_registry import RunRegistry
 from .replay import ReadonlyReplayWindowAdapter, ReadonlyReplayWindowObservation
 from .replay_execution import ReplayCandidateExecution, ReplayCandidateInputAdapter
@@ -12,6 +18,7 @@ from .types import ExecutionContext
 __all__ = [
     "ArtifactRef",
     "ArtifactResolver",
+    "CachedOutputValidator",
     "ExecutionContext",
     "Module",
     "ModuleBlocked",

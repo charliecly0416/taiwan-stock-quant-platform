@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from .artifacts import ArtifactRef, ArtifactResolver
 from .types import ExecutionContext, WorkflowError
@@ -28,6 +28,17 @@ class Module(Protocol):
         inputs: dict[str, dict[str, Any]],
         resolver: ArtifactResolver,
     ) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class CachedOutputValidator(Protocol):
+    def validate_cached_output(
+        self,
+        context: ExecutionContext,
+        config: dict[str, Any],
+        output: dict[str, Any],
+        resolver: ArtifactResolver,
+    ) -> None: ...
 
 
 class ModuleRegistry:

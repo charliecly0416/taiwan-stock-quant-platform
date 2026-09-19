@@ -411,6 +411,23 @@ class ReplayCandidateExecution:
         self._require_candidate_path(implementation_root, candidate_root)
         return implementation_root, digest
 
+    def _expected_manifest(
+        self,
+        source_ref: ArtifactRef,
+        candidate_root: Path,
+        implementation_root: Path,
+    ) -> Path:
+        window_key = f"{WINDOW_START}_{WINDOW_END}".replace("-", "")
+        return self._require_candidate_path(
+            implementation_root
+            / MODEL_A
+            / STRATEGY
+            / window_key
+            / source_ref.run_id
+            / "order_intent_replay_result/manifest.json",
+            candidate_root,
+        )
+
     def resolve_artifact_inputs(
         self,
         context: ExecutionContext,
@@ -451,6 +468,81 @@ class ReplayCandidateExecution:
             raise WorkflowError("replay candidate output identity is invalid")
         return manifest
 
+    def validate_cached_output(
+        self,
+        context: ExecutionContext,
+        config: dict[str, Any],
+        output: dict[str, Any],
+        resolver: ArtifactResolver,
+    ) -> None:
+        self._validate_config(context, config)
+        expected_fields = {
+            "artifact_type",
+            "status",
+            "product_index_admission",
+            "model_id",
+            "strategy_rule",
+            "window_start",
+            "window_end",
+            "run_id",
+            "manifest",
+            "manifest_sha256",
+            "execution_implementation_sha256",
+            "workspace",
+            "reused_candidate",
+        }
+        if not isinstance(output, dict) or set(output) != expected_fields:
+            raise WorkflowError("cached replay candidate output structure is invalid")
+        expected_values = {
+            "artifact_type": "ReplayResultArtifactCandidate",
+            "status": "CANDIDATE_HOLD",
+            "product_index_admission": False,
+            "model_id": MODEL_A,
+            "strategy_rule": STRATEGY,
+            "window_start": WINDOW_START,
+            "window_end": WINDOW_END,
+            "workspace": str(context.workspace),
+        }
+        for field, expected in expected_values.items():
+            actual = output[field]
+            if isinstance(expected, bool):
+                matches = type(actual) is bool and actual is expected
+            else:
+                matches = actual == expected
+            if not matches:
+                raise WorkflowError(f"cached replay candidate {field} is invalid")
+        if type(output["reused_candidate"]) is not bool:
+            raise WorkflowError("cached replay candidate reused_candidate is invalid")
+
+        source_ref = self.input_adapter.resolve()
+        candidate_root = self._candidate_root(context)
+        implementation_root, implementation_digest = self._implementation_root(
+            source_ref, candidate_root
+        )
+        expected_manifest = self._expected_manifest(
+            source_ref, candidate_root, implementation_root
+        )
+        raw_manifest = output["manifest"]
+        if (
+            not isinstance(raw_manifest, str)
+            or not raw_manifest
+            or Path(raw_manifest).is_absolute()
+        ):
+            raise WorkflowError("cached replay candidate manifest path is invalid")
+        cached_manifest = (context.workspace / raw_manifest).resolve()
+        if cached_manifest != expected_manifest:
+            raise WorkflowError("cached replay candidate manifest path is invalid")
+        if not cached_manifest.is_file():
+            raise WorkflowError("cached replay candidate manifest is missing")
+        if (
+            output["run_id"] != source_ref.run_id
+            or output["execution_implementation_sha256"] != implementation_digest
+            or not isinstance(output["manifest_sha256"], str)
+            or output["manifest_sha256"] != _sha256(cached_manifest)
+        ):
+            raise WorkflowError("cached replay candidate output identity is invalid")
+        self._validate_output(cached_manifest, source_ref, candidate_root)
+
     @staticmethod
     def _require_candidate_path(path: Path, candidate_root: Path) -> Path:
         resolved = path.resolve()
@@ -473,17 +565,8 @@ class ReplayCandidateExecution:
         implementation_root, implementation_digest = self._implementation_root(
             source_ref, candidate_root
         )
-        window_key = f"{WINDOW_START}_{WINDOW_END}".replace("-", "")
-        expected_manifest = (
-            implementation_root
-            / MODEL_A
-            / STRATEGY
-            / window_key
-            / source_ref.run_id
-            / "order_intent_replay_result/manifest.json"
-        )
-        expected_manifest = self._require_candidate_path(
-            expected_manifest, candidate_root
+        expected_manifest = self._expected_manifest(
+            source_ref, candidate_root, implementation_root
         )
         reused_candidate = expected_manifest.is_file()
         if not reused_candidate:
@@ -507,11 +590,15 @@ class ReplayCandidateExecution:
             if not isinstance(raw_manifest, str) or not raw_manifest:
                 raise WorkflowError("replay candidate builder returned no manifest")
             built_manifest = Path(raw_manifest)
-            expected_manifest = (
+            built_manifest = (
                 built_manifest
                 if built_manifest.is_absolute()
                 else (self.repo_root / built_manifest)
             )
+            if built_manifest.resolve() != expected_manifest:
+                raise WorkflowError(
+                    "replay candidate builder returned unexpected manifest"
+                )
         manifest = self._validate_output(expected_manifest, source_ref, candidate_root)
         relative_manifest = str(
             expected_manifest.resolve().relative_to(context.workspace)

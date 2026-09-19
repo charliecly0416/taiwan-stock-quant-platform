@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .artifacts import ArtifactResolver
-from .modules import Module, ModuleBlocked, ModuleRegistry
+from .modules import CachedOutputValidator, Module, ModuleBlocked, ModuleRegistry
 from .run_registry import (
     TERMINAL_STATUSES,
     RunRegistry,
@@ -147,6 +147,32 @@ class WorkflowEngine:
                     raise RunRegistryError(f"run identity conflict: {run_id}")
                 if existing["status"] not in TERMINAL_STATUSES:
                     raise RunRegistryError(f"non-terminal run already exists: {run_id}")
+                if existing["status"] == "SUCCEEDED":
+                    for node in ordered_nodes:
+                        stage = existing["nodes"][node.node_id]
+                        module = self.modules.get(node.module)
+                        if stage["status"] != "SUCCEEDED" or not isinstance(
+                            module, CachedOutputValidator
+                        ):
+                            continue
+                        try:
+                            module.validate_cached_output(
+                                context,
+                                node.config,
+                                stage["output"],
+                                self.resolver,
+                            )
+                            after = self._resolve_artifact_inputs(
+                                module, context, node.config
+                            )
+                            if after != artifact_inputs[node.node_id]:
+                                raise WorkflowError(
+                                    "artifact inputs changed during cached output validation"
+                                )
+                        except Exception as exc:
+                            raise WorkflowError(
+                                f"cached output validation failed for node {node.node_id}: {exc}"
+                            ) from exc
                 return WorkflowRunResult(existing, idempotent_reuse=True)
 
             started_at = _utc_now()

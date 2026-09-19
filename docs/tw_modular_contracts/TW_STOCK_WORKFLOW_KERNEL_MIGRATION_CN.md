@@ -59,7 +59,7 @@ module 只接受 Model A `e4_frozen_qlib_2018_2022`、默认策略 `top50_exit_o
 <workspace>/artifacts/wf2b_model_a_replay_candidate/implementation_<digest>/
 ```
 
-workspace 必须位于 repository 外，解析后的输出仍必须在 workspace 内，因此不能写入正式 D6/D7/latest 或借 symlink 逃逸。implementation digest 由上述四个实现文件的路径、SHA256 与大小规范化重算；相同实现可在完整验证后复用同一隔离 candidate，任一实现哈希变化则写入新的命名空间，不能复用旧实现生成的 candidate。输出继续固定为 `CANDIDATE_HOLD` 和 `product_index_admission=false`。
+workspace 必须位于 repository 外，解析后的输出仍必须在 workspace 内，因此不能写入正式 D6/D7/latest 或借 symlink 逃逸。implementation digest 由上述四个实现文件的路径、SHA256 与大小规范化重算；相同实现只有在 terminal success cached-output hook 重新核对 output 结构、固定 manifest 路径与 SHA256、当前 implementation namespace、source identity 和完整 validator 后才能复用。manifest 缺失或被篡改会 fail closed，不自动删除、重建或隔离；任一实现哈希变化则写入新的命名空间，不能复用旧实现生成的 candidate。输出继续固定为 `CANDIDATE_HOLD` 和 `product_index_admission=false`。
 
 WF-2B 只是隔离 candidate execution module 完成，不代表产品 index admission、baseline 切换或正式 replay execution 切换。该 spec 未登记到 daily orchestrator 或 cron，也不触发训练、真实数据抓取、provider、accepted latest、paper account、broker 或订单路径。
 
@@ -71,7 +71,7 @@ WF-2B 只是隔离 candidate execution module 完成，不代表产品 index adm
 - DAG 在运行前拒绝重复节点、未知依赖、自依赖、环和未注册模块。每个节点必须显式声明 `required`、`optional` 或 `nonblocking` policy，运行状态为 `SUCCEEDED`、`BLOCKED`、`FAILED` 或 `SKIPPED`。required 节点不能依赖 nonblocking 分支。
 - 节点结果由不可变 `StageResult` dataclass 表达，再统一序列化为 run evidence，避免各模块自行拼接状态结构。
 - required 节点失败会使 workflow 失败；required 节点阻断或因依赖未成功而跳过会使 workflow 阻断。若 required 后继因上游 `FAILED` 跳过，总体仍为失败。optional/nonblocking 节点不会污染无依赖的 required 分支。
-- run identity 由 workflow spec、规范化 execution context，以及各节点在执行前解析并校验的 artifact refs（包括 manifest SHA256）的 canonical JSON 决定，不包含时钟时间。engine 在模块调用前后自行重新解析并严格比较输入；这项校验不依赖模块输出内容。相同输入在同一 workspace 重跑直接返回已有 terminal record。
+- run identity 由 workflow spec、规范化 execution context，以及各节点在执行前解析并校验的 artifact refs（包括 manifest SHA256）的 canonical JSON 决定，不包含时钟时间。engine 在模块调用前后自行重新解析并严格比较输入；这项校验不依赖模块输出内容。相同输入在同一 workspace 重跑时，FAILED/BLOCKED terminal 与未声明 cached-output hook 的旧 module 保持既有复用语义；SUCCEEDED terminal 中声明 hook 的 module 必须先复验自身输出，复验失败即 fail closed，不返回 idempotent success。
 - `RunRegistry` 使用文件锁、临时文件、文件与目录 `fsync` 和 `os.replace` 写入 `<workspace>/runs/<run_id>.json`。所有入口只接受 `wf_<24 hex>` run ID。读取或复用时会验证完整 RUNNING/terminal 结构、重新计算保存的 identity payload，并核对 workflow、context、artifact 输入、节点结果和总体状态。损坏记录、路径穿越、身份冲突或遗留 `RUNNING` 记录均 fail closed。
 
 ## CLI
