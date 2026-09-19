@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -143,12 +144,70 @@ def test_m3_daily_auto_update_script_audit_passes_only_when_legacy_path_is_gated
     assert audit["production_accepted_latest_path_present"] is True
     assert audit["legacy_provider_gate_present"] is True
     assert audit["legacy_provider_gate_default_disabled"] is True
+    assert audit["workflow_readonly_shadow_gate_present"] is True
+    assert audit["workflow_readonly_shadow_gate_default_disabled"] is True
+    assert audit["workflow_readonly_shadow_spec_exact"] is True
+    assert audit["workflow_readonly_shadow_modules"] == ["replay_window.observe"]
+    assert audit["workflow_readonly_shadow_only_replay_read"] is True
+    assert audit["workflow_readonly_shadow_no_candidate_execution"] is True
+    assert audit["workflow_readonly_shadow_job_local_workspace"] is True
+    assert audit["workflow_readonly_shadow_fixed_timeout"] is True
+    assert audit["workflow_readonly_shadow_nonblocking_states"] is True
+    assert audit["workflow_readonly_shadow_finalize_call_count"] == 1
+    assert audit["workflow_readonly_shadow_dng9_early_exit_precedes_job"] is True
+    assert audit["workflow_readonly_shadow_runner_pinned"] is True
+    assert audit["workflow_readonly_shadow_persisted_record_validated"] is True
     assert audit["legacy_provider_block_guarded"] is True
     assert audit["default_provider_refresh_reachable"] is False
     assert audit["default_provider_publish_reachable"] is False
     assert audit["default_accepted_latest_reachable"] is False
     assert audit["broker_order_patterns_present"] == []
     assert audit["monitor_write_patterns_present"] == []
+
+
+def test_wf3_daily_wiring_is_thin_default_off_and_after_dng9_early_exit() -> None:
+    source = DAILY_SCRIPT.read_text(encoding="utf-8")
+    helper = (ROOT / "scripts/tw_daily_workflow_readonly_shadow.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        'default=env_flag("TW_DAILY_AUTO_ENABLE_WORKFLOW_READONLY_SHADOW", False)'
+        in source
+    )
+    assert source.count("run_daily_workflow_readonly_shadow(") == 1
+    assert (
+        'WORKFLOW_READONLY_SHADOW_SPEC = ROOT / "configs/workflows/replay_window_observation.yaml"'
+        in source
+    )
+    assert '"formal_provider_calendar": CALENDAR' in source
+    assert '"qlib_accepted_latest": LATEST' in source
+    assert '"controlled_model_signal_latest": CONTROLLED_MODEL_SIGNAL_LATEST' in source
+    assert 'return 0 if validation.get("ok") else 2' in source
+    assert source.index('return 0 if validation.get("ok") else 2') < source.index(
+        "job: dict[str, Any] = {"
+    )
+    assert 'WORKFLOW_PERMISSION = "replay.read"' in helper
+    assert 'WORKFLOW_MODULE = "replay_window.observe"' in helper
+    assert "replay_candidate.build_validate" not in helper
+    assert "replay.candidate.write" not in helper
+    assert "WORKFLOW_TIMEOUT_SECONDS = 60" in helper
+    assert "set_pending_asof" not in helper
+    assert "clear_pending_asof" not in helper
+
+
+def test_daily_entrypoint_help_loads_without_external_pythonpath() -> None:
+    completed = subprocess.run(
+        [sys.executable, str(DAILY_SCRIPT), "--help"],
+        cwd=ROOT,
+        env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "--enable-workflow-readonly-shadow" in completed.stdout
 
 
 def test_pbpr0_daily_chain_blocked_case_emits_dasf_fields() -> None:

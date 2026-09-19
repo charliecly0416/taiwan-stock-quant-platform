@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GOLDEN_ROOT = ROOT / "data_tw/golden_samples/modular_contracts/m3"
 DEFAULT_SCRIPT = ROOT / "scripts/run_daily_tw_stock_auto_update.py"
@@ -38,6 +40,10 @@ STRICT_E4_GATE_FLAG = "--enable-strict-e4-readonly-chain"
 STRICT_E4_GATE_ENV = "TW_DAILY_AUTO_ENABLE_STRICT_E4_READONLY_CHAIN"
 MODEL_SIGNAL_GATE_FLAG = "--enable-model-signal-gate"
 MODEL_SIGNAL_GATE_ENV = "TW_DAILY_AUTO_ENABLE_MODEL_SIGNAL_GATE"
+WORKFLOW_READONLY_SHADOW_GATE_FLAG = "--enable-workflow-readonly-shadow"
+WORKFLOW_READONLY_SHADOW_GATE_ENV = "TW_DAILY_AUTO_ENABLE_WORKFLOW_READONLY_SHADOW"
+WORKFLOW_READONLY_SHADOW_SPEC = ROOT / "configs/workflows/replay_window_observation.yaml"
+WORKFLOW_READONLY_SHADOW_HELPER = ROOT / "scripts/tw_daily_workflow_readonly_shadow.py"
 PBPR0_DAILY_CHAIN_REQUIRED_PATTERNS = {
     "state",
     "required_inputs",
@@ -360,9 +366,65 @@ def legacy_gate_audit(text: str) -> dict[str, Any]:
     }
 
 
+def function_text(text: str, tree: ast.AST, function_name: str) -> str:
+    lines = text.splitlines()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == function_name:
+            return "\n".join(lines[node.lineno - 1 : getattr(node, "end_lineno", node.lineno)])
+    return ""
+
+
+def workflow_readonly_shadow_spec_audit() -> dict[str, Any]:
+    try:
+        payload = yaml.safe_load(WORKFLOW_READONLY_SHADOW_SPEC.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return {
+            "spec_readable": False,
+            "spec_exact_readonly_observation": False,
+            "modules": [],
+        }
+    nodes = payload.get("nodes") if isinstance(payload, dict) else None
+    modules = [str(node.get("module") or "") for node in nodes or [] if isinstance(node, dict)]
+    expected_config = {
+        "model_id": "e4_frozen_qlib_2018_2022",
+        "strategy_rule": "top50_exit_one_worst_sell",
+        "window_start": "2026-01-01",
+        "window_end": "2026-05-07",
+        "status": "INDEXED_READONLY",
+        "min_count": 1,
+    }
+    exact = bool(
+        isinstance(payload, dict)
+        and payload.get("schema_version") == "tw.workflow.spec.v1"
+        and payload.get("workflow_id") == "replay_window.model_a_observation"
+        and payload.get("version") == "1"
+        and isinstance(nodes, list)
+        and len(nodes) == 1
+        and nodes[0]
+        == {
+            "id": "observe_model_a_replay_window",
+            "module": "replay_window.observe",
+            "policy": "required",
+            "config": expected_config,
+        }
+    )
+    return {
+        "spec_readable": True,
+        "spec_exact_readonly_observation": exact,
+        "modules": modules,
+    }
+
+
 def audit_script(script_path: Path) -> dict[str, Any]:
     text = script_path.read_text(encoding="utf-8")
-    checked = [rel(script_path)]
+    helper_text = WORKFLOW_READONLY_SHADOW_HELPER.read_text(encoding="utf-8")
+    checked = [
+        rel(script_path),
+        rel(WORKFLOW_READONLY_SHADOW_SPEC),
+        rel(WORKFLOW_READONLY_SHADOW_HELPER),
+    ]
+    tree = ast.parse(text)
+    helper_tree = ast.parse(helper_text)
     production_provider_refresh_path_present = "run_option_c_yahoo_scrapling_refresh.py" in text
     production_provider_publish_path_present = (
         "provider_publish_triggered" in text and "publish_option_c_yahoo_scrapling_refresh.py" in text
@@ -373,6 +435,15 @@ def audit_script(script_path: Path) -> dict[str, Any]:
     legacy_gate_present = LEGACY_PROVIDER_GATE_FLAG in text and LEGACY_PROVIDER_GATE_ENV in text
     strict_e4_gate_present = STRICT_E4_GATE_FLAG in text and STRICT_E4_GATE_ENV in text
     model_signal_gate_present = MODEL_SIGNAL_GATE_FLAG in text and MODEL_SIGNAL_GATE_ENV in text
+    workflow_readonly_shadow_gate_present = (
+        WORKFLOW_READONLY_SHADOW_GATE_FLAG in text
+        and WORKFLOW_READONLY_SHADOW_GATE_ENV in text
+    )
+    workflow_shadow_function = function_text(
+        helper_text, helper_tree, "run_daily_workflow_readonly_shadow"
+    )
+    finalize_function = function_text(text, tree, "finalize_job")
+    workflow_spec_audit = workflow_readonly_shadow_spec_audit()
     daily_full_capture_patterns_present = sorted([pattern for pattern in DAILY_FULL_CAPTURE_REQUIRED_PATTERNS if pattern in text])
     daily_full_capture_missing_patterns = sorted(DAILY_FULL_CAPTURE_REQUIRED_PATTERNS - set(daily_full_capture_patterns_present))
     pbpr0_daily_chain_patterns_present = sorted([pattern for pattern in PBPR0_DAILY_CHAIN_REQUIRED_PATTERNS if pattern in text])
@@ -416,6 +487,76 @@ def audit_script(script_path: Path) -> dict[str, Any]:
         "strict_e4_readonly_gate_default_disabled": env_gate_default_disabled_by_ast(ast.parse(text), STRICT_E4_GATE_FLAG, STRICT_E4_GATE_ENV),
         "model_signal_gate_present": model_signal_gate_present,
         "model_signal_gate_default_disabled": env_gate_default_disabled_by_ast(ast.parse(text), MODEL_SIGNAL_GATE_FLAG, MODEL_SIGNAL_GATE_ENV),
+        "workflow_readonly_shadow_gate_present": workflow_readonly_shadow_gate_present,
+        "workflow_readonly_shadow_gate_default_disabled": env_gate_default_disabled_by_ast(
+            tree,
+            WORKFLOW_READONLY_SHADOW_GATE_FLAG,
+            WORKFLOW_READONLY_SHADOW_GATE_ENV,
+        ),
+        "workflow_readonly_shadow_spec_exact": workflow_spec_audit[
+            "spec_exact_readonly_observation"
+        ],
+        "workflow_readonly_shadow_modules": workflow_spec_audit["modules"],
+        "workflow_readonly_shadow_only_replay_read": (
+            'WORKFLOW_PERMISSION = "replay.read"' in helper_text
+            and '"replay.candidate.write"' not in workflow_shadow_function
+            and '"artifact.read"' not in workflow_shadow_function
+        ),
+        "workflow_readonly_shadow_no_candidate_execution": (
+            "replay_candidate.build_validate" not in workflow_shadow_function
+            and '"replay_candidate_execution": False' in workflow_shadow_function
+        ),
+        "workflow_readonly_shadow_job_local_workspace": (
+            'workspace = job_dir / "workflow_readonly_shadow"' in helper_text
+            and "workspace.resolve(strict=False).relative_to(job_root)" in helper_text
+            and "workspace.is_symlink()" in helper_text
+        ),
+        "workflow_readonly_shadow_fixed_timeout": (
+            "WORKFLOW_TIMEOUT_SECONDS = 60" in helper_text
+            and "timeout=WORKFLOW_TIMEOUT_SECONDS" in workflow_shadow_function
+        ),
+        "workflow_readonly_shadow_nonblocking_states": all(
+            pattern in workflow_shadow_function
+            for pattern in (
+                "SUCCEEDED_NONBLOCKING",
+                "BLOCKED_NONBLOCKING",
+                "FAILED_NONBLOCKING",
+                "TIMEOUT_NONBLOCKING",
+                "ERROR_NONBLOCKING",
+                '"mainline_blocking": False',
+            )
+        ),
+        "workflow_readonly_shadow_finalize_call_count": finalize_function.count(
+            "run_daily_workflow_readonly_shadow("
+        ),
+        "workflow_readonly_shadow_runner_pinned": all(
+            pattern in helper_text
+            for pattern in (
+                'repo_root / "scripts/run_tw_stock_workflow.py"',
+                "workflow_runner_path.is_symlink()",
+                "not workflow_runner_path.is_file()",
+                "workflow_runner_path.resolve() != expected.resolve()",
+            )
+        ),
+        "workflow_readonly_shadow_persisted_record_validated": all(
+            pattern in helper_text
+            for pattern in (
+                "_load_and_validate_run_record",
+                "from tw_stock_workflow.run_registry import validate_run_record",
+                "record = validate_run_record(record, run_id)",
+                'output.get("full_replay_contract_admission") is not False',
+                'metadata.get("full_replay_contract_status") != "HOLD"',
+                "stdout_record.get(field) != record.get(field)",
+                'record.get("context") !=',
+                "stdout/stderr may not be a symlink",
+            )
+        ),
+        "workflow_readonly_shadow_dng9_early_exit_precedes_job": (
+            "if args.dng9_model_signal_gate_dry_run_summary:" in text
+            and "job: dict[str, Any] = {" in text
+            and text.index("if args.dng9_model_signal_gate_dry_run_summary:")
+            < text.index("job: dict[str, Any] = {")
+        ),
         "model_signal_gate_dry_run_summary_present": "dng9_model_signal_gate_dry_run" in text and "model_signal_gate_summary.json" in text,
         "model_signal_gate_summary_validation_present": "dng9_model_signal_gate_validation.json" in text and "validate_model_signal_gate_summary_payload" in text,
         "model_signal_gate_default_unreachable_recorded": '"model_signal_gate_default_reachable": False' in text,
@@ -495,6 +636,32 @@ def audit_script(script_path: Path) -> dict[str, Any]:
         errors.append(err("strict_e4_gate_default_enabled", "strict E4 readonly chain gate must default to disabled", script_path, "enable_strict_e4_readonly_chain"))
     if model_signal_gate_present and not findings["model_signal_gate_default_disabled"]:
         errors.append(err("model_signal_gate_default_enabled", "DNG9 model signal gate must default to disabled", script_path, "enable_model_signal_gate"))
+    if not findings["workflow_readonly_shadow_gate_present"]:
+        errors.append(err("workflow_readonly_shadow_gate_missing", "WF-3 readonly shadow gate is missing", script_path, "enable_workflow_readonly_shadow"))
+    if workflow_readonly_shadow_gate_present and not findings["workflow_readonly_shadow_gate_default_disabled"]:
+        errors.append(err("workflow_readonly_shadow_gate_default_enabled", "WF-3 readonly shadow gate must default to disabled", script_path, "enable_workflow_readonly_shadow"))
+    if not findings["workflow_readonly_shadow_spec_exact"]:
+        errors.append(err("workflow_readonly_shadow_spec_invalid", "WF-3 must use the exact fixed replay-window observation spec", WORKFLOW_READONLY_SHADOW_SPEC, "replay_window.observe"))
+    if findings["workflow_readonly_shadow_modules"] != ["replay_window.observe"]:
+        errors.append(err("workflow_readonly_shadow_module_invalid", "WF-3 may only run replay_window.observe", WORKFLOW_READONLY_SHADOW_SPEC, "nodes.module"))
+    if not findings["workflow_readonly_shadow_only_replay_read"]:
+        errors.append(err("workflow_readonly_shadow_permission_invalid", "WF-3 may only grant replay.read", script_path, "permissions"))
+    if not findings["workflow_readonly_shadow_no_candidate_execution"]:
+        errors.append(err("workflow_readonly_shadow_execution_reachable", "WF-3 must not execute replay candidates", script_path, "replay_candidate_execution"))
+    if not findings["workflow_readonly_shadow_job_local_workspace"]:
+        errors.append(err("workflow_readonly_shadow_workspace_invalid", "WF-3 workspace must remain job-local and reject symlink escape", script_path, "workflow_readonly_shadow_workspace"))
+    if not findings["workflow_readonly_shadow_fixed_timeout"]:
+        errors.append(err("workflow_readonly_shadow_timeout_missing", "WF-3 must use its fixed timeout", script_path, "WORKFLOW_READONLY_SHADOW_TIMEOUT_SECONDS"))
+    if not findings["workflow_readonly_shadow_nonblocking_states"]:
+        errors.append(err("workflow_readonly_shadow_nonblocking_missing", "WF-3 must normalize all terminal/error states as nonblocking evidence", script_path, "workflow_readonly_shadow"))
+    if findings["workflow_readonly_shadow_finalize_call_count"] != 1:
+        errors.append(err("workflow_readonly_shadow_finalize_integration_invalid", "WF-3 must have exactly one integration call in finalize_job", script_path, "finalize_job"))
+    if not findings["workflow_readonly_shadow_runner_pinned"]:
+        errors.append(err("workflow_readonly_shadow_runner_unpinned", "WF-3 must pin a regular non-symlink repository workflow CLI", WORKFLOW_READONLY_SHADOW_HELPER, "workflow_runner_path"))
+    if not findings["workflow_readonly_shadow_persisted_record_validated"]:
+        errors.append(err("workflow_readonly_shadow_run_record_unvalidated", "WF-3 success must validate persisted run evidence and replay HOLD boundaries", WORKFLOW_READONLY_SHADOW_HELPER, "run_record"))
+    if not findings["workflow_readonly_shadow_dng9_early_exit_precedes_job"]:
+        errors.append(err("workflow_readonly_shadow_dng9_boundary_invalid", "DNG9 early dry-run must exit before WF-3 finalization", script_path, "dng9_model_signal_gate_dry_run_summary"))
     if model_signal_gate_present and not findings["model_signal_gate_dry_run_summary_present"]:
         errors.append(err("model_signal_gate_dry_run_summary_missing", "DNG9 model signal gate must emit dry-run summary evidence", script_path, "model_signal_gate_summary"))
     if model_signal_gate_present and not findings["model_signal_gate_summary_validation_present"]:

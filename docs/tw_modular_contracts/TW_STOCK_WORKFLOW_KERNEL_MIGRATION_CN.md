@@ -63,6 +63,16 @@ workspace 必须位于 repository 外，解析后的输出仍必须在 workspace
 
 WF-2B 只是隔离 candidate execution module 完成，不代表产品 index admission、baseline 切换或正式 replay execution 切换。该 spec 未登记到 daily orchestrator 或 cron，也不触发训练、真实数据抓取、provider、accepted latest、paper account、broker 或订单路径。
 
+## WF-3 Daily Readonly Shadow DAG
+
+WF-3 已把固定的 replay-window observation 作为日更 `finalize_job()` 的单一非阻断 sidecar 接口接入。实现逻辑位于 `scripts/tw_daily_workflow_readonly_shadow.py`，日更入口只负责显式注入 repo、固定 spec/runner、六个受保护路径、pending、installed cron 和既有 `run_cmd`。开关为 `--enable-workflow-readonly-shadow` / `TW_DAILY_AUTO_ENABLE_WORKFLOW_READONLY_SHADOW`，源码默认关闭；本阶段没有修改 installed cron。DNG9 summary 的提前退出发生在 job 创建和 finalizer 之前，因此不会误触发 WF-3。
+
+启用后只允许固定的 `configs/workflows/replay_window_observation.yaml` 合同：唯一 module 为 `replay_window.observe`，唯一权限为 `replay.read`，模式为 `readonly`，超时固定 60 秒。workspace 固定为 `<job_dir>/workflow_readonly_shadow`，job_dir/workspace symlink 或解析后逃出 job 目录会在 runner 前被拒绝。runner 也必须精确为 repo 内 regular、非 symlink 的 `scripts/run_tw_stock_workflow.py`，不能通过参数替换为其他脚本。`replay_candidate.build_validate`、`replay.candidate.write`、训练、provider、latest、pending recovery 和交易路径均不在该 sidecar 能力内。
+
+runner stdout 不能单独证明成功。WF-3 会读取 `<workspace>/runs/<run_id>.json`，核对 stdout 与持久化 record 的 workflow ID/version/run ID/status，确认唯一节点仍为 `replay_window.observe`；成功记录还必须保持 `full_replay_contract_admission=false`、artifact metadata `full_replay_contract_status=HOLD` 和 observed artifact asof `2026-05-07`。daily target asof 独立记录为 `daily_job_asof`，不会把固定历史观察窗口伪装成当天 replay。
+
+在调用前后，sidecar 指纹化 formal provider calendar、qlib accepted latest、legacy Option C latest、controlled Model A latest、readonly snapshot latest、Agent prompt latest，并单独指纹化 `pending_asof.json` 与 installed cron。`SUCCEEDED`、`BLOCKED`、`FAILED`、timeout、异常或证据不一致都只归一化为 `job["workflow_readonly_shadow"]` 证据；任何失败均为 `mainline_blocking=false`，不改变原 daily status、caller return code、pending、latest 或主线后续语义。
+
 ## 合同
 
 - `ExecutionContext` 明确声明 `mode`、`asof`、带时区的 `decision_cutoff`、隔离 `workspace` 和权限集合。
@@ -92,7 +102,7 @@ PYTHONPATH=. python3 scripts/run_tw_stock_workflow.py \
 
 1. **Replay observation（WF-1 已完成 sidecar）**：专用只读 adapter 和 observation module 用固定 fixture、历史 manifest 与 backend index parity 验证，不替换现有 replay runner。完整 ReplayResult admission 仍为 HOLD。
 2. **Replay execution（WF-2A candidate gate 与 WF-2B isolated module 已完成）**：canonical Model A 固定窗口 candidate 已由同一 D3RR 前向引擎生成并通过完整 validator，workflow module 也可在显式外部 workspace 中幂等构建和验证候选；结果仍为 HOLD，未登记 D7。产品 admission 与正式切换仍需独立决定，旧入口继续保留。
-3. **Daily shadow orchestration**：仅在 replay 迁移稳定后，将无写入的 daily preflight/observation 作为 optional shadow DAG 接入；不得改变 pending、latest 或主线返回码。
+3. **Daily shadow orchestration（WF-3 已完成、源码默认关闭）**：固定 replay observation 已作为非阻断 sidecar 接入统一 finalizer；是否加入 installed cron 和连续自然调度观察仍需独立运维决定。
 4. **Daily stage migration**：逐阶段迁移 data、feature、Model A signal、strategy、snapshot，每阶段都保留现有合同、artifact validator 和回退入口。Model B 始终是非阻断 optional branch。
 5. **切换与清理**：只有完整模块回归、M3 validator、readonly deployment acceptance 和连续自然调度证据均通过后，才另行提出切换决定。旧执行路径的删除需要独立影响闭包、备份和恢复验证。
 

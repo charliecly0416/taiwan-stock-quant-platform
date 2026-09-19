@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_tw_model_b_hsa8_isolated_handoff_wiring as hsa8
 import finmind_logical_acquisition as logical_acquisition
@@ -46,6 +47,7 @@ from tw_daily_runtime_stages import (
     runtime_truth,
 )
 from tw_daily_stage_adapters import build_named_stage_adapters, stage_contract_summary
+from tw_daily_workflow_readonly_shadow import run_daily_workflow_readonly_shadow
 from tw_research_data_history import materialize_daily_research_history
 
 # ARCH-2: the descriptor is the single source for runtime model identity and
@@ -66,6 +68,9 @@ CALENDAR = QLIB / "data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_
 INSTRUMENTS = QLIB / "data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin/instruments/all.txt"
 PENDING_ASOF = OPS_ROOT / "pending_asof.json"
 TERMINAL_PENDING_QUARANTINE_ROOT = OPS_ROOT / "terminal_pending_quarantine"
+WORKFLOW_READONLY_SHADOW_SPEC = ROOT / "configs/workflows/replay_window_observation.yaml"
+WORKFLOW_READONLY_SHADOW_RUNNER = ROOT / "scripts/run_tw_stock_workflow.py"
+INSTALLED_DAILY_CRON = OPS_ROOT / "tw-daily-auto-update.installed.cron"
 READONLY_SNAPSHOT_ROOT = ROOT / "data_tw/artifacts/publish/readonly_strategy_snapshot"
 READONLY_SNAPSHOT_LATEST = READONLY_SNAPSHOT_ROOT / "latest.json"
 AGENT_DAILY_PROMPT_ROOT = ROOT / "data_tw/artifacts/agent_daily_prompt"
@@ -1840,6 +1845,30 @@ def finalize_job(job: dict[str, Any], *, job_dir: Path, asof: str, args: argpars
                 "production_allowed": False,
                 "no_apply": True,
             }
+    job["workflow_readonly_shadow"] = run_daily_workflow_readonly_shadow(
+        job=job,
+        job_dir=job_dir,
+        asof=asof,
+        enabled=bool(getattr(args, "enable_workflow_readonly_shadow", False)),
+        repo_root=ROOT,
+        python_executable=PYTHON,
+        workflow_runner_path=WORKFLOW_READONLY_SHADOW_RUNNER,
+        spec_path=WORKFLOW_READONLY_SHADOW_SPEC,
+        expected_model_id=MODELA_MODEL_ID,
+        expected_strategy_rule=STRATEGY_RULE,
+        protected_paths={
+            "formal_provider_calendar": CALENDAR,
+            "qlib_accepted_latest": LATEST,
+            "legacy_option_c_latest": ROOT
+            / "data_tw/experiments/option_c_daily_signal/latest_signal.json",
+            "controlled_model_signal_latest": CONTROLLED_MODEL_SIGNAL_LATEST,
+            "readonly_snapshot_latest": READONLY_SNAPSHOT_LATEST,
+            "agent_prompt_latest": AGENT_DAILY_PROMPT_LATEST,
+        },
+        pending_path=PENDING_ASOF,
+        installed_cron_path=INSTALLED_DAILY_CRON,
+        command_runner=run_cmd,
+    )
     write_json(job_dir / "job.json", job)
     attach_daily_readiness_dashboard(job, job_dir=job_dir, asof=asof, args=args)
     write_dng13_daily_chain_artifacts(job, job_dir=job_dir, asof=asof, args=args)
@@ -7209,6 +7238,12 @@ def main() -> int:
         help="Incident-isolation switch for the default-on, non-blocking research history finalize step.",
     )
     parser.add_argument(
+        "--enable-workflow-readonly-shadow",
+        action="store_true",
+        default=env_flag("TW_DAILY_AUTO_ENABLE_WORKFLOW_READONLY_SHADOW", False),
+        help="Explicit non-default WF-3 gate for the readonly replay-window observation DAG.",
+    )
+    parser.add_argument(
         "--enable-model-signal-gate",
         action="store_true",
         default=env_flag("TW_DAILY_AUTO_ENABLE_MODEL_SIGNAL_GATE", False),
@@ -7479,6 +7514,21 @@ def main() -> int:
         "data_catalog_dashboard_path": rel_path(DATA_CATALOG_DASHBOARD),
         "data_catalog_dashboard_validation_path": rel_path(DNG6_DATA_CATALOG_DASHBOARD_VALIDATION),
         "research_data_history_enabled": not bool(args.disable_research_data_history),
+        "workflow_readonly_shadow_enabled": bool(args.enable_workflow_readonly_shadow),
+        "workflow_readonly_shadow": {
+            "schema_version": "daily.workflow_readonly_shadow.v1",
+            "enabled": bool(args.enable_workflow_readonly_shadow),
+            "attempted": False,
+            "ok": not bool(args.enable_workflow_readonly_shadow),
+            "status": (
+                "NOT_ATTEMPTED"
+                if args.enable_workflow_readonly_shadow
+                else "DISABLED_BY_DEFAULT"
+            ),
+            "mainline_blocking": False,
+            "production_allowed": False,
+            "no_apply": True,
+        },
         "model_signal_gate_enabled": bool(args.enable_model_signal_gate),
         "mbcds3_daily_shadow_enabled": bool(args.enable_mbcds3_daily_shadow),
         "mbcds3_daily_shadow_attempted": False,
