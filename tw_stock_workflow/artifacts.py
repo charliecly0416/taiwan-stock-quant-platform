@@ -240,7 +240,181 @@ class ResearchHistoryAdapter:
             for key, value in filters.items()
         )
 
-    def _model_a_refs(self, day_asof: str, day: dict[str, Any]) -> list[ArtifactRef]:
+    def _regular_repo_path(self, raw_path: Any, *, label: str) -> tuple[Path, str]:
+        if (
+            not isinstance(raw_path, str)
+            or not raw_path
+            or Path(raw_path).is_absolute()
+        ):
+            raise ArtifactError(f"{label} must be a canonical repository-relative path")
+        candidate = self.repo_root / raw_path
+        if candidate.is_symlink():
+            raise ArtifactError(f"{label} may not be a symlink: {raw_path}")
+        resolved = candidate.resolve()
+        try:
+            canonical = str(resolved.relative_to(self.repo_root))
+        except ValueError as exc:
+            raise ArtifactError(f"{label} escapes repository: {raw_path}") from exc
+        if raw_path != canonical:
+            raise ArtifactError(f"{label} is not canonical: {raw_path}")
+        if not resolved.is_file():
+            raise ArtifactError(f"{label} is not a regular file: {raw_path}")
+        return resolved, canonical
+
+    @staticmethod
+    def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ArtifactError(f"invalid {label}: {path}") from exc
+        if not isinstance(value, dict):
+            raise ArtifactError(f"{label} must be an object: {path}")
+        return value
+
+    def _day_manifest(
+        self, day_asof: str, day: dict[str, Any]
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        path, canonical = self._regular_repo_path(
+            day.get("manifest_path"), label="research history day manifest"
+        )
+        expected_parent = (self.index_path.parent / day_asof).resolve()
+        if path.parent != expected_parent:
+            raise ArtifactError(
+                f"research history day manifest is outside its day directory: {day_asof}"
+            )
+        manifest = self._load_json_object(path, label="research history day manifest")
+        if manifest.get("schema_version") != "tw.research_data_history.day.v1":
+            raise ArtifactError(
+                f"unsupported research history day manifest: {day_asof}"
+            )
+        if manifest.get("asof") != day_asof or manifest.get("status") != day.get(
+            "status"
+        ):
+            raise ArtifactError(
+                f"research history index/day-manifest drift: {day_asof}"
+            )
+        if manifest.get("model_a") != day.get("model_a"):
+            raise ArtifactError(
+                f"research history Model A index/day-manifest drift: {day_asof}"
+            )
+        if (
+            manifest.get("production_allowed") is not False
+            or manifest.get("no_apply") is not True
+            or manifest.get("mainline_blocking") is not False
+        ):
+            raise ArtifactError(
+                f"invalid research history day safety boundary: {day_asof}"
+            )
+        return manifest, {
+            "path": canonical,
+            "size_bytes": path.stat().st_size,
+            "sha256": _sha256(path),
+        }
+
+    def _validated_slot_files(
+        self,
+        *,
+        day_asof: str,
+        slot: str,
+        item: dict[str, Any],
+    ) -> tuple[Path, dict[str, dict[str, Any]]]:
+        raw_dir = item.get("path")
+        if not isinstance(raw_dir, str) or not raw_dir or Path(raw_dir).is_absolute():
+            raise ArtifactError(
+                f"invalid artifact directory for {day_asof} model_a.{slot}"
+            )
+        candidate = self.repo_root / raw_dir
+        if candidate.is_symlink():
+            raise ArtifactError(f"artifact directory may not be a symlink: {raw_dir}")
+        artifact_dir = candidate.resolve()
+        try:
+            canonical_dir = str(artifact_dir.relative_to(self.repo_root))
+        except ValueError as exc:
+            raise ArtifactError(
+                f"artifact directory escapes repository: {raw_dir}"
+            ) from exc
+        if raw_dir != canonical_dir or not artifact_dir.is_dir():
+            raise ArtifactError(
+                f"artifact directory is invalid or noncanonical: {raw_dir}"
+            )
+        files = item.get("files")
+        if not isinstance(files, dict):
+            raise ArtifactError(f"file records missing for {day_asof} model_a.{slot}")
+        data_file = (
+            "inference_frame.csv" if slot == "inference_input" else "signals.csv"
+        )
+        required = {"manifest.json", "validator_report.json", data_file}
+        missing = sorted(required - set(files))
+        if missing:
+            raise ArtifactError(
+                f"required file records missing for {day_asof} model_a.{slot}: {', '.join(missing)}"
+            )
+        normalized: dict[str, dict[str, Any]] = {}
+        canonical_paths: set[str] = set()
+        for name, raw_record in sorted(files.items()):
+            if (
+                not isinstance(name, str)
+                or not name
+                or not isinstance(raw_record, dict)
+            ):
+                raise ArtifactError(
+                    f"malformed file record for {day_asof} model_a.{slot}"
+                )
+            if set(raw_record) != {"path", "size_bytes", "sha256"}:
+                raise ArtifactError(
+                    f"malformed file record for {day_asof} model_a.{slot}.{name}"
+                )
+            path, canonical = self._regular_repo_path(
+                raw_record.get("path"), label=f"model_a.{slot}.{name}"
+            )
+            try:
+                relative = path.relative_to(artifact_dir)
+            except ValueError as exc:
+                raise ArtifactError(
+                    f"declared file is outside artifact directory: {canonical}"
+                ) from exc
+            if str(relative) != name:
+                raise ArtifactError(f"declared file path/name mismatch: {name}")
+            if canonical in canonical_paths:
+                raise ArtifactError(f"duplicate declared file path: {canonical}")
+            canonical_paths.add(canonical)
+            size = raw_record.get("size_bytes")
+            digest = raw_record.get("sha256")
+            if (
+                not isinstance(size, int)
+                or isinstance(size, bool)
+                or size < 0
+                or not isinstance(digest, str)
+                or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+            ):
+                raise ArtifactError(
+                    f"malformed file identity for {day_asof} model_a.{slot}.{name}"
+                )
+            if path.stat().st_size != size:
+                raise ArtifactError(f"file size mismatch: {canonical}")
+            if _sha256(path) != digest:
+                raise ArtifactError(f"file checksum mismatch: {canonical}")
+            normalized[name] = {
+                "path": canonical,
+                "size_bytes": size,
+                "sha256": digest,
+            }
+        validator_path = self.repo_root / normalized["validator_report.json"]["path"]
+        validator = self._load_json_object(
+            validator_path, label="Model A validator report"
+        )
+        if validator.get("ok") is not True or validator.get("status") != "PASS":
+            raise ArtifactError(
+                f"Model A validator did not pass: {day_asof} model_a.{slot}"
+            )
+        return artifact_dir, normalized
+
+    def _model_a_refs(
+        self,
+        day_asof: str,
+        day: dict[str, Any],
+        day_manifest_record: dict[str, Any],
+    ) -> list[ArtifactRef]:
         model_a = day.get("model_a")
         if not isinstance(model_a, dict):
             return []
@@ -250,13 +424,20 @@ class ResearchHistoryAdapter:
         for key in ("inference_input", "signal"):
             item = model_a.get(key)
             if not isinstance(item, dict):
-                continue
-            files = item.get("files") if isinstance(item.get("files"), dict) else {}
-            manifest_record = files.get("manifest.json")
-            if not isinstance(manifest_record, dict):
+                raise ArtifactError(f"Model A slot missing for {day_asof}: {key}")
+            expected_type = (
+                "ModelInferenceInput"
+                if key == "inference_input"
+                else "ModelSignalArtifact"
+            )
+            if item.get("artifact_type") != expected_type:
                 raise ArtifactError(
-                    f"manifest record missing for {day_asof} model_a.{key}"
+                    f"invalid Model A artifact type for {day_asof}: {key}"
                 )
+            _, files = self._validated_slot_files(
+                day_asof=day_asof, slot=key, item=item
+            )
+            manifest_record = files["manifest.json"]
             refs.append(
                 ArtifactRef(
                     adapter_id=self.adapter_id,
@@ -271,6 +452,11 @@ class ResearchHistoryAdapter:
                     metadata={
                         "history_day_status": str(day.get("status") or ""),
                         "history_slot": key,
+                        "history_day_manifest": dict(day_manifest_record),
+                        "declared_files": files,
+                        "production_allowed": False,
+                        "no_apply": True,
+                        "mainline_blocking": False,
                     },
                 )
             )
@@ -294,6 +480,8 @@ class ResearchHistoryAdapter:
         result: list[ArtifactRef] = []
         for day_asof, raw_day in sorted(payload["days"].items()):
             validate_asof(str(day_asof))
+            if asof is not None and str(day_asof) != asof:
+                continue
             if not isinstance(raw_day, dict) or raw_day.get("asof") != day_asof:
                 raise ArtifactError(f"invalid research history day entry: {day_asof}")
             if raw_day.get("status") not in {
@@ -301,10 +489,11 @@ class ResearchHistoryAdapter:
                 "READY_MODELA_MODELB",
             }:
                 raise ArtifactError(f"invalid research history day status: {day_asof}")
+            _, day_manifest_record = self._day_manifest(str(day_asof), raw_day)
             # Model B history is a multi-file research bundle whose manifest does
             # not yet expose the standard run_id identity required by ArtifactRef.
             # A dedicated adapter will onboard that bundle without weakening the
             # generic manifest checks used for Model A artifacts.
-            refs = self._model_a_refs(day_asof, raw_day)
+            refs = self._model_a_refs(day_asof, raw_day, day_manifest_record)
             result.extend(ref for ref in refs if self._matches(ref, filters))
         return result

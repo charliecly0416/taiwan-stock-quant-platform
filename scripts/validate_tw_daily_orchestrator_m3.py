@@ -44,6 +44,11 @@ WORKFLOW_READONLY_SHADOW_GATE_FLAG = "--enable-workflow-readonly-shadow"
 WORKFLOW_READONLY_SHADOW_GATE_ENV = "TW_DAILY_AUTO_ENABLE_WORKFLOW_READONLY_SHADOW"
 WORKFLOW_READONLY_SHADOW_SPEC = ROOT / "configs/workflows/replay_window_observation.yaml"
 WORKFLOW_READONLY_SHADOW_HELPER = ROOT / "scripts/tw_daily_workflow_readonly_shadow.py"
+WORKFLOW_SHADOW_SHARED_HELPER = ROOT / "scripts/tw_daily_workflow_shadow.py"
+WORKFLOW_MODELA_SIGNAL_SHADOW_GATE_FLAG = "--enable-workflow-model-a-signal-shadow"
+WORKFLOW_MODELA_SIGNAL_SHADOW_GATE_ENV = "TW_DAILY_AUTO_ENABLE_WORKFLOW_MODELA_SIGNAL_SHADOW"
+WORKFLOW_MODELA_SIGNAL_SHADOW_SPEC = ROOT / "configs/workflows/research_history_observation.yaml"
+WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER = ROOT / "scripts/tw_daily_model_a_signal_shadow.py"
 PBPR0_DAILY_CHAIN_REQUIRED_PATTERNS = {
     "state",
     "required_inputs",
@@ -374,6 +379,113 @@ def function_text(text: str, tree: ast.AST, function_name: str) -> str:
     return ""
 
 
+def function_node(tree: ast.AST, function_name: str) -> ast.FunctionDef | None:
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == function_name:
+            return node
+    return None
+
+
+def named_calls(function: ast.FunctionDef | None, name: str) -> list[ast.Call]:
+    if function is None:
+        return []
+    return [
+        node
+        for node in function_nodes(function)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == name
+    ]
+
+
+def function_nodes(function: ast.FunctionDef) -> list[ast.AST]:
+    result: list[ast.AST] = []
+    pending = list(function.body)
+    while pending:
+        node = pending.pop()
+        result.append(node)
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                continue
+            pending.append(child)
+    return result
+
+
+def workflow_shadow_wiring_audit(
+    model_a_helper_tree: ast.AST, shared_helper_tree: ast.AST
+) -> dict[str, bool]:
+    wrapper = function_node(model_a_helper_tree, "run_daily_model_a_signal_shadow")
+    shared = function_node(shared_helper_tree, "run_daily_workflow_shadow")
+    wrapper_calls = named_calls(wrapper, "run_daily_workflow_shadow")
+    precondition_forwarded = len(wrapper_calls) == 1 and any(
+        keyword.arg == "precondition"
+        and isinstance(keyword.value, ast.Name)
+        and keyword.value.id == "precondition"
+        for keyword in wrapper_calls[0].keywords
+    )
+    precondition_calls = []
+    if shared is not None:
+        for guarded in function_nodes(shared):
+            if not isinstance(guarded, ast.If) or ast.unparse(guarded.test) != "precondition is not None":
+                continue
+            precondition_calls.extend(
+                node
+                for statement in guarded.body
+                for node in ast.walk(statement)
+                if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "result"
+                and node.func.attr == "update"
+                and len(node.args) == 1
+                and isinstance(node.args[0], ast.Call)
+                and isinstance(node.args[0].func, ast.Name)
+                and node.args[0].func.id == "precondition"
+            )
+    command_runner_calls = named_calls(shared, "command_runner")
+    precondition_before_runner = bool(
+        precondition_calls
+        and command_runner_calls
+        and min(call.lineno for call in precondition_calls)
+        < min(call.lineno for call in command_runner_calls)
+    )
+    evidence_path_guard = False
+    pinned_sources_enforced = False
+    if shared is not None:
+        for node in function_nodes(shared):
+            if not isinstance(node, ast.If):
+                if isinstance(node, ast.For):
+                    loop = ast.unparse(node)
+                    if all(
+                        marker in loop
+                        for marker in (
+                            "profile.pinned_sources",
+                            "_regular_pinned_file(source, source, repo_root, flag)",
+                            "argv.extend((flag, relative_source))",
+                        )
+                    ) and all(
+                        node.lineno < call.lineno for call in command_runner_calls
+                    ):
+                        pinned_sources_enforced = True
+                continue
+            condition = ast.unparse(node.test)
+            if all(marker in condition for marker in (
+                "runner_result.get('stdout_path')",
+                "stdout_path.resolve()",
+                "runner_result.get('stderr_path')",
+                "stderr_path.resolve()",
+                "stdout_path.is_symlink()",
+                "stderr_path.is_symlink()",
+            )) and any(isinstance(child, ast.Raise) for child in ast.walk(node)):
+                evidence_path_guard = True
+    return {
+        "precondition_forwarded": precondition_forwarded,
+        "precondition_before_runner": precondition_before_runner,
+        "evidence_path_guard": evidence_path_guard,
+        "pinned_sources_enforced": pinned_sources_enforced,
+    }
+
+
 def workflow_readonly_shadow_spec_audit() -> dict[str, Any]:
     try:
         payload = yaml.safe_load(WORKFLOW_READONLY_SHADOW_SPEC.read_text(encoding="utf-8"))
@@ -415,16 +527,53 @@ def workflow_readonly_shadow_spec_audit() -> dict[str, Any]:
     }
 
 
+def workflow_model_a_signal_spec_audit() -> dict[str, Any]:
+    try:
+        payload = yaml.safe_load(WORKFLOW_MODELA_SIGNAL_SHADOW_SPEC.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return {"spec_exact": False, "modules": []}
+    nodes = payload.get("nodes") if isinstance(payload, dict) else None
+    modules = [str(node.get("module") or "") for node in nodes or [] if isinstance(node, dict)]
+    expected = {
+        "schema_version": "tw.workflow.spec.v1",
+        "workflow_id": "research_history.model_a_observation",
+        "version": "1",
+        "nodes": [
+            {
+                "id": "observe_model_a_input",
+                "module": "research_history.observe",
+                "policy": "required",
+                "config": {"artifact_type": "ModelInferenceInput", "model_id": "e4_frozen_qlib_2018_2022", "status": "READY", "min_count": 1},
+            },
+            {
+                "id": "observe_model_a_signal",
+                "module": "research_history.observe",
+                "needs": ["observe_model_a_input"],
+                "policy": "required",
+                "config": {"artifact_type": "ModelSignalArtifact", "model_id": "e4_frozen_qlib_2018_2022", "status": "READY", "min_count": 1, "require_same_run_id": True},
+            },
+        ],
+    }
+    return {"spec_exact": payload == expected, "modules": modules}
+
+
 def audit_script(script_path: Path) -> dict[str, Any]:
     text = script_path.read_text(encoding="utf-8")
     helper_text = WORKFLOW_READONLY_SHADOW_HELPER.read_text(encoding="utf-8")
+    shared_helper_text = WORKFLOW_SHADOW_SHARED_HELPER.read_text(encoding="utf-8")
+    model_a_helper_text = WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER.read_text(encoding="utf-8")
     checked = [
         rel(script_path),
         rel(WORKFLOW_READONLY_SHADOW_SPEC),
         rel(WORKFLOW_READONLY_SHADOW_HELPER),
+        rel(WORKFLOW_SHADOW_SHARED_HELPER),
+        rel(WORKFLOW_MODELA_SIGNAL_SHADOW_SPEC),
+        rel(WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER),
     ]
     tree = ast.parse(text)
     helper_tree = ast.parse(helper_text)
+    shared_helper_tree = ast.parse(shared_helper_text)
+    model_a_helper_tree = ast.parse(model_a_helper_text)
     production_provider_refresh_path_present = "run_option_c_yahoo_scrapling_refresh.py" in text
     production_provider_publish_path_present = (
         "provider_publish_triggered" in text and "publish_option_c_yahoo_scrapling_refresh.py" in text
@@ -439,11 +588,22 @@ def audit_script(script_path: Path) -> dict[str, Any]:
         WORKFLOW_READONLY_SHADOW_GATE_FLAG in text
         and WORKFLOW_READONLY_SHADOW_GATE_ENV in text
     )
+    workflow_model_a_signal_shadow_gate_present = (
+        WORKFLOW_MODELA_SIGNAL_SHADOW_GATE_FLAG in text
+        and WORKFLOW_MODELA_SIGNAL_SHADOW_GATE_ENV in text
+    )
     workflow_shadow_function = function_text(
         helper_text, helper_tree, "run_daily_workflow_readonly_shadow"
     )
+    shared_shadow_function = function_text(shared_helper_text, shared_helper_tree, "run_daily_workflow_shadow")
     finalize_function = function_text(text, tree, "finalize_job")
     workflow_spec_audit = workflow_readonly_shadow_spec_audit()
+    model_a_spec_audit = workflow_model_a_signal_spec_audit()
+    workflow_shadow_wiring = workflow_shadow_wiring_audit(
+        model_a_helper_tree, shared_helper_tree
+    )
+    history_materialization_offset = finalize_function.find('job["research_data_history"] = materialize_daily_research_history(')
+    model_a_shadow_offset = finalize_function.find('job["workflow_model_a_signal_shadow"] = run_daily_model_a_signal_shadow(')
     daily_full_capture_patterns_present = sorted([pattern for pattern in DAILY_FULL_CAPTURE_REQUIRED_PATTERNS if pattern in text])
     daily_full_capture_missing_patterns = sorted(DAILY_FULL_CAPTURE_REQUIRED_PATTERNS - set(daily_full_capture_patterns_present))
     pbpr0_daily_chain_patterns_present = sorted([pattern for pattern in PBPR0_DAILY_CHAIN_REQUIRED_PATTERNS if pattern in text])
@@ -504,19 +664,20 @@ def audit_script(script_path: Path) -> dict[str, Any]:
         ),
         "workflow_readonly_shadow_no_candidate_execution": (
             "replay_candidate.build_validate" not in workflow_shadow_function
-            and '"replay_candidate_execution": False' in workflow_shadow_function
+            and '"replay_candidate_execution": False' in shared_shadow_function
         ),
         "workflow_readonly_shadow_job_local_workspace": (
-            'workspace = job_dir / "workflow_readonly_shadow"' in helper_text
-            and "workspace.resolve(strict=False).relative_to(job_root)" in helper_text
-            and "workspace.is_symlink()" in helper_text
+            'workspace_name="workflow_readonly_shadow"' in helper_text
+            and "workspace.resolve(strict=False).relative_to(job_dir.resolve())" in shared_helper_text
+            and "workspace.is_symlink()" in shared_helper_text
         ),
         "workflow_readonly_shadow_fixed_timeout": (
             "WORKFLOW_TIMEOUT_SECONDS = 60" in helper_text
-            and "timeout=WORKFLOW_TIMEOUT_SECONDS" in workflow_shadow_function
+            and "TIMEOUT_SECONDS = 60" in shared_helper_text
+            and "timeout=TIMEOUT_SECONDS" in shared_shadow_function
         ),
         "workflow_readonly_shadow_nonblocking_states": all(
-            pattern in workflow_shadow_function
+            pattern in shared_shadow_function
             for pattern in (
                 "SUCCEEDED_NONBLOCKING",
                 "BLOCKED_NONBLOCKING",
@@ -530,27 +691,39 @@ def audit_script(script_path: Path) -> dict[str, Any]:
             "run_daily_workflow_readonly_shadow("
         ),
         "workflow_readonly_shadow_runner_pinned": all(
-            pattern in helper_text
+            pattern in shared_helper_text
             for pattern in (
                 'repo_root / "scripts/run_tw_stock_workflow.py"',
-                "workflow_runner_path.is_symlink()",
-                "not workflow_runner_path.is_file()",
-                "workflow_runner_path.resolve() != expected.resolve()",
+                "_regular_pinned_file(",
+                '"runner"',
             )
         ),
         "workflow_readonly_shadow_persisted_record_validated": all(
-            pattern in helper_text
+            pattern in (helper_text + shared_helper_text)
             for pattern in (
-                "_load_and_validate_run_record",
                 "from tw_stock_workflow.run_registry import validate_run_record",
-                "record = validate_run_record(record, run_id)",
+                "record = validate_run_record(_read_json(run_path), run_id)",
                 'output.get("full_replay_contract_admission") is not False',
                 'metadata.get("full_replay_contract_status") != "HOLD"',
                 "stdout_record.get(field) != record.get(field)",
-                'record.get("context") !=',
+                'record["context"] !=',
                 "stdout/stderr may not be a symlink",
             )
         ),
+        "workflow_model_a_signal_shadow_gate_present": workflow_model_a_signal_shadow_gate_present,
+        "workflow_model_a_signal_shadow_gate_default_disabled": env_gate_default_disabled_by_ast(tree, WORKFLOW_MODELA_SIGNAL_SHADOW_GATE_FLAG, WORKFLOW_MODELA_SIGNAL_SHADOW_GATE_ENV),
+        "workflow_model_a_signal_shadow_spec_exact": model_a_spec_audit["spec_exact"],
+        "workflow_model_a_signal_shadow_modules": model_a_spec_audit["modules"],
+        "workflow_model_a_signal_shadow_only_artifact_read": 'WORKFLOW_PERMISSION = "artifact.read"' in model_a_helper_text and '"replay.read"' not in model_a_helper_text,
+        "workflow_model_a_signal_shadow_pinned_history": all(pattern in model_a_helper_text for pattern in ('HISTORY_INDEX_RELATIVE_PATH = "data_tw/catalog/research_data_history/index.json"', '(("--history-index", HISTORY_INDEX_RELATIVE_PATH),)')),
+        "workflow_model_a_signal_shadow_materialization_bound": all(pattern in model_a_helper_text for pattern in ("_current_materialization_manifest", 'history.get("job_id") != expected_job_id', 'history.get("asof") != daily_asof', "expected_day_manifest", "verify_current_manifest", 'manifest.get("model_a") != history["model_a"]', "hashlib.sha256(content).hexdigest()")),
+        "workflow_model_a_signal_shadow_precondition_forwarded": workflow_shadow_wiring["precondition_forwarded"],
+        "workflow_model_a_signal_shadow_precondition_before_runner": workflow_shadow_wiring["precondition_before_runner"],
+        "workflow_model_a_signal_shadow_evidence_path_guard": workflow_shadow_wiring["evidence_path_guard"],
+        "workflow_model_a_signal_shadow_pinned_sources_enforced": workflow_shadow_wiring["pinned_sources_enforced"],
+        "workflow_model_a_signal_shadow_finalize_call_count": finalize_function.count("run_daily_model_a_signal_shadow("),
+        "workflow_model_a_signal_shadow_after_materialization": history_materialization_offset >= 0 and model_a_shadow_offset >= 0 and history_materialization_offset < model_a_shadow_offset,
+        "workflow_model_a_signal_shadow_shared_safety": all(pattern in (model_a_helper_text + shared_helper_text) for pattern in ('workspace_name="workflow_model_a_signal_shadow"', "WORKFLOW_TIMEOUT_SECONDS = TIMEOUT_SECONDS", "TIMEOUT_SECONDS = 60", "validate_run_record", "SUCCEEDED_NONBLOCKING", "BLOCKED_NONBLOCKING", "FAILED_NONBLOCKING", "TIMEOUT_NONBLOCKING", "ERROR_NONBLOCKING", '"mainline_blocking": False', '"model_training_triggered": False', '"model_scoring_triggered": False', '"latest_pointer_write_performed": False', '"trading_triggered": False')) and all(workflow_shadow_wiring.values()),
         "workflow_readonly_shadow_dng9_early_exit_precedes_job": (
             "if args.dng9_model_signal_gate_dry_run_summary:" in text
             and "job: dict[str, Any] = {" in text
@@ -662,6 +835,34 @@ def audit_script(script_path: Path) -> dict[str, Any]:
         errors.append(err("workflow_readonly_shadow_run_record_unvalidated", "WF-3 success must validate persisted run evidence and replay HOLD boundaries", WORKFLOW_READONLY_SHADOW_HELPER, "run_record"))
     if not findings["workflow_readonly_shadow_dng9_early_exit_precedes_job"]:
         errors.append(err("workflow_readonly_shadow_dng9_boundary_invalid", "DNG9 early dry-run must exit before WF-3 finalization", script_path, "dng9_model_signal_gate_dry_run_summary"))
+    if not findings["workflow_model_a_signal_shadow_gate_present"]:
+        errors.append(err("workflow_model_a_signal_shadow_gate_missing", "WF-4A Model A signal shadow gate is missing", script_path, "enable_workflow_model_a_signal_shadow"))
+    if workflow_model_a_signal_shadow_gate_present and not findings["workflow_model_a_signal_shadow_gate_default_disabled"]:
+        errors.append(err("workflow_model_a_signal_shadow_gate_default_enabled", "WF-4A gate must default to disabled", script_path, "enable_workflow_model_a_signal_shadow"))
+    if not findings["workflow_model_a_signal_shadow_spec_exact"]:
+        errors.append(err("workflow_model_a_signal_shadow_spec_invalid", "WF-4A must use the exact Model A research-history observation spec", WORKFLOW_MODELA_SIGNAL_SHADOW_SPEC, "research_history.observe"))
+    if findings["workflow_model_a_signal_shadow_modules"] != ["research_history.observe", "research_history.observe"]:
+        errors.append(err("workflow_model_a_signal_shadow_module_invalid", "WF-4A may only run the two research_history.observe nodes", WORKFLOW_MODELA_SIGNAL_SHADOW_SPEC, "nodes.module"))
+    if not findings["workflow_model_a_signal_shadow_only_artifact_read"]:
+        errors.append(err("workflow_model_a_signal_shadow_permission_invalid", "WF-4A may only grant artifact.read", WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER, "permissions"))
+    if not findings["workflow_model_a_signal_shadow_pinned_history"]:
+        errors.append(err("workflow_model_a_signal_shadow_history_unpinned", "WF-4A must pin the canonical research history index", WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER, "history_index"))
+    if not findings["workflow_model_a_signal_shadow_materialization_bound"]:
+        errors.append(err("workflow_model_a_signal_shadow_materialization_unbound", "WF-4A must bind observations to the current finalize materialization", WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER, "research_data_history"))
+    if not findings["workflow_model_a_signal_shadow_precondition_forwarded"]:
+        errors.append(err("workflow_model_a_signal_shadow_precondition_not_forwarded", "WF-4A wrapper must pass its local materialization precondition to the shared runner", WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER, "precondition"))
+    if not findings["workflow_model_a_signal_shadow_precondition_before_runner"]:
+        errors.append(err("workflow_model_a_signal_shadow_precondition_not_invoked", "shared workflow shadow must invoke the precondition before command_runner", WORKFLOW_SHADOW_SHARED_HELPER, "precondition"))
+    if not findings["workflow_model_a_signal_shadow_evidence_path_guard"]:
+        errors.append(err("workflow_model_a_signal_shadow_evidence_path_guard_missing", "shared workflow shadow must verify returned stdout/stderr paths and reject post-run symlinks", WORKFLOW_SHADOW_SHARED_HELPER, "stdout_stderr"))
+    if not findings["workflow_model_a_signal_shadow_pinned_sources_enforced"]:
+        errors.append(err("workflow_model_a_signal_shadow_pinned_source_enforcement_missing", "shared workflow shadow must validate and append each pinned source before command_runner", WORKFLOW_SHADOW_SHARED_HELPER, "pinned_sources"))
+    if findings["workflow_model_a_signal_shadow_finalize_call_count"] != 1:
+        errors.append(err("workflow_model_a_signal_shadow_finalize_integration_invalid", "WF-4A must have exactly one integration call in finalize_job", script_path, "finalize_job"))
+    if not findings["workflow_model_a_signal_shadow_after_materialization"]:
+        errors.append(err("workflow_model_a_signal_shadow_order_invalid", "WF-4A must run after daily research-history materialization", script_path, "finalize_job"))
+    if not findings["workflow_model_a_signal_shadow_shared_safety"]:
+        errors.append(err("workflow_model_a_signal_shadow_shared_safety_missing", "WF-4A shared runner/workspace/timeout/nonblocking/persisted-record safety is incomplete", WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER, "shared_workflow_shadow"))
     if model_signal_gate_present and not findings["model_signal_gate_dry_run_summary_present"]:
         errors.append(err("model_signal_gate_dry_run_summary_missing", "DNG9 model signal gate must emit dry-run summary evidence", script_path, "model_signal_gate_summary"))
     if model_signal_gate_present and not findings["model_signal_gate_summary_validation_present"]:

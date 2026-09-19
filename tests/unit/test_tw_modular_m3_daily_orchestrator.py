@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = ROOT / "scripts/validate_tw_daily_orchestrator_m3.py"
 GOLDEN_ROOT = ROOT / "data_tw/golden_samples/modular_contracts/m3"
@@ -20,6 +22,14 @@ def write_payload(path: Path, payload: dict) -> None:
 
 def load_daily_module():
     spec = importlib.util.spec_from_file_location("run_daily_tw_stock_auto_update", DAILY_SCRIPT)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_validator_module():
+    spec = importlib.util.spec_from_file_location("validate_tw_daily_orchestrator_m3", VALIDATOR)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -157,6 +167,20 @@ def test_m3_daily_auto_update_script_audit_passes_only_when_legacy_path_is_gated
     assert audit["workflow_readonly_shadow_dng9_early_exit_precedes_job"] is True
     assert audit["workflow_readonly_shadow_runner_pinned"] is True
     assert audit["workflow_readonly_shadow_persisted_record_validated"] is True
+    assert audit["workflow_model_a_signal_shadow_gate_present"] is True
+    assert audit["workflow_model_a_signal_shadow_gate_default_disabled"] is True
+    assert audit["workflow_model_a_signal_shadow_spec_exact"] is True
+    assert audit["workflow_model_a_signal_shadow_modules"] == ["research_history.observe", "research_history.observe"]
+    assert audit["workflow_model_a_signal_shadow_only_artifact_read"] is True
+    assert audit["workflow_model_a_signal_shadow_pinned_history"] is True
+    assert audit["workflow_model_a_signal_shadow_materialization_bound"] is True
+    assert audit["workflow_model_a_signal_shadow_precondition_forwarded"] is True
+    assert audit["workflow_model_a_signal_shadow_precondition_before_runner"] is True
+    assert audit["workflow_model_a_signal_shadow_evidence_path_guard"] is True
+    assert audit["workflow_model_a_signal_shadow_pinned_sources_enforced"] is True
+    assert audit["workflow_model_a_signal_shadow_finalize_call_count"] == 1
+    assert audit["workflow_model_a_signal_shadow_after_materialization"] is True
+    assert audit["workflow_model_a_signal_shadow_shared_safety"] is True
     assert audit["legacy_provider_block_guarded"] is True
     assert audit["default_provider_refresh_reachable"] is False
     assert audit["default_provider_publish_reachable"] is False
@@ -196,6 +220,94 @@ def test_wf3_daily_wiring_is_thin_default_off_and_after_dng9_early_exit() -> Non
     assert "clear_pending_asof" not in helper
 
 
+def test_wf4a_daily_wiring_is_default_off_and_after_current_materialization() -> None:
+    source = DAILY_SCRIPT.read_text(encoding="utf-8")
+    helper = (ROOT / "scripts/tw_daily_model_a_signal_shadow.py").read_text(encoding="utf-8")
+    finalize_start = source.index("def finalize_job(")
+    finalize_end = source.index("\ndef env_flag(", finalize_start)
+    finalizer = source[finalize_start:finalize_end]
+
+    assert "TW_DAILY_AUTO_ENABLE_WORKFLOW_MODELA_SIGNAL_SHADOW" in source
+    assert source.count("run_daily_model_a_signal_shadow(") == 1
+    assert finalizer.index("materialize_daily_research_history(") < finalizer.index("run_daily_model_a_signal_shadow(")
+    assert 'WORKFLOW_PERMISSION = "artifact.read"' in helper
+    assert 'workspace_name="workflow_model_a_signal_shadow"' in helper
+    assert '(("--history-index", HISTORY_INDEX_RELATIVE_PATH),)' in helper
+    assert "_current_materialization_manifest" in helper
+    assert "model_training_triggered" not in helper
+    assert "model_scoring_triggered" not in helper
+
+
+def test_wf4a_missing_finalize_call_is_reported_as_audit_error(tmp_path: Path) -> None:
+    source = DAILY_SCRIPT.read_text(encoding="utf-8")
+    modified = source.replace('job["workflow_model_a_signal_shadow"] = run_daily_model_a_signal_shadow(', 'job["workflow_model_a_signal_shadow"] = missing_model_a_shadow(', 1)
+    script_path = tmp_path / "daily_missing_wf4a.py"
+    script_path.write_text(modified, encoding="utf-8")
+
+    audit = load_validator_module().audit_script(script_path)
+
+    assert audit["ok"] is False
+    assert audit["script_audit"]["workflow_model_a_signal_shadow_finalize_call_count"] == 0
+    assert audit["script_audit"]["workflow_model_a_signal_shadow_after_materialization"] is False
+    assert any(error["code"] == "workflow_model_a_signal_shadow_order_invalid" for error in audit["errors"])
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_code"),
+    [
+        ("wrapper_precondition", "workflow_model_a_signal_shadow_precondition_not_forwarded"),
+        ("shared_precondition", "workflow_model_a_signal_shadow_precondition_not_invoked"),
+        ("evidence_guard", "workflow_model_a_signal_shadow_evidence_path_guard_missing"),
+        ("evidence_guard_body", "workflow_model_a_signal_shadow_evidence_path_guard_missing"),
+        ("pinned_source", "workflow_model_a_signal_shadow_pinned_source_enforcement_missing"),
+        ("pinned_argv", "workflow_model_a_signal_shadow_pinned_source_enforcement_missing"),
+    ],
+)
+def test_wf4a_m3_audit_fails_closed_when_shared_wiring_is_removed(
+    tmp_path: Path, monkeypatch, mutation: str, expected_code: str
+) -> None:
+    validator = load_validator_module()
+    wrapper_source = (ROOT / "scripts/tw_daily_model_a_signal_shadow.py").read_text(encoding="utf-8")
+    shared_source = (ROOT / "scripts/tw_daily_workflow_shadow.py").read_text(encoding="utf-8")
+    if mutation == "wrapper_precondition":
+        wrapper_source = wrapper_source.replace("        precondition=precondition,\n", "", 1)
+    elif mutation == "shared_precondition":
+        shared_source = shared_source.replace("            result.update(precondition())\n", "            pass\n", 1)
+    elif mutation == "evidence_guard":
+        start = shared_source.index("        if (\n            Path(str(runner_result.get(\"stdout_path\")")
+        stop = shared_source.index("        stdout_record = _read_json(stdout_path)", start)
+        shared_source = shared_source[:start] + shared_source[stop:]
+    elif mutation == "evidence_guard_body":
+        shared_source = shared_source.replace(
+            '            raise ValueError("workflow runner stdout/stderr evidence path changed")\n',
+            "            pass\n",
+            1,
+        )
+    elif mutation == "pinned_source":
+        shared_source = shared_source.replace(
+            "            _regular_pinned_file(source, source, repo_root, flag)\n",
+            "            pass\n",
+            1,
+        )
+    else:
+        shared_source = shared_source.replace(
+            "            argv.extend((flag, relative_source))\n",
+            "            pass\n",
+            1,
+        )
+    wrapper_path = tmp_path / "tw_daily_model_a_signal_shadow.py"
+    shared_path = tmp_path / "tw_daily_workflow_shadow.py"
+    wrapper_path.write_text(wrapper_source, encoding="utf-8")
+    shared_path.write_text(shared_source, encoding="utf-8")
+    monkeypatch.setattr(validator, "WORKFLOW_MODELA_SIGNAL_SHADOW_HELPER", wrapper_path)
+    monkeypatch.setattr(validator, "WORKFLOW_SHADOW_SHARED_HELPER", shared_path)
+
+    audit = validator.audit_script(DAILY_SCRIPT)
+
+    assert audit["ok"] is False
+    assert expected_code in {error["code"] for error in audit["errors"]}
+
+
 def test_daily_entrypoint_help_loads_without_external_pythonpath() -> None:
     completed = subprocess.run(
         [sys.executable, str(DAILY_SCRIPT), "--help"],
@@ -208,6 +320,7 @@ def test_daily_entrypoint_help_loads_without_external_pythonpath() -> None:
 
     assert completed.returncode == 0, completed.stderr
     assert "--enable-workflow-readonly-shadow" in completed.stdout
+    assert "--enable-workflow-model-a-signal-shadow" in completed.stdout
 
 
 def test_pbpr0_daily_chain_blocked_case_emits_dasf_fields() -> None:

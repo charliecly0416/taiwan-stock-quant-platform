@@ -1,12 +1,12 @@
 # 通用 Workflow Kernel 与迁移顺序
 
-状态：WF-0 独立内核、WF-1 replay observation sidecar 与 WF-2B 隔离 replay candidate execution module 已完成。均未接入 daily、cron 或任何发布链路。
+状态：WF-0 独立内核、WF-1 replay observation、WF-2B 隔离 replay candidate execution module、WF-3 日更 replay 只读 shadow 与 WF-4A 日更 Model A 输入/信号只读 shadow 已完成。WF-3/WF-4A 仅以源码默认关闭的非阻断 sidecar 接入 daily finalizer；未修改 installed cron，也未接入任何发布链路。
 
 ## 目标与边界
 
-`tw_stock_workflow` 提供一个小型通用执行内核，将执行上下文、artifact 查询、模块注册、DAG、权限和运行记录统一起来。当前唯一内置模块 `research_history.observe` 只读 `data_tw/catalog/research_data_history/index.json`，用于证明既有 Model A 输入和信号可以通过标准引用串联。当前 adapter 只暴露具备标准 `artifact_type/model_id/asof/status/run_id` manifest 身份的 Model A artifact；Model B history 是缺少标准 `run_id` 的多文件研究 bundle，必须在后续通过独立 adapter 接入，不能弱化通用 manifest 校验来伪装成标准 signal。
+`tw_stock_workflow` 提供一个小型通用执行内核，将执行上下文、artifact 查询、模块注册、DAG、权限和运行记录统一起来。`research_history.observe` 只读 `data_tw/catalog/research_data_history/index.json`，用于证明既有 Model A 输入和信号可以通过标准引用串联。adapter 使用 index day entry 指向的不可变 day manifest 作为日期身份闭包，并校验 Model A 两个 slot 声明的 manifest、validator、CSV 与所有额外文件的路径、大小和 SHA256；index 新增无关日期不会改变显式旧日期的 run identity。当前 adapter 只暴露具备标准 `artifact_type/model_id/asof/status/run_id` manifest 身份的 Model A artifact；Model B history 是缺少标准 `run_id` 的多文件研究 bundle，必须在后续通过独立 adapter 接入，不能弱化通用 manifest 校验来伪装成标准 signal。
 
-内核不触发数据抓取、模型训练、provider/latest 写入、paper account、broker 或订单路径。`configs/workflows/research_history_observation.yaml` 只是只读 workflow spec，不在 cron 或 daily orchestrator 中注册。B19R2R 仍为 `production_allowed=false` 的研究 challenger。
+内核不触发数据抓取、模型训练、provider/latest 写入、paper account、broker 或订单路径。`configs/workflows/research_history_observation.yaml` 只通过 WF-4A 的显式默认关闭 gate 接入 daily finalizer，未进入 cron。B19R2R 仍为 `production_allowed=false` 的研究 challenger。
 
 WF-1 增加 `replay_window.observe`，只观察产品 registry 指向的 D7 readonly replay window index 及其 D6 artifact。它不会调用 replay runner、读取 policy 中的历史 experiment `source`、生成新收益结果或修改 index/latest。`configs/workflows/replay_window_observation.yaml` 同样没有接入 cron 或 daily。
 
@@ -73,6 +73,14 @@ runner stdout 不能单独证明成功。WF-3 会读取 `<workspace>/runs/<run_i
 
 在调用前后，sidecar 指纹化 formal provider calendar、qlib accepted latest、legacy Option C latest、controlled Model A latest、readonly snapshot latest、Agent prompt latest，并单独指纹化 `pending_asof.json` 与 installed cron。`SUCCEEDED`、`BLOCKED`、`FAILED`、timeout、异常或证据不一致都只归一化为 `job["workflow_readonly_shadow"]` 证据；任何失败均为 `mainline_blocking=false`，不改变原 daily status、caller return code、pending、latest 或主线后续语义。
 
+## WF-4A Daily Model A Input/Signal Shadow
+
+WF-4A 在 `materialize_daily_research_history()` 之后，以独立 sidecar 运行固定的 `research_history.model_a_observation`。开关为 `--enable-workflow-model-a-signal-shadow` / `TW_DAILY_AUTO_ENABLE_WORKFLOW_MODELA_SIGNAL_SHADOW`，源码默认关闭；workspace、stdout 和 stderr 分别固定在当前 job 下的 `workflow_model_a_signal_shadow` 命名空间，与 WF-3 不共享权限或运行记录。
+
+启用时只授予 `artifact.read`，并精确固定 `configs/workflows/research_history_observation.yaml`、`scripts/run_tw_stock_workflow.py` 和 `data_tw/catalog/research_data_history/index.json`。runner 前置条件要求本次 finalizer 的 `job.research_data_history` 已实际尝试且成功，状态为 `READY_MODELA_ONLY` 或 `READY_MODELA_MODELB`，其 asof、job_id 和 day manifest 路径必须与当前 daily job 完全一致。物化失败或 `SKIPPED_NO_ACCEPTED_ASSET` 时，WF-4A 记录 `BLOCKED_NONBLOCKING`，不会读取同日期的旧 index entry 冒充本次成功。
+
+成功记录必须通过官方 `validate_run_record`，且正好包含 Model A input/signal 两个节点和各一个 READY ref。两个 ref 必须同日、同 model、同 run_id，并共同绑定本次 day manifest；adapter、artifact manifest、全部 declared files、安全字段和节点输出 query 也必须一致。WF-4A 固定超时 60 秒，并复用 WF-3 的受保护指针、pending、installed cron 和 mainline status 前后指纹。任何 workflow 阻断、失败、超时、异常或证据漂移均为非阻断证据，不触发训练、打分、replay、恢复、latest/pending 写入或交易。
+
 ## 合同
 
 - `ExecutionContext` 明确声明 `mode`、`asof`、带时区的 `decision_cutoff`、隔离 `workspace` 和权限集合。
@@ -103,7 +111,8 @@ PYTHONPATH=. python3 scripts/run_tw_stock_workflow.py \
 1. **Replay observation（WF-1 已完成 sidecar）**：专用只读 adapter 和 observation module 用固定 fixture、历史 manifest 与 backend index parity 验证，不替换现有 replay runner。完整 ReplayResult admission 仍为 HOLD。
 2. **Replay execution（WF-2A candidate gate 与 WF-2B isolated module 已完成）**：canonical Model A 固定窗口 candidate 已由同一 D3RR 前向引擎生成并通过完整 validator，workflow module 也可在显式外部 workspace 中幂等构建和验证候选；结果仍为 HOLD，未登记 D7。产品 admission 与正式切换仍需独立决定，旧入口继续保留。
 3. **Daily shadow orchestration（WF-3 已完成、源码默认关闭）**：固定 replay observation 已作为非阻断 sidecar 接入统一 finalizer；是否加入 installed cron 和连续自然调度观察仍需独立运维决定。
-4. **Daily stage migration**：逐阶段迁移 data、feature、Model A signal、strategy、snapshot，每阶段都保留现有合同、artifact validator 和回退入口。Model B 始终是非阻断 optional branch。
-5. **切换与清理**：只有完整模块回归、M3 validator、readonly deployment acceptance 和连续自然调度证据均通过后，才另行提出切换决定。旧执行路径的删除需要独立影响闭包、备份和恢复验证。
+4. **Model A input/signal shadow（WF-4A 已完成、源码默认关闭）**：只观察本次 finalizer 成功物化的 Model A 输入与信号，不执行模型；是否加入 installed cron 和连续自然调度观察仍需独立运维决定。
+5. **Daily stage migration**：逐阶段迁移 data、feature、strategy、snapshot，每阶段都保留现有合同、artifact validator 和回退入口。Model B 始终是非阻断 optional branch。
+6. **切换与清理**：只有完整模块回归、M3 validator、readonly deployment acceptance 和连续自然调度证据均通过后，才另行提出切换决定。旧执行路径的删除需要独立影响闭包、备份和恢复验证。
 
 任何迁移都不得通过 workflow 私下读取实验文件；依赖必须来自 registry 允许的标准 artifact。生产默认、provider/accepted latest 和 cron 变更需要单独授权，本文件不构成授权。

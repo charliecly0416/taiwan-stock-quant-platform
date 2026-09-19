@@ -47,6 +47,7 @@ from tw_daily_runtime_stages import (
     runtime_truth,
 )
 from tw_daily_stage_adapters import build_named_stage_adapters, stage_contract_summary
+from tw_daily_model_a_signal_shadow import run_daily_model_a_signal_shadow
 from tw_daily_workflow_readonly_shadow import run_daily_workflow_readonly_shadow
 from tw_research_data_history import materialize_daily_research_history
 
@@ -70,6 +71,10 @@ PENDING_ASOF = OPS_ROOT / "pending_asof.json"
 TERMINAL_PENDING_QUARANTINE_ROOT = OPS_ROOT / "terminal_pending_quarantine"
 WORKFLOW_READONLY_SHADOW_SPEC = ROOT / "configs/workflows/replay_window_observation.yaml"
 WORKFLOW_READONLY_SHADOW_RUNNER = ROOT / "scripts/run_tw_stock_workflow.py"
+WORKFLOW_MODELA_SIGNAL_SHADOW_SPEC = (
+    ROOT / "configs/workflows/research_history_observation.yaml"
+)
+WORKFLOW_MODELA_SIGNAL_SHADOW_RUNNER = ROOT / "scripts/run_tw_stock_workflow.py"
 INSTALLED_DAILY_CRON = OPS_ROOT / "tw-daily-auto-update.installed.cron"
 READONLY_SNAPSHOT_ROOT = ROOT / "data_tw/artifacts/publish/readonly_strategy_snapshot"
 READONLY_SNAPSHOT_LATEST = READONLY_SNAPSHOT_ROOT / "latest.json"
@@ -1845,6 +1850,32 @@ def finalize_job(job: dict[str, Any], *, job_dir: Path, asof: str, args: argpars
                 "production_allowed": False,
                 "no_apply": True,
             }
+    workflow_protected_paths = {
+        "formal_provider_calendar": CALENDAR,
+        "qlib_accepted_latest": LATEST,
+        "legacy_option_c_latest": ROOT
+        / "data_tw/experiments/option_c_daily_signal/latest_signal.json",
+        "controlled_model_signal_latest": CONTROLLED_MODEL_SIGNAL_LATEST,
+        "readonly_snapshot_latest": READONLY_SNAPSHOT_LATEST,
+        "agent_prompt_latest": AGENT_DAILY_PROMPT_LATEST,
+    }
+    job["workflow_model_a_signal_shadow"] = run_daily_model_a_signal_shadow(
+        job=job,
+        job_dir=job_dir,
+        asof=asof,
+        enabled=bool(
+            getattr(args, "enable_workflow_model_a_signal_shadow", False)
+        ),
+        repo_root=ROOT,
+        python_executable=PYTHON,
+        workflow_runner_path=WORKFLOW_MODELA_SIGNAL_SHADOW_RUNNER,
+        spec_path=WORKFLOW_MODELA_SIGNAL_SHADOW_SPEC,
+        expected_model_id=MODELA_MODEL_ID,
+        protected_paths=workflow_protected_paths,
+        pending_path=PENDING_ASOF,
+        installed_cron_path=INSTALLED_DAILY_CRON,
+        command_runner=run_cmd,
+    )
     job["workflow_readonly_shadow"] = run_daily_workflow_readonly_shadow(
         job=job,
         job_dir=job_dir,
@@ -1856,15 +1887,7 @@ def finalize_job(job: dict[str, Any], *, job_dir: Path, asof: str, args: argpars
         spec_path=WORKFLOW_READONLY_SHADOW_SPEC,
         expected_model_id=MODELA_MODEL_ID,
         expected_strategy_rule=STRATEGY_RULE,
-        protected_paths={
-            "formal_provider_calendar": CALENDAR,
-            "qlib_accepted_latest": LATEST,
-            "legacy_option_c_latest": ROOT
-            / "data_tw/experiments/option_c_daily_signal/latest_signal.json",
-            "controlled_model_signal_latest": CONTROLLED_MODEL_SIGNAL_LATEST,
-            "readonly_snapshot_latest": READONLY_SNAPSHOT_LATEST,
-            "agent_prompt_latest": AGENT_DAILY_PROMPT_LATEST,
-        },
+        protected_paths=workflow_protected_paths,
         pending_path=PENDING_ASOF,
         installed_cron_path=INSTALLED_DAILY_CRON,
         command_runner=run_cmd,
@@ -7244,6 +7267,14 @@ def main() -> int:
         help="Explicit non-default WF-3 gate for the readonly replay-window observation DAG.",
     )
     parser.add_argument(
+        "--enable-workflow-model-a-signal-shadow",
+        action="store_true",
+        default=env_flag(
+            "TW_DAILY_AUTO_ENABLE_WORKFLOW_MODELA_SIGNAL_SHADOW", False
+        ),
+        help="Explicit non-default WF-4A gate for readonly Model A input/signal observation.",
+    )
+    parser.add_argument(
         "--enable-model-signal-gate",
         action="store_true",
         default=env_flag("TW_DAILY_AUTO_ENABLE_MODEL_SIGNAL_GATE", False),
@@ -7523,6 +7554,23 @@ def main() -> int:
             "status": (
                 "NOT_ATTEMPTED"
                 if args.enable_workflow_readonly_shadow
+                else "DISABLED_BY_DEFAULT"
+            ),
+            "mainline_blocking": False,
+            "production_allowed": False,
+            "no_apply": True,
+        },
+        "workflow_model_a_signal_shadow_enabled": bool(
+            args.enable_workflow_model_a_signal_shadow
+        ),
+        "workflow_model_a_signal_shadow": {
+            "schema_version": "daily.workflow_model_a_signal_shadow.v1",
+            "enabled": bool(args.enable_workflow_model_a_signal_shadow),
+            "attempted": False,
+            "ok": not bool(args.enable_workflow_model_a_signal_shadow),
+            "status": (
+                "NOT_ATTEMPTED"
+                if args.enable_workflow_model_a_signal_shadow
                 else "DISABLED_BY_DEFAULT"
             ),
             "mainline_blocking": False,

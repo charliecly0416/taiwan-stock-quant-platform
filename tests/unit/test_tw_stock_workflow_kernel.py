@@ -39,6 +39,23 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def file_record(repo: Path, path: Path) -> dict[str, Any]:
+    return {
+        "path": str(path.relative_to(repo)),
+        "size_bytes": path.stat().st_size,
+        "sha256": sha256(path),
+    }
+
+
+def sync_day_manifest(repo: Path, index_payload: dict[str, Any], asof: str) -> None:
+    day = index_payload["days"][asof]
+    path = repo / day["manifest_path"]
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    for key in ("asof", "status", "model_a", "model_b"):
+        manifest[key] = day[key]
+    write_json(path, manifest)
+
+
 def make_history(
     repo: Path, *, asof: str = "2026-09-18", run_id: str = "run-1"
 ) -> Path:
@@ -56,17 +73,46 @@ def make_history(
             "run_id": run_id,
         }
         write_json(artifact_dir / "manifest.json", manifest)
+        write_json(
+            artifact_dir / "validator_report.json", {"ok": True, "status": "PASS"}
+        )
+        data_file = (
+            "inference_frame.csv" if slot == "inference_input" else "signals.csv"
+        )
+        (artifact_dir / data_file).write_text(
+            "date,instrument,value\n2026-09-18,TW2330,1\n", encoding="utf-8"
+        )
         slots[slot] = {
             "artifact_type": artifact_type,
             "path": str(artifact_dir.relative_to(repo)),
             "run_id": run_id,
             "files": {
-                "manifest.json": {
-                    "path": str((artifact_dir / "manifest.json").relative_to(repo)),
-                    "sha256": sha256(artifact_dir / "manifest.json"),
-                }
+                name: file_record(repo, artifact_dir / name)
+                for name in ("manifest.json", "validator_report.json", data_file)
             },
         }
+    day = {
+        "asof": asof,
+        "status": "READY_MODELA_ONLY",
+        "model_a": {
+            "model_id": MODEL_A,
+            "asof": asof,
+            "status": "READY",
+            **slots,
+        },
+        "model_b": None,
+    }
+    day_manifest = repo / f"history/{asof}/day.json"
+    write_json(
+        day_manifest,
+        {
+            "schema_version": "tw.research_data_history.day.v1",
+            **day,
+            "production_allowed": False,
+            "no_apply": True,
+            "mainline_blocking": False,
+        },
+    )
     index_path = repo / "history/index.json"
     write_json(
         index_path,
@@ -74,20 +120,50 @@ def make_history(
             "schema_version": "tw.research_data_history.index.v1",
             "days": {
                 asof: {
-                    "asof": asof,
-                    "status": "READY_MODELA_ONLY",
-                    "model_a": {
-                        "model_id": MODEL_A,
-                        "asof": asof,
-                        "status": "READY",
-                        **slots,
-                    },
-                    "model_b": None,
+                    **day,
+                    "manifest_path": str(day_manifest.relative_to(repo)),
                 }
             },
         },
     )
     return index_path
+
+
+def research_observation_workflow() -> WorkflowSpec:
+    return spec(
+        [
+            {
+                "id": "input",
+                "module": "research_history.observe",
+                "policy": "required",
+                "config": {
+                    "artifact_type": "ModelInferenceInput",
+                    "model_id": MODEL_A,
+                    "status": "READY",
+                },
+            },
+            {
+                "id": "signal",
+                "module": "research_history.observe",
+                "needs": ["input"],
+                "policy": "required",
+                "config": {
+                    "artifact_type": "ModelSignalArtifact",
+                    "model_id": MODEL_A,
+                    "status": "READY",
+                    "require_same_run_id": True,
+                },
+            },
+        ]
+    )
+
+
+def research_engine(repo: Path, index_path: Path) -> WorkflowEngine:
+    resolver = ArtifactResolver(repo)
+    resolver.register(ResearchHistoryAdapter(repo, index_path))
+    registry = ModuleRegistry()
+    registry.register(ResearchHistoryObservation())
+    return WorkflowEngine(registry, resolver)
 
 
 def context(
@@ -477,7 +553,7 @@ def test_engine_detects_input_drift_without_module_artifact_echo(
 
     assert result.status == "FAILED"
     assert result.record["nodes"]["tamper"]["error_type"] == "ArtifactError"
-    assert "checksum mismatch" in result.record["nodes"]["tamper"]["error"]
+    assert "mismatch" in result.record["nodes"]["tamper"]["error"]
     stored = RunRegistry(tmp_path / "workspace").load(result.run_id)
     assert stored is not None
     assert stored["status"] == "FAILED"
@@ -534,8 +610,217 @@ def test_artifact_query_filters_and_checks_manifest_sha(tmp_path: Path) -> None:
 
     manifest = tmp_path / refs[0].manifest_path
     manifest.write_text("{}\n", encoding="utf-8")
-    with pytest.raises(ArtifactError, match="checksum mismatch"):
+    with pytest.raises(ArtifactError, match="(size|checksum) mismatch"):
         resolver.query(model_id=MODEL_A)
+
+
+@pytest.mark.parametrize(
+    ("slot", "filename"),
+    [
+        ("inference_input", "inference_frame.csv"),
+        ("signal", "signals.csv"),
+        ("signal", "validator_report.json"),
+    ],
+)
+def test_research_history_rejects_declared_file_tampering(
+    tmp_path: Path, slot: str, filename: str
+) -> None:
+    index_path = make_history(tmp_path)
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    record = payload["days"]["2026-09-18"]["model_a"][slot]["files"][filename]
+    (tmp_path / record["path"]).write_text("tampered\n", encoding="utf-8")
+    resolver = ArtifactResolver(tmp_path)
+    resolver.register(ResearchHistoryAdapter(tmp_path, index_path))
+
+    with pytest.raises(ArtifactError, match="(size|checksum) mismatch"):
+        resolver.query(asof="2026-09-18")
+
+
+@pytest.mark.parametrize(
+    "validator_payload",
+    [{"ok": False, "status": "PASS"}, {"ok": True, "status": "FAIL"}],
+)
+def test_research_history_requires_passing_validator_report(
+    tmp_path: Path, validator_payload: dict[str, Any]
+) -> None:
+    index_path = make_history(tmp_path)
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    signal = payload["days"]["2026-09-18"]["model_a"]["signal"]
+    validator_path = tmp_path / signal["files"]["validator_report.json"]["path"]
+    write_json(validator_path, validator_payload)
+    signal["files"]["validator_report.json"] = file_record(tmp_path, validator_path)
+    sync_day_manifest(tmp_path, payload, "2026-09-18")
+    write_json(index_path, payload)
+    resolver = ArtifactResolver(tmp_path)
+    resolver.register(ResearchHistoryAdapter(tmp_path, index_path))
+
+    with pytest.raises(ArtifactError, match="validator did not pass"):
+        resolver.query(asof="2026-09-18")
+
+
+def test_research_history_rejects_day_manifest_drift(tmp_path: Path) -> None:
+    index_path = make_history(tmp_path)
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    day_path = tmp_path / payload["days"]["2026-09-18"]["manifest_path"]
+    day = json.loads(day_path.read_text(encoding="utf-8"))
+    day["status"] = "READY_MODELA_MODELB"
+    write_json(day_path, day)
+    resolver = ArtifactResolver(tmp_path)
+    resolver.register(ResearchHistoryAdapter(tmp_path, index_path))
+
+    with pytest.raises(ArtifactError, match="index/day-manifest drift"):
+        resolver.query(asof="2026-09-18")
+
+
+@pytest.mark.parametrize("mutation", ["missing", "malformed", "extra_field"])
+def test_research_history_rejects_incomplete_file_records(
+    tmp_path: Path, mutation: str
+) -> None:
+    index_path = make_history(tmp_path)
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    files = payload["days"]["2026-09-18"]["model_a"]["signal"]["files"]
+    if mutation == "missing":
+        del files["signals.csv"]
+    elif mutation == "malformed":
+        files["signals.csv"] = "not-an-object"
+    else:
+        files["signals.csv"]["unexpected"] = True
+    sync_day_manifest(tmp_path, payload, "2026-09-18")
+    write_json(index_path, payload)
+    resolver = ArtifactResolver(tmp_path)
+    resolver.register(ResearchHistoryAdapter(tmp_path, index_path))
+
+    with pytest.raises(
+        ArtifactError, match="(required file records missing|malformed file record)"
+    ):
+        resolver.query(asof="2026-09-18")
+
+
+def test_research_history_validates_and_binds_extra_declared_file(
+    tmp_path: Path,
+) -> None:
+    index_path = make_history(tmp_path)
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    signal = payload["days"]["2026-09-18"]["model_a"]["signal"]
+    extra_path = tmp_path / signal["path"] / "quality.json"
+    write_json(extra_path, {"coverage": 1.0})
+    signal["files"]["quality.json"] = file_record(tmp_path, extra_path)
+    sync_day_manifest(tmp_path, payload, "2026-09-18")
+    write_json(index_path, payload)
+    resolver = ArtifactResolver(tmp_path)
+    resolver.register(ResearchHistoryAdapter(tmp_path, index_path))
+
+    refs = resolver.query(artifact_type="ModelSignalArtifact", asof="2026-09-18")
+
+    assert refs[0].metadata["declared_files"]["quality.json"] == file_record(
+        tmp_path, extra_path
+    )
+
+
+def test_research_history_rejects_colliding_or_noncanonical_file_path(
+    tmp_path: Path,
+) -> None:
+    index_path = make_history(tmp_path)
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    signal = payload["days"]["2026-09-18"]["model_a"]["signal"]
+    duplicate = dict(signal["files"]["manifest.json"])
+    duplicate["path"] = f"{signal['path']}/nested/../manifest.json"
+    signal["files"]["duplicate.json"] = duplicate
+    sync_day_manifest(tmp_path, payload, "2026-09-18")
+    write_json(index_path, payload)
+    resolver = ArtifactResolver(tmp_path)
+    resolver.register(ResearchHistoryAdapter(tmp_path, index_path))
+
+    with pytest.raises(ArtifactError, match="not canonical"):
+        resolver.query(asof="2026-09-18")
+
+
+def test_research_history_day_manifest_must_be_in_index_day_directory(
+    tmp_path: Path,
+) -> None:
+    index_path = make_history(tmp_path)
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    original = tmp_path / payload["days"]["2026-09-18"]["manifest_path"]
+    misplaced = tmp_path / "history/day.json"
+    misplaced.write_bytes(original.read_bytes())
+    payload["days"]["2026-09-18"]["manifest_path"] = str(
+        misplaced.relative_to(tmp_path)
+    )
+    write_json(index_path, payload)
+    resolver = ArtifactResolver(tmp_path)
+    resolver.register(ResearchHistoryAdapter(tmp_path, index_path))
+
+    with pytest.raises(ArtifactError, match="outside its day directory"):
+        resolver.query(asof="2026-09-18")
+
+
+def test_explicit_asof_ignores_unrelated_broken_day_and_keeps_run_identity(
+    tmp_path: Path,
+) -> None:
+    index_path = make_history(tmp_path)
+    engine = research_engine(tmp_path, index_path)
+    workflow = research_observation_workflow()
+    run_context = context(tmp_path / "workspace")
+    first = engine.run(workflow, run_context)
+
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    payload["days"]["2026-09-19"] = {
+        "asof": "2026-09-19",
+        "status": "BROKEN",
+        "manifest_path": "missing/day.json",
+    }
+    write_json(index_path, payload)
+    refs = engine.resolver.query(asof="2026-09-18")
+    second = engine.run(workflow, run_context)
+
+    assert len(refs) == 2
+    assert second.run_id == first.run_id
+    assert second.idempotent_reuse is True
+
+
+def test_run_identity_changes_when_declared_payload_changes(tmp_path: Path) -> None:
+    index_path = make_history(tmp_path)
+    workflow = research_observation_workflow()
+    run_context = context(tmp_path / "workspace")
+    engine = research_engine(tmp_path, index_path)
+    first = engine.run(workflow, run_context)
+
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    signal = payload["days"]["2026-09-18"]["model_a"]["signal"]
+    signal_path = tmp_path / signal["files"]["signals.csv"]["path"]
+    signal_path.write_text(
+        "date,instrument,value\n2026-09-18,TW2330,2\n", encoding="utf-8"
+    )
+    signal["files"]["signals.csv"] = file_record(tmp_path, signal_path)
+    sync_day_manifest(tmp_path, payload, "2026-09-18")
+    write_json(index_path, payload)
+
+    second = engine.run(workflow, run_context)
+    assert second.run_id != first.run_id
+
+
+def test_research_history_metadata_contains_complete_readonly_identity(
+    tmp_path: Path,
+) -> None:
+    index_path = make_history(tmp_path)
+    resolver = ArtifactResolver(tmp_path)
+    resolver.register(ResearchHistoryAdapter(tmp_path, index_path))
+
+    ref = resolver.query(artifact_type="ModelSignalArtifact", asof="2026-09-18")[0]
+
+    assert set(ref.metadata["history_day_manifest"]) == {
+        "path",
+        "size_bytes",
+        "sha256",
+    }
+    assert set(ref.metadata["declared_files"]) == {
+        "manifest.json",
+        "validator_report.json",
+        "signals.csv",
+    }
+    assert ref.metadata["production_allowed"] is False
+    assert ref.metadata["no_apply"] is True
+    assert ref.metadata["mainline_blocking"] is False
 
 
 def test_manifest_identity_fields_are_required(tmp_path: Path) -> None:
@@ -547,6 +832,8 @@ def test_manifest_identity_fields_are_required(tmp_path: Path) -> None:
     del manifest["run_id"]
     write_json(manifest_path, manifest)
     signal["files"]["manifest.json"]["sha256"] = sha256(manifest_path)
+    signal["files"]["manifest.json"]["size_bytes"] = manifest_path.stat().st_size
+    sync_day_manifest(tmp_path, payload, "2026-09-18")
     write_json(index_path, payload)
     resolver = ArtifactResolver(tmp_path)
     resolver.register(ResearchHistoryAdapter(tmp_path, index_path))
@@ -560,10 +847,11 @@ def test_artifact_path_and_symlink_escape_are_rejected(tmp_path: Path) -> None:
     payload = json.loads(index_path.read_text(encoding="utf-8"))
     signal = payload["days"]["2026-09-18"]["model_a"]["signal"]
     signal["path"] = "../outside"
+    sync_day_manifest(tmp_path, payload, "2026-09-18")
     write_json(index_path, payload)
     resolver = ArtifactResolver(tmp_path)
     resolver.register(ResearchHistoryAdapter(tmp_path, index_path))
-    with pytest.raises(ArtifactError, match="escapes repository"):
+    with pytest.raises(ArtifactError, match="(escapes repository|symlink)"):
         resolver.query(artifact_type="ModelSignalArtifact")
 
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
@@ -577,10 +865,12 @@ def test_artifact_path_and_symlink_escape_are_rejected(tmp_path: Path) -> None:
     signal["path"] = str(link.relative_to(tmp_path))
     signal["files"]["manifest.json"] = {
         "path": str((link / "manifest.json").relative_to(tmp_path)),
+        "size_bytes": (outside / "manifest.json").stat().st_size,
         "sha256": sha256(outside / "manifest.json"),
     }
+    sync_day_manifest(tmp_path, payload, "2026-09-18")
     write_json(index_path, payload)
-    with pytest.raises(ArtifactError, match="escapes repository"):
+    with pytest.raises(ArtifactError, match="(escapes repository|symlink)"):
         resolver.query(artifact_type="ModelSignalArtifact")
 
 
@@ -717,6 +1007,8 @@ def test_run_identity_changes_when_declared_manifest_sha_changes(
     manifest["decision_cutoff"] = "2026-09-18T10:31:00+00:00"
     write_json(manifest_path, manifest)
     signal["files"]["manifest.json"]["sha256"] = sha256(manifest_path)
+    signal["files"]["manifest.json"]["size_bytes"] = manifest_path.stat().st_size
+    sync_day_manifest(tmp_path, payload, "2026-09-18")
     write_json(index_path, payload)
 
     second = engine.run(workflow, run_context)
@@ -799,6 +1091,7 @@ def test_model_a_query_ignores_unstandardized_model_b_history_entry(
         "production_allowed": False,
         "no_apply": True,
     }
+    sync_day_manifest(tmp_path, payload, "2026-09-18")
     write_json(index_path, payload)
     resolver = ArtifactResolver(tmp_path)
     resolver.register(ResearchHistoryAdapter(tmp_path, index_path))
