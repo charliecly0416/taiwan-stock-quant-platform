@@ -182,6 +182,8 @@
 </template>
 
 <script>
+import { usePaperPortfolio } from '../composables/usePaperPortfolio'
+// Legacy API ownership remains explicit while the composable delegates to these helpers.
 import {
   getTwStockPaperPortfolioLatestDecision,
   getTwStockPaperPortfolioState,
@@ -212,7 +214,8 @@ export default {
       resetResult: null,
       error: '',
       applyConfirmVisible: false,
-      resetConfirmVisible: false
+      resetConfirmVisible: false,
+      paperPortfolioComposable: null
     }
   },
   computed: {
@@ -310,15 +313,13 @@ export default {
       this.loading = true
       this.error = ''
       try {
-        const latest = this.unwrap(await getTwStockPaperPortfolioLatestDecision())
+        if (!this.paperPortfolioComposable) this.paperPortfolioComposable = usePaperPortfolio()
+        const bundle = await this.paperPortfolioComposable.load()
+        const latest = this.unwrap(bundle && bundle.latest)
         this.latestPayload = latest
         if (latest && latest.ok === true && latest.paper_account_id) {
-          const [state, runs] = await Promise.all([
-            getTwStockPaperPortfolioState({ paper_account_id: latest.paper_account_id }),
-            getTwStockPaperPortfolioApplyRuns({ paper_account_id: latest.paper_account_id, limit: 20 })
-          ])
-          this.statePayload = this.unwrap(state)
-          this.applyRunsPayload = this.unwrap(runs)
+          this.statePayload = this.unwrap(bundle.account)
+          this.applyRunsPayload = this.unwrap(bundle.runs)
         }
       } catch (error) {
         this.error = this.friendlyError(error)
@@ -342,7 +343,8 @@ export default {
           confirmed_by_user: true,
           confirm_text: '确认应用到模拟账户，此操作只影响模拟账户'
         }
-        const result = this.unwrap(await applyTwStockPaperPortfolioDecision(payload))
+        if (!this.paperPortfolioComposable) this.paperPortfolioComposable = usePaperPortfolio()
+        const result = this.unwrap(await this.paperPortfolioComposable.apply(payload))
         this.applyResult = result
         this.applyConfirmVisible = false
         await this.loadAll()
@@ -365,7 +367,8 @@ export default {
           confirm_text: '确认重置模拟账户',
           reset_initial_cash: this.initialCash
         }
-        this.resetResult = this.unwrap(await resetTwStockPaperPortfolio(payload))
+        if (!this.paperPortfolioComposable) this.paperPortfolioComposable = usePaperPortfolio()
+        this.resetResult = this.unwrap(await this.paperPortfolioComposable.reset(payload))
         this.applyResult = null
         this.resetConfirmVisible = false
         await this.loadAll()

@@ -301,6 +301,9 @@ class TWStockPaperPortfolioService:
         }
 
     def apply_decision(self, *, user_id: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+        # The service owns this safety flag; client values cannot opt out of
+        # the simulation-only boundary.
+        payload = {**(payload or {}), "paper_only": True}
         paper_account_id = str(payload.get("paper_account_id") or payload.get("paperAccountId") or "")
         idempotency_key = str(payload.get("idempotency_key") or payload.get("idempotencyKey") or "")
         input_checksum = str(payload.get("input_checksum") or payload.get("inputChecksum") or "")
@@ -415,6 +418,7 @@ class TWStockPaperPortfolioService:
                 "created_at": str(now),
                 "applied_at": str(now),
                 "simulation_only": True,
+                "paper_only": True,
                 "trading": sim_trading_flags(),
             }
             cur.execute(
@@ -432,6 +436,7 @@ class TWStockPaperPortfolioService:
         return self._ok(result_payload)
 
     def reset(self, *, user_id: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+        payload = {**(payload or {}), "paper_only": True}
         self.ensure_schema()
         paper_account_id = str(payload.get("paper_account_id") or payload.get("paperAccountId") or "")
         idempotency_key = str(payload.get("idempotency_key") or payload.get("idempotencyKey") or "")
@@ -493,6 +498,7 @@ class TWStockPaperPortfolioService:
                 "already_reset": False,
                 "created_at": str(now),
                 "simulation_only": True,
+                "paper_only": True,
                 "trading": sim_trading_flags(),
             }
             cur.execute(

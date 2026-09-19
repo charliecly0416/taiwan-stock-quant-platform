@@ -2,6 +2,20 @@
 
 生成日期：2026-06-18
 
+## 2026-09-18 运维审查补充
+
+当前唯一 active baseline 为 Model A；B19R2R 是独立研究影子，不自动切换模型或策略。下文的默认执行说明不代表本机已授权 cron 的全部部署参数，不应照抄示例覆盖现有 crontab。
+
+同日 Model A 已 accepted 后，非 strict 的 full 正交采集若覆盖不完整，在开启 B19 且保护路径未变化时进入独立影子分支。完整市场覆盖仍记录 FAIL；B19 自行检查 Exact-50、TW7769 排除、78F 和 PIT。此分支不得重复发布 A/provider，也不得设置或清除主链 pending。
+
+影子只能绑定同日、同 logical acquisition run 的 A 原始不可变 publish snapshot；缺失或绑定不一致时独立 BLOCKED，不回退到可变 provider。strict 或保护路径漂移仍按阻断规则处理。
+
+日更与 readonly 运维 API 的 `b19r2r_shadow` 状态为 READY、BLOCKED、NOT_ATTEMPTED 或 NOT_OBSERVED；`readiness_scope=status_observation_only` 表示运行状态观察，不表示收益评估或模型准入通过。最近 daily no-op 不应遮蔽最近 full 的影子结果。事件的 `settlement_pending` 不等于已完成自动收益结算。
+
+本轮实际只读观察：A、策略快照和 Agent prompt 日期均为 2026-09-18，无 pending。最近一次真实 full cron 的 B19 为 BLOCKED；同日受控两阶段重试已生成 `READY_RESEARCH_SHADOW`，但状态 API 不把手动重试冒充定时成功。自动 wrapper 已修为先预抓 TWII、再封存 cutoff、最后评分；当前 v2 精确实现仍需下一个合法 full cron 留下自动证据。
+
+日志轮转模板见 `../ops/quantdinger-logrotate.example`；本机已安装到 `/etc/logrotate.d/quantdinger-tw-stock` 并实际轮转 63MB cron 日志。模板使用 copytruncate，有短暂复制/截断竞争，不可用这些日志代替不可变审计记录。HTTP readiness、数据库备份和隔离恢复演练均已完成；总体审查与证据见 `../PRODUCT_OPERATIONS_REVIEW_CN.md`。
+
 ## 1. 目的
 
 本文档说明台股产品日更自动化应如何运行、失败时如何判断、哪些动作允许、哪些动作禁止，以及如何把数据更新、模型信号、策略快照、前端展示和模拟账户只读链路串起来。

@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 import app.services.phase_yz3_productization_status as yz3_status
 from app.services.phase_yz3_productization_status import (
     MODEL_A,
@@ -48,6 +50,30 @@ def _patch_yz_paths(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(yz3_status, "YZ2R_ROOT", readiness_root)
     return signal_root, readiness_root
 
+
+@pytest.mark.parametrize("model_a_allowed", [True, False])
+def test_research_default_never_bypasses_production_admission(monkeypatch, tmp_path, model_a_allowed):
+    signal_root, _ = _patch_yz_paths(monkeypatch, tmp_path)
+    _write_signal_fixture(signal_root, "2026-06-19")
+    original_load_yaml = yz3_status.load_yaml
+
+    def configured_yaml(path):
+        payload = original_load_yaml(path)
+        if path == yz3_status.POLICY:
+            payload["default_model_id"] = MODEL_B
+            if not model_a_allowed:
+                payload["models"][MODEL_A]["production_selectable"] = False
+        return payload
+
+    monkeypatch.setattr(yz3_status, "load_yaml", configured_yaml)
+    payload = load_yz3_productization_status("2026-06-19")
+    assert payload["selected_model_id"] == (MODEL_A if model_a_allowed else "")
+    assert payload["selected_model_id"] != MODEL_B
+    if not model_a_allowed:
+        assert payload["ok"] is False
+        assert payload["paper_apply_allowed"] is False
+        assert payload["paper_apply_blocked_reason"] == "production_model_unavailable"
+
 OLD_EXPOSED_TOKENS = [
     "origin",
     "original",
@@ -67,9 +93,9 @@ def test_yz3_status_exposes_only_clean_models_and_strategy():
     assert payload["ok"] is True
     assert payload["schema_version"] == "yz3_productization_status_v1"
     assert payload["signal_asof"] == "2026-06-17"
-    assert [item["model_id"] for item in payload["models"]] == [MODEL_A, MODEL_B]
+    assert [item["model_id"] for item in payload["models"]] == [MODEL_A]
     assert [item["strategy_rule_id"] for item in payload["production_strategies"]] == ["top50_exit_one_worst_sell"]
-    assert payload["selected_model_id"] == MODEL_B
+    assert payload["selected_model_id"] == MODEL_A
     assert payload["selected_strategy_rule_id"] == "top50_exit_one_worst_sell"
 
     serialized = json.dumps(payload, ensure_ascii=False)
@@ -123,17 +149,17 @@ def test_yz3_productization_route_is_get_only(client):
     assert data["execution_price_status"] == "execution_price_unavailable"
     assert data["paper_apply_allowed"] is False
     assert data["paper_apply_blocked_reason"] == "next_open_unavailable"
-    assert [item["model_id"] for item in data["models"]] == [MODEL_A, MODEL_B]
+    assert [item["model_id"] for item in data["models"]] == [MODEL_A]
 
     for method in ["post", "put", "patch", "delete"]:
         assert getattr(client, method)("/api/tw-stock/phase-yz/productization-status").status_code == 405
 
 
 def test_yz3_route_source_has_no_forbidden_write_or_ops_calls():
-    source = Path("backend/app/routes/tw_stock.py").read_text(encoding="utf-8")
-    route_start = source.index('@tw_stock_bp.route("/phase-yz/productization-status", methods=["GET"])')
-    route_end = source.index("def _current_user_id", route_start)
-    route_source = source[route_start:route_end]
+    source = Path("backend/app/routes/tw_stock_context_routes.py").read_text(encoding="utf-8")
+    route_start = source.index('@tw_stock_context_bp.route("/phase-yz/productization-status", methods=["GET"])')
+    route_end = source.find("\n\n@", route_start)
+    route_source = source[route_start:route_end if route_end != -1 else len(source)]
 
     assert 'methods=["GET"]' in route_source
     forbidden = [

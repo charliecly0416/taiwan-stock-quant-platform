@@ -1,0 +1,7 @@
+{
+  "sample_name": "fail_p1b_d_uses_execution_price_or_tiny_buffer",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

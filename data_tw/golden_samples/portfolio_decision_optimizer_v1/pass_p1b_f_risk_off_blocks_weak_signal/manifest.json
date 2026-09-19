@@ -1,0 +1,8 @@
+{
+  "sample_name": "pass_p1b_f_risk_off_blocks_weak_signal",
+  "fixture": "fixture.json",
+  "expected": "expected.json",
+  "expected_validator_result": {
+    "ok": true
+  }
+}

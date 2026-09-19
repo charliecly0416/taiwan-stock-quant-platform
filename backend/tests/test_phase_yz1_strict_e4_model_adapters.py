@@ -15,13 +15,15 @@ def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_yz1_registry_keeps_only_two_strict_e4_production_models():
+def test_yz1_registry_keeps_model_b_shadow_only():
     registry = yaml.safe_load((ROOT / "configs/tw_modular_registry.yaml").read_text(encoding="utf-8"))
     expected = set(registry["production_models"]["production_selectable"].keys())
-    assert expected == {
-        "e4_frozen_qlib_2018_2022",
-        "e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025",
-    }
+    assert expected == {"e4_frozen_qlib_2018_2022"}
+    model_b = registry["production_models"]["research_only"]["e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025"]
+    assert model_b["production_allowed"] is False
+    assert model_b["frontend_selectable"] is False
+    assert model_b["production_default"] is False
+    assert model_b["research_only"] is True
 
 
 def test_yz1_current_builder_source_has_no_old_model_hardcode():

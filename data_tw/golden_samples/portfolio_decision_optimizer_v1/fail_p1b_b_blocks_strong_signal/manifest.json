@@ -1,0 +1,7 @@
+{
+  "sample_name": "fail_p1b_b_blocks_strong_signal",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

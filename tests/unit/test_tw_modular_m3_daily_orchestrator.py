@@ -280,6 +280,147 @@ def test_dapr18_controlled_latest_gate_requires_exact_authorized_auto_publish_sc
         assert all(token in line for token in required_scope)
 
 
+def test_b19r2r_shadow_wrapper_enabled_passes_same_run_inputs(tmp_path: Path) -> None:
+    module = load_daily_module()
+    model_a = tmp_path / "model_a"
+    model_a.mkdir()
+    handoff = tmp_path / "same_run_handoff_validation.json"
+    handoff.write_text("{}", encoding="utf-8")
+    provider = tmp_path / "option_c_yahoo_scrapling_publish_x" / "tmp" / "formal_provider_rebuild"
+    provider.mkdir(parents=True)
+    (tmp_path / "job").mkdir()
+    captured: dict[str, object] = {"calls": []}
+
+    def fake_runner(argv, **kwargs):
+        captured["calls"].append({"argv": argv, "kwargs": kwargs})
+        captured["argv"] = argv
+        kwargs["stdout_path"].write_text(json.dumps({"ok": True, "status": "READY_RESEARCH_SHADOW"}), encoding="utf-8")
+        return {"ok": True, "returncode": 0, "stdout_path": str(kwargs["stdout_path"]), "stderr_tail": ""}
+
+    result = module.run_b19r2r_daily_shadow_nonblocking(
+        enabled=True,
+        asof="2026-09-17",
+        job_id="job-1",
+        job_dir=tmp_path / "job",
+        model_signal_gate={"ok": True, "summary": {"model_a_signal_path": str(model_a)}},
+        same_run_handoff_validation=handoff,
+        source_acquisition_run_id="logical-run-1",
+        provider_snapshot=provider,
+        decision_cutoff="2026-09-17T08:00:00+00:00",
+        next_session_open="2026-09-18T01:00:00+00:00",
+        command_runner=fake_runner,
+    )
+    argv = captured["argv"]
+    assert result["shadow_ok"] is True
+    assert result["mainline_blocking"] is False
+    assert result["production_allowed"] is False
+    assert result["no_apply"] is True
+    assert len(captured["calls"]) == 2
+    capture_call = captured["calls"][0]
+    assert str(module.B19R2R_TWII_CAPTURE_RUNNER.relative_to(module.ROOT)) in capture_call["argv"]
+    assert capture_call["kwargs"]["env"]["B19YTWII_ACQUISITION_RUN_ID"] == "logical-run-1"
+    assert result["requested_decision_cutoff"] == "2026-09-17T08:00:00+00:00"
+    assert result["decision_cutoff"] != result["requested_decision_cutoff"]
+    assert "--model-a-signal-dir" in argv
+    assert str(model_a) in argv
+    assert "--handoff-validation" in argv
+    assert str(handoff) in argv
+    assert "--provider-snapshot" in argv
+    assert str(provider) in argv
+    assert "--twii-csv" in argv
+    assert "--twii-manifest" in argv
+
+
+def test_b19r2r_shadow_wrapper_disabled_does_not_invoke_runner(tmp_path: Path) -> None:
+    module = load_daily_module()
+    called = False
+
+    def fake_runner(*args, **kwargs):
+        nonlocal called
+        called = True
+        return {"ok": True, "returncode": 0}
+
+    result = module.run_b19r2r_daily_shadow_nonblocking(
+        enabled=False,
+        asof="2026-09-17",
+        job_id="job-1",
+        job_dir=tmp_path,
+        model_signal_gate={"ok": True},
+        same_run_handoff_validation=tmp_path / "missing-handoff.json",
+        source_acquisition_run_id="run",
+        provider_snapshot=tmp_path / "missing-provider",
+        decision_cutoff="cutoff",
+        next_session_open="open",
+        command_runner=fake_runner,
+    )
+    assert result["status"] == "DISABLED_BY_DEFAULT"
+    assert result["attempted"] is False
+    assert called is False
+
+
+def test_b19r2r_shadow_capture_failure_is_nonblocking_and_does_not_score(tmp_path: Path) -> None:
+    module = load_daily_module()
+    model_a = tmp_path / "model_a"
+    model_a.mkdir()
+    handoff = tmp_path / "handoff.json"
+    handoff.write_text("{}", encoding="utf-8")
+    provider = tmp_path / "provider"
+    provider.mkdir()
+
+    calls = []
+
+    def failed_runner(argv, **kwargs):
+        calls.append(argv)
+        kwargs["stdout_path"].write_text(json.dumps({"ok": False, "status": "B19R2R_BLOCKED_VALIDATOR"}), encoding="utf-8")
+        return {"ok": False, "returncode": 2, "stdout_path": str(kwargs["stdout_path"]), "stderr_tail": "blocked"}
+
+    result = module.run_b19r2r_daily_shadow_nonblocking(
+        enabled=True,
+        asof="2026-09-17",
+        job_id="job-1",
+        job_dir=tmp_path,
+        model_signal_gate={"ok": True, "summary": {"model_a_signal_path": str(model_a)}},
+        same_run_handoff_validation=handoff,
+        source_acquisition_run_id="run",
+        provider_snapshot=provider,
+        decision_cutoff="2026-09-17T08:00:00+00:00",
+        next_session_open="2026-09-18T01:00:00+00:00",
+        command_runner=failed_runner,
+    )
+    assert result["ok"] is True
+    assert result["shadow_ok"] is False
+    assert result["mainline_blocking"] is False
+    assert result["pending_asof_set"] is False
+    assert result["status"] == "B19R2R_BLOCKED_TWII_CAPTURE"
+    assert result["runner_returncode"] == 2
+    assert len(calls) == 1
+    assert str(module.B19R2R_TWII_CAPTURE_RUNNER.relative_to(module.ROOT)) in calls[0]
+
+
+def test_b19r2r_cron_gate_is_full_scope_only() -> None:
+    cron = (ROOT / "data_tw/ops/daily_auto_update/tw-daily-auto-update.installed.cron").read_text(encoding="utf-8")
+    lines = [line for line in cron.splitlines() if "run_daily_tw_stock_auto_update.py" in line]
+    assert len(lines) >= 2
+    daily = next(line for line in lines if "TW_DAILY_AUTO_FINMIND_SCOPE=daily" in line)
+    full = next(line for line in lines if "TW_DAILY_AUTO_FINMIND_SCOPE=full" in line)
+    assert "TW_DAILY_AUTO_ENABLE_B19R2R_SHADOW=true" not in daily
+    assert "TW_DAILY_AUTO_ENABLE_B19R2R_SHADOW=true" in full
+
+
+def test_b19r2r_cutoff_is_captured_after_model_a_gate() -> None:
+    source = DAILY_SCRIPT.read_text(encoding="utf-8")
+    gate_failure = source.index("if args.enable_model_signal_gate and not model_signal_gate.get(\"ok\"):")
+    cutoff_capture = source.index("b19r2r_cutoff = utc_now()")
+    assert cutoff_capture > gate_failure
+    assert "cutoff_value = b19r2r_cutoff" in source
+
+
+def test_b19r2r_uses_the_publish_stage_qlib_snapshot_root() -> None:
+    source = DAILY_SCRIPT.read_text(encoding="utf-8")
+    assert 'QLIB / "data_tw/experiments/option_c_ops" / publish_job_id / "tmp/formal_provider_rebuild"' in source
+    assert 'ROOT / "data_tw/experiments/option_c_ops" / publish_job_id' not in source
+
+
 def test_fpala_formal_accepted_latest_gate_is_dedicated_default_off_no_publish() -> None:
     source = DAILY_SCRIPT.read_text(encoding="utf-8")
 

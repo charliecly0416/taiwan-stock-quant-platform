@@ -1,0 +1,8 @@
+{
+  "sample_name": "fail_p1b_f_future_return_or_pnl_input",
+  "fixture": "fixture.json",
+  "expected": "expected.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

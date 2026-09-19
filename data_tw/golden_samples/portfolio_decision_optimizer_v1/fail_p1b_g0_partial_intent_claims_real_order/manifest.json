@@ -1,0 +1,8 @@
+{
+  "sample_name": "fail_p1b_g0_partial_intent_claims_real_order",
+  "fixture": "fixture.json",
+  "expected": "expected.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

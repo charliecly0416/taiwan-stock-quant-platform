@@ -1,0 +1,8 @@
+{
+  "sample_name": "pass_p1b_e_budget_blocks_low_priority_when_exceeded",
+  "fixture": "fixture.json",
+  "expected": "expected.json",
+  "expected_validator_result": {
+    "ok": true
+  }
+}

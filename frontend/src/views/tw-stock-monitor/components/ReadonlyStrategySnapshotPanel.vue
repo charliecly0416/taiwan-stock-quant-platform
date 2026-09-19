@@ -58,7 +58,7 @@
           <div class="readonly-section-head">
             <div>
               <strong>候选调入</strong>
-              <small>LTR 重排后的前 {{ topCandidates.length }} 名候选</small>
+              <small>{{ rankingLabel }}前 {{ topCandidates.length }} 名候选</small>
             </div>
             <a-tag color="blue">候选</a-tag>
           </div>
@@ -121,6 +121,9 @@ export default {
   },
   computed: {
     snapshot () { return (this.payload && this.payload.snapshot) || {} },
+    rankingLabel () {
+      return String(this.snapshot.ranking_source || '').includes('ltr') ? 'Model A+B 重排后的' : 'Model A 排序的'
+    },
     manifest () { return (this.payload && this.payload.manifest) || {} },
     validation () { return (this.payload && this.payload.validation) || {} },
     checksum () { return (this.payload && this.payload.checksum) || {} },

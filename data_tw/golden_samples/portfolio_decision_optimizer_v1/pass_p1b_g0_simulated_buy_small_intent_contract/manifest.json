@@ -1,0 +1,8 @@
+{
+  "sample_name": "pass_p1b_g0_simulated_buy_small_intent_contract",
+  "fixture": "fixture.json",
+  "expected": "expected.json",
+  "expected_validator_result": {
+    "ok": true
+  }
+}

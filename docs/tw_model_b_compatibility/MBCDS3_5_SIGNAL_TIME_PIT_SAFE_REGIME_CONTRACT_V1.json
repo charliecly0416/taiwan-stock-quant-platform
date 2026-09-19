@@ -1,0 +1,62 @@
+{
+  "schema_version": "mbcds35.signal_time_regime_contract.v1",
+  "contract_id": "mbcds35_rsr2_twii_signal_time_regime_v1",
+  "status": "FROZEN",
+  "source_policy": "RSR2_predeclared_TWII_regime_adapted_to_existing_Model_B_feature_frame",
+  "signal_time_only": true,
+  "required_feature_fields": [
+    "TWII_close_vs_MA60",
+    "TWII_ret20",
+    "market_drawdown60"
+  ],
+  "field_semantics": {
+    "TWII_close_vs_MA60": "TWII close / trailing 60-session close mean - 1, using rows on or before target_asof",
+    "TWII_ret20": "TWII close / close 20 sessions earlier - 1, using rows on or before target_asof",
+    "market_drawdown60": "TWII close / rolling 60-session maximum close - 1, with min_periods=20 and using rows on or before target_asof"
+  },
+  "classification_priority": [
+    {
+      "regime": "crash",
+      "predicate": "market_drawdown60 <= -0.15"
+    },
+    {
+      "regime": "risk_off",
+      "predicate": "TWII_close_vs_MA60 < 0 OR market_drawdown60 <= -0.08"
+    },
+    {
+      "regime": "risk_on",
+      "predicate": "TWII_close_vs_MA60 >= 0 AND TWII_ret20 >= 0"
+    },
+    {
+      "regime": "neutral",
+      "predicate": "otherwise"
+    }
+  ],
+  "boundary_policy": {
+    "drawdown_minus_0_15": "crash",
+    "drawdown_minus_0_08": "risk_off unless crash already matched",
+    "close_vs_ma60_zero": "eligible for risk_on only when TWII_ret20 >= 0",
+    "ret20_zero": "satisfies the non-negative risk_on trend condition"
+  },
+  "missing_policy": "FAIL_CLOSED_NO_CLASSIFICATION_NO_FILL",
+  "non_finite_policy": "FAIL_CLOSED_NO_CLASSIFICATION_NO_FILL",
+  "cross_section_policy": "all 150 feature-frame rows must carry one identical finite value for each required TWII field",
+  "available_at_policy": "source_available_at and all source artifacts must be checksum-bound and available no later than decision_cutoff",
+  "forbidden_inputs": [
+    "future_return",
+    "outcome",
+    "entry_open",
+    "exit_open",
+    "realized_return",
+    "outcome_regime",
+    "post_signal_market_data"
+  ],
+  "allowed_regimes": [
+    "crash",
+    "risk_off",
+    "risk_on",
+    "neutral"
+  ],
+  "production_allowed": false,
+  "baseline_switch_allowed": false
+}

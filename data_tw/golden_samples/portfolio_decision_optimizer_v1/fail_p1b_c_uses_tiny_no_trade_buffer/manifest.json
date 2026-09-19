@@ -1,0 +1,7 @@
+{
+  "sample_name": "fail_p1b_c_uses_tiny_no_trade_buffer",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

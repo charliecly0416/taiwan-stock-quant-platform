@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import importlib.util
 import hashlib
 import json
@@ -176,6 +177,34 @@ def test_arch1_mutable_latest_positive_fixture(tmp_path: Path) -> None:
     assert all(check["status"] == "pass" for check in checks.values()), checks
 
 
+def test_arch1_mutable_latest_accepts_manifest_availability_policy(tmp_path: Path) -> None:
+    fixture = mutable_latest_fixture(tmp_path)
+    _, descriptor, _, runtime_root, _, _ = fixture
+    latest = json.loads((runtime_root / descriptor["active_baseline"]["model_a"]["latest_pointer"]).read_text(encoding="utf-8"))
+    manifest_path = runtime_root / latest["canonical_manifest"]
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert "available_at" not in manifest
+    assert manifest["available_at_policy"]
+    assert latest_checks(fixture)["active_latest_signals_contract"]["status"] == "pass"
+
+
+def test_arch1_mutable_latest_rejects_row_available_after_signal_asof(tmp_path: Path) -> None:
+    fixture = mutable_latest_fixture(tmp_path)
+    _, descriptor, _, runtime_root, _, _ = fixture
+    latest_path = runtime_root / descriptor["active_baseline"]["model_a"]["latest_pointer"]
+    latest = json.loads(latest_path.read_text(encoding="utf-8"))
+    signals_path = runtime_root / latest["canonical_signals"]
+    rows = list(csv.DictReader(signals_path.open(newline="", encoding="utf-8")))
+    rows[0]["available_at"] = "9999-12-31"
+    with signals_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    assert latest_checks(fixture)["active_latest_signals_contract"]["status"] == "fail"
+
+
 def test_arch1_mutable_latest_rejects_non_model_a_identity(tmp_path: Path) -> None:
     fixture = mutable_latest_fixture(tmp_path)
     _, descriptor, _, runtime_root, _, _ = fixture
@@ -264,10 +293,10 @@ def test_arch1_mutable_latest_rejects_pre_anchor_date(tmp_path: Path) -> None:
     assert latest_checks(fixture)["active_latest_arch0_monotonic_anchor"]["status"] == "fail"
 
 
-def test_arch1_mutable_latest_rejects_mutated_arch0_anchor(tmp_path: Path) -> None:
+def test_arch1_mutable_latest_rejects_malformed_arch0_anchor_hash(tmp_path: Path) -> None:
     fixture = mutable_latest_fixture(tmp_path)
     _, _, inventory, _, _, _ = fixture
-    inventory["active_baseline"]["signal_latest"]["canonical_manifest_sha256"] = "f" * 64
+    inventory["active_baseline"]["signal_latest"]["canonical_manifest_sha256"] = "f" * 63
     assert latest_checks(fixture)["active_latest_arch0_anchor_integrity"]["status"] == "fail"
 
 

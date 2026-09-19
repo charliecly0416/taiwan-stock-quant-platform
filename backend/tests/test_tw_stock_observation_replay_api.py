@@ -76,8 +76,8 @@ def test_observation_replay_api_contract_and_params(client, monkeypatch):
 
 
 def test_observation_replay_api_source_get_only_and_no_dangerous_route_terms():
-    source = Path("backend/app/routes/tw_stock.py").read_text()
-    assert '@tw_stock_bp.route("/rank-tech-cross/observation-replay", methods=["GET"])' in source
-    route_slice = source.split('@tw_stock_bp.route("/rank-tech-cross/observation-replay"', 1)[1].split('@tw_stock_bp.route("/rank-tech-cross/portfolio-replay"', 1)[0]
+    source = Path("backend/app/routes/tw_stock_replay_routes.py").read_text()
+    assert '@tw_stock_replay_bp.route("/rank-tech-cross/observation-replay", methods=["GET"])' in source
+    route_slice = source.split('@tw_stock_replay_bp.route("/rank-tech-cross/observation-replay"', 1)[1].split('@tw_stock_replay_bp.route("/rank-tech-cross/portfolio-replay"', 1)[0]
     forbidden = ["methods=[\"POST\"]", "BacktestService", "sim/orders", "portfolio-replay", "monitor scan", "alerts", "publish", "refresh"]
     assert not any(term in route_slice for term in forbidden)

@@ -74,6 +74,14 @@ export function getTwStockReadonlyReplayWindow (params = {}) {
   })
 }
 
+export function getTwStockReadonlyModelStrategyComparison (params = {}) {
+  return request({
+    url: `${BASE_URL}/readonly/model-strategy-comparison`,
+    method: 'get',
+    params
+  })
+}
+
 export function getTwStockLTROptionalSimStrategies () {
   return request({
     url: `${BASE_URL}/ltr-optional-sim-strategies`,

@@ -9,6 +9,27 @@ SAMPLE_ROOT = Path("data_tw/golden_samples/agent_daily_prompt")
 APLR_CANDIDATE_ONLY_ROOT = Path("data_tw/artifacts/agent_daily_prompt/2026-07-08")
 
 
+def test_validator_repo_relative_sources_do_not_depend_on_working_directory(tmp_path, monkeypatch):
+    from scripts import validate_tw_agent_daily_prompt_artifact as validator
+
+    source = tmp_path / "data_tw" / "source.json"
+    source.parent.mkdir()
+    source.write_text("{}", encoding="utf-8")
+    artifact_dir = tmp_path / "artifact"
+    artifact_dir.mkdir()
+    backend_dir = tmp_path / "backend"
+    backend_dir.mkdir()
+    monkeypatch.setattr(validator, "ROOT", tmp_path)
+    monkeypatch.chdir(backend_dir)
+    result = validator.ValidationResult()
+    validator.validate_source_artifacts(result, artifact_dir, {"source": "data_tw/source.json"}, allow_golden_missing_sources=False)
+    assert result.ok, result.errors
+    source.unlink()
+    missing = validator.ValidationResult()
+    validator.validate_source_artifacts(missing, artifact_dir, {"source": "data_tw/source.json"}, allow_golden_missing_sources=False)
+    assert not missing.ok
+
+
 def _copy_pass_sample(tmp_path):
     sample = tmp_path / "sample"
     shutil.copytree(SAMPLE_ROOT / "pass", sample)

@@ -8,11 +8,13 @@ TWSE official validation fields for matching archived rows.
 from __future__ import annotations
 
 import argparse
+import csv
 import ctypes
 import hashlib
 import json
 import os
 import stat
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -321,30 +323,50 @@ def _real_hsa8_finmind_capture(*, segment: str, symbols: Sequence[str], start: s
 
 
 def _real_hsa8_twii_capture(*, start: str, end: str, output_dir: Optional[str], acquisition_run_id: str = "") -> dict[str, Any]:
-    """Capture TWII only from its explicit provider endpoint; no calendar fallback."""
+    """Capture TWII from TWSE, with an isolated Yahoo dual-interval fallback.
+
+    The fallback is only eligible after the TWSE response fails the exact date
+    and identity validator. It runs the frozen write-once Yahoo capture in the
+    same job directory and never touches accepted latest/provider state.
+    """
     if not output_dir:
         return {"status": "disabled"}
     import requests
 
     endpoint = "https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX"
     fetched = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    response = requests.get(endpoint, params={"date": end.replace("-", ""), "response": "json"}, timeout=20)
-    response.raise_for_status()
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    twse_path = root / "twii.http.raw"
+    twse_normalized = root / "twii.normalized.json"
+    twse_error = ""
+    try:
+        response = requests.get(endpoint, params={"date": end.replace("-", ""), "response": "json"}, timeout=20)
+        response.raise_for_status()
+    except Exception as exc:
+        response = None
+        twse_error = f"{type(exc).__name__}:{exc}"
     response_headers = {
         key.lower(): str(response.headers.get(key) or "")
         for key in ("Date", "Last-Modified", "ETag", "Age")
-        if getattr(response, "headers", None) is not None and response.headers.get(key)
+        if response is not None and getattr(response, "headers", None) is not None and response.headers.get(key)
     }
-    path = Path(output_dir) / "twii.http.raw"
-    _atomic_bytes(path, response.content)
-    payload = response.json()
-    rows = payload if isinstance(payload, list) else payload.get("data", []) if isinstance(payload, dict) else []
-    schema = validate_twii_response_rows(rows, target_asof=end)
-    schema_ok = schema["ok"]
-    normalized = Path(output_dir) / "twii.normalized.json"
-    data = json.dumps({"segment": "twii", "artifact_kind": "provider_normalized_payload", "records": rows if isinstance(rows, list) else []}, ensure_ascii=False, sort_keys=True).encode("utf-8") + b"\n"
-    _atomic_bytes(normalized, data)
-    capture = {
+    if response is not None:
+        _atomic_bytes(twse_path, response.content)
+        try:
+            payload = response.json()
+            rows = payload if isinstance(payload, list) else payload.get("data", []) if isinstance(payload, dict) else []
+            schema = validate_twii_response_rows(rows, target_asof=end)
+        except Exception as exc:
+            rows = []
+            schema = {"ok": False, "errors": [f"response_parse:{type(exc).__name__}"], "trade_date": ""}
+        data = json.dumps({"segment": "twii", "artifact_kind": "provider_normalized_payload", "records": rows if isinstance(rows, list) else []}, ensure_ascii=False, sort_keys=True).encode("utf-8") + b"\n"
+        _atomic_bytes(twse_normalized, data)
+    else:
+        rows = []
+        schema = {"ok": False, "errors": ["request_failed"], "trade_date": ""}
+    schema_ok = bool(schema["ok"])
+    twse_capture = {
         "source_family": "twii",
         "acquisition_run_id": acquisition_run_id,
         "target_asof": end,
@@ -354,13 +376,13 @@ def _real_hsa8_twii_capture(*, start: str, end: str, output_dir: Optional[str], 
         "endpoint": endpoint,
         "endpoint_version": "v1/exchangeReport/MI_INDEX",
         "request_parameters": {"date": end.replace("-", ""), "response": "json"},
-        "http_status": int(response.status_code),
+        "http_status": int(response.status_code) if response is not None else 599,
         "response_timing_headers": response_headers,
         "parser_version": "daily-auto-hsa8-twii-v1",
         "schema_version": "twse-mi-index.v1",
         "transport_identity": "python-requests-response-content",
-        "raw_paths": [str(path)],
-        "normalized_paths": [str(normalized)],
+        "raw_paths": [str(twse_path)] if response is not None else [],
+        "normalized_paths": [str(twse_normalized)] if response is not None else [],
         "fetched_at": fetched,
         "source_published_at": None,
         "available_at": fetched,
@@ -380,11 +402,116 @@ def _real_hsa8_twii_capture(*, start: str, end: str, output_dir: Optional[str], 
         "absent_scope": [],
         "unknown_scope": [] if schema_ok else ["TWII"],
     }
-    _set_capture_digest(capture, [str(path)], [str(normalized)])
-    capture_path = Path(output_dir) / "twii.adapter_output.json"
-    _atomic_bytes(capture_path, (json.dumps(capture, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8"))
-    capture["adapter_output_path"] = str(capture_path)
-    return capture
+    if twse_error:
+        twse_capture["schema_errors"] = [*twse_capture["schema_errors"], twse_error]
+    if response is not None:
+        _set_capture_digest(twse_capture, [str(twse_path)], [str(twse_normalized)])
+
+    if schema_ok:
+        capture_path = root / "twii.adapter_output.json"
+        _atomic_bytes(capture_path, (json.dumps(twse_capture, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8"))
+        twse_capture["adapter_output_path"] = str(capture_path)
+        return twse_capture
+
+    # Preserve the rejected TWSE evidence and try the already-reviewed Yahoo
+    # dual-interval capture without modifying any accepted/latest path.
+    failure_path = root / "twii.twse_failure.adapter_output.json"
+    _atomic_bytes(failure_path, (json.dumps(twse_capture, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8"))
+    yahoo_root = root / "twii_yahoo_scrapling"
+    capture_script = Path(__file__).resolve().parents[2] / "scripts" / "capture_modelb_b19r2r_twii_yahoo_20260916.py"
+    target_day = date.fromisoformat(end)
+    next_day = target_day + timedelta(days=1)
+    while next_day.weekday() >= 5:
+        next_day += timedelta(days=1)
+    env = os.environ.copy()
+    env.update({
+        "B19YTWII_RESEARCH_ROOT": str(root),
+        "B19YTWII_TARGET_ASOF": end,
+        "B19YTWII_ACQUISITION_RUN_ID": acquisition_run_id,
+        "B19YTWII_SESSION_CLOSE_UTC": f"{end}T05:30:00+00:00",
+        "B19YTWII_NEXT_OPEN_UTC": f"{next_day.isoformat()}T01:00:00+00:00",
+    })
+    command = [sys.executable, str(capture_script), "--output", str(yahoo_root)]
+    try:
+        result = subprocess.run(command, cwd=str(capture_script.parents[1]), env=env, text=True, capture_output=True, timeout=120, check=False)
+    except Exception as exc:
+        result = None
+        fallback_error = f"{type(exc).__name__}:{exc}"
+    else:
+        fallback_error = (result.stderr or result.stdout or "").strip()[-2000:]
+    _atomic_bytes(root / "twii_yahoo_capture.stdout.txt", ((result.stdout if result else "") or "").encode("utf-8"))
+    _atomic_bytes(root / "twii_yahoo_capture.stderr.txt", ((result.stderr if result else fallback_error) or "").encode("utf-8"))
+    manifest_path = yahoo_root / "TWII_CAPTURE_MANIFEST.json"
+    if result is None or result.returncode != 0 or not manifest_path.is_file():
+        twse_capture["fallback"] = {
+            "attempted": True,
+            "status": "BLOCKED",
+            "error": fallback_error,
+            "command": command,
+            "output_dir": str(yahoo_root),
+        }
+        capture_path = root / "twii.adapter_output.json"
+        _set_capture_digest(twse_capture, [str(twse_path)] if response is not None else [], [str(twse_normalized)] if response is not None else []) if response is not None else None
+        _atomic_bytes(capture_path, (json.dumps(twse_capture, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8"))
+        twse_capture["adapter_output_path"] = str(capture_path)
+        return twse_capture
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("pit_status") != "PASS" or manifest.get("target_asof") != end or manifest.get("validator_status") not in {"PASS", "PASS_CANDIDATE_AWAITING_INDEPENDENT_REVIEW"}:
+        twse_capture["fallback"] = {"attempted": True, "status": "BLOCKED", "error": "yahoo_manifest_contract_failed", "manifest": str(manifest_path)}
+        capture_path = root / "twii.adapter_output.json"
+        _set_capture_digest(twse_capture, [str(twse_path)] if response is not None else [], [str(twse_normalized)] if response is not None else []) if response is not None else None
+        _atomic_bytes(capture_path, (json.dumps(twse_capture, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8"))
+        twse_capture["adapter_output_path"] = str(capture_path)
+        return twse_capture
+
+    normalized_path = yahoo_root / "TWII_NORMALIZED.csv"
+    rows_out: list[dict[str, Any]] = []
+    with normalized_path.open(newline="", encoding="utf-8") as handle:
+        rows_out = [dict(row) for row in csv.DictReader(handle)]
+    if not rows_out or rows_out[-1].get("date") != end:
+        raise RuntimeError("Yahoo TWII fallback normalized output has no target row")
+    adapter = {
+        "source_family": "twii",
+        "acquisition_run_id": acquisition_run_id,
+        "target_asof": end,
+        "status": "captured",
+        "provider": "Yahoo Finance",
+        "source_id": "yahoo.finance.chart.twii.dual_interval.v1",
+        "endpoint": manifest.get("endpoint"),
+        "endpoint_version": "v8/finance/chart.dual_interval",
+        "request_parameters": manifest.get("requests"),
+        "http_status": 200,
+        "response_timing_headers": manifest.get("server_date_utc"),
+        "parser_version": "modelb-b19r2r-yahoo-dual-interval-v1",
+        "schema_version": manifest.get("schema_version"),
+        "transport_identity": "scrapling_fetcher_chrome_proxy",
+        "raw_paths": [str(yahoo_root / "twii_daily_raw.json"), str(yahoo_root / "twii_intraday_1m_raw.json")],
+        "normalized_paths": [str(normalized_path)],
+        "fetched_at": manifest.get("fetched_at"),
+        "source_published_at": None,
+        "available_at": manifest.get("available_at"),
+        "availability_evidence": {"method": "first_successful_capture", "observed_at": manifest.get("available_at"), "observation_scope": "twii_yahoo_dual_interval"},
+        "http_response_bytes": True,
+        "pit_status": "PASS",
+        "scope_status": "PASS_SCHEMA_AND_SCOPE",
+        "validator_status": "PASS_CANDIDATE_AWAITING_INDEPENDENT_REVIEW",
+        "schema_errors": [],
+        "trade_date": end,
+        "expected_scope": ["TWII"],
+        "returned_scope": ["TWII"],
+        "absent_scope": [],
+        "unknown_scope": [],
+        "official_source": False,
+        "independent_review_required": True,
+        "fallback_from": {"provider": "TWSE OpenAPI", "schema_errors": twse_capture.get("schema_errors", []), "adapter_output": str(failure_path)},
+    }
+    _set_capture_digest(adapter, adapter["raw_paths"], adapter["normalized_paths"])
+    capture_path = root / "twii.adapter_output.json"
+    _atomic_bytes(capture_path, (json.dumps(adapter, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8"))
+    adapter["adapter_output_path"] = str(capture_path)
+    adapter["fallback"] = {"attempted": True, "status": "PASS_CANDIDATE", "manifest": str(manifest_path), "row_count": len(rows_out), "rejected_twse_adapter": str(failure_path)}
+    return adapter
 
 
 def validate_twii_response_rows(rows: Any, *, target_asof: str) -> dict[str, Any]:

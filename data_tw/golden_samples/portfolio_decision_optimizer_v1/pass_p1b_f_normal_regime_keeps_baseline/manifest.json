@@ -1,0 +1,8 @@
+{
+  "sample_name": "pass_p1b_f_normal_regime_keeps_baseline",
+  "fixture": "fixture.json",
+  "expected": "expected.json",
+  "expected_validator_result": {
+    "ok": true
+  }
+}

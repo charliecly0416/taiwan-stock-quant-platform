@@ -65,6 +65,8 @@
 
 ---
 
+> **当前台股项目入口：** 本仓库当前运行的台股主线是只读研究工作台与 simulation-only 模拟账户，不启用下文 QuantDinger 上游能力中的实盘执行。当前 baseline、B19R2R 研究影子、运维方式和开发边界请从[项目介绍](PROJECT_INTRO_CN.md)、[新 Codex 接手指南](CODEX_HANDOFF_CN.md)和[日常运维清单](ops/DAILY_OPERATIONS_CHECKLIST_CN.md)进入。
+
 ## 目录
 
 [快速开始](#两分钟试用) · [相关仓库](#相关仓库) · [MCP 与 Agent 网关](#mcp-agent-gateway) · [产品概览](#产品概览) · [功能一览](#功能一览) · [视觉导览](#视觉导览) · [架构](#架构) · [安装](#安装与首次运行) · [文档](#文档导航) · [常见问题](#常见问题) · [许可](#许可与商业说明)

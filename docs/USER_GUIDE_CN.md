@@ -29,6 +29,9 @@ cp .env.example .env
 
 ```bash
 DATABASE_URL=postgresql://user:password@127.0.0.1:5432/quantdinger
+SECRET_KEY=<自行生成的持久随机密钥>
+ADMIN_USER=<你的管理员用户名>
+ADMIN_PASSWORD=<自行设置的密码>
 FINMIND_TOKEN=
 
 QLIB_TW_OPTION_C_ROOT=../qlib_pipeline/data_tw/experiments/option_c_daily_signal
@@ -37,6 +40,8 @@ TW_QLIB_OPTION_C_PROVIDER_CALENDAR=../qlib_pipeline/data_tw/experiments/yahoo_ad
 ```
 
 如果没有 FinMind token，也可以先运行；但 token 有助于提高稳定性和额度。
+
+用 `python -c "import secrets; print(secrets.token_hex(32))"` 生成密钥后设置到 `.env`，不要提交真实凭证。CLI 与 Gunicorn 启动都会拒绝缺失或示例签名密钥。研究模式默认不启动订单派发、持仓监控和运行策略恢复；开启继承的交易模块属于独立部署范围。
 
 ## 3. 安装后端依赖
 
@@ -153,14 +158,15 @@ corepack pnpm build
 python scripts/run_daily_tw_stock_auto_update.py
 ```
 
-默认会：
+源码默认与这台机器的已安装 cron 配置不同。源码默认会：
 
 - 自动选择台北当天日期
 - 如果存在 pending 日期，优先重试 pending 日期
 - 更新 FinMind/QuantDinger raw 数据
-- 更新 Yahoo/Scrapling qlib 复权数据
-- 发布 qlib provider
-- 更新 accepted latest
+- 记录 job、readiness 与 pending 状态
+- legacy provider publish 和 accepted latest 切换默认关闭；只在明确授权和配置下运行
+
+本机自动化使用两小时 daily lane 与工作日台北 22:45 full lane；full lane 启用 B19R2R 自动影子。Model A 是当前默认模型，A+B 只用于研究比较和独立影子积累。完整配置以实际 `crontab -l` 和 runbook 为准，不应仅凭模板推定全链成功。
 
 常用命令：
 
@@ -174,8 +180,7 @@ python scripts/run_daily_tw_stock_auto_update.py --asof 2026-06-02 --force
 # 只更新 FinMind/QuantDinger raw
 python scripts/run_daily_tw_stock_auto_update.py --skip-qlib
 
-# 只跑 Yahoo/Scrapling + qlib
-python scripts/run_daily_tw_stock_auto_update.py --skip-finmind
+# --skip-finmind 不能绕过 same-run handoff；缺少抓取证据会阻断。
 
 # FinMind 只补 daily bars
 python scripts/run_daily_tw_stock_auto_update.py --finmind-scope daily
@@ -198,10 +203,11 @@ PROJECT_ROOT=/path/to/taiwan-stock-quant-platform
 安装：
 
 ```bash
-crontab docs/tw-daily-auto-update.cron.example
+# 先检查已有 crontab，并合并模板中的任务，避免覆盖其他已安装任务。
+crontab -l
 ```
 
-默认策略：
+历史模板的调度示例：
 
 - 台北时间周一到周五 16:30、18:30、20:30、22:30 尝试
 - 次日 00:30、02:30、04:30 继续尝试

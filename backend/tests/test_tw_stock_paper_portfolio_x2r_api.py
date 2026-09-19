@@ -9,6 +9,7 @@ from flask import Flask
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app.routes import tw_stock as tw_stock_route
+from app.routes.tw_stock_paper_routes import tw_stock_paper_bp
 from app.services.tw_stock_paper_portfolio import TWStockPaperPortfolioService
 from app.utils import auth as auth_mod
 
@@ -38,6 +39,7 @@ class _RouteHarness:
         monkeypatch.setattr(auth_mod, "verify_token", lambda token: {"sub": "u7", "user_id": 7, "role": "user"})
         app = Flask(__name__)
         app.register_blueprint(tw_stock_route.tw_stock_bp, url_prefix="/api/tw-stock")
+        app.register_blueprint(tw_stock_paper_bp, url_prefix="/api/tw-stock")
         self.client = app.test_client()
         self.headers = {"Authorization": "Bearer test-token"}
         self.tmp_path = tmp_path
@@ -73,6 +75,7 @@ def test_paper_portfolio_routes_require_login(tmp_path, monkeypatch):
 def test_paper_portfolio_apply_route_success_and_error_mapping(tmp_path, monkeypatch):
     harness = _RouteHarness(tmp_path, monkeypatch)
     payload = harness.artifact_payload(run_id="ok", decision_id="decision-ok", key="idem-ok")
+    payload["paper_only"] = False
     resp = harness.client.post("/api/tw-stock/paper-portfolio/apply-decision", json=payload, headers=harness.headers)
     data = resp.get_json()
     assert resp.status_code == 200
@@ -80,6 +83,8 @@ def test_paper_portfolio_apply_route_success_and_error_mapping(tmp_path, monkeyp
     assert data["data"]["simulation_only"] is True
     assert data["data"]["trading"]["real_orders_enabled"] is False
     assert data["data"]["trading"]["connects_to_broker"] is False
+    assert data["data"]["paper_only"] is True
+    assert harness.db.apply_runs and '"paper_only": true' in harness.db.apply_runs[0]["request_json"]
 
     conflict = harness.artifact_payload(run_id="conflict", decision_id="decision-conflict", key="idem-ok", state_checksum="sha256:conflict")
     resp = harness.client.post("/api/tw-stock/paper-portfolio/apply-decision", json=conflict, headers=harness.headers)

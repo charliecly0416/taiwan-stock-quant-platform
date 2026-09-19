@@ -133,6 +133,18 @@ def _clean_strategies(registry: dict[str, Any]) -> list[dict[str, Any]]:
     return clean
 
 
+def _production_model_ids(registry: dict[str, Any], policy: dict[str, Any]) -> set[str]:
+    registry_models = set(
+        ((registry.get("production_models") or {}).get("production_selectable") or {}).keys()
+    )
+    policy_models = {
+        key
+        for key, value in (policy.get("models") or {}).items()
+        if (value or {}).get("production_selectable") is True
+    }
+    return registry_models & policy_models
+
+
 def load_yz3_productization_status(signal_asof: str | None = None) -> dict[str, Any]:
     registry = load_yaml(REGISTRY)
     policy = load_yaml(POLICY)
@@ -160,14 +172,32 @@ def load_yz3_productization_status(signal_asof: str | None = None) -> dict[str, 
     else:
         message = "成交口径：次一交易日开盘价。成交价可用性尚未生成，等待下一轮数据更新。"
     selected_strategy = str(policy.get("default_strategy_rule") or DEFAULT_STRATEGY)
-    selected_model = MODEL_B if model_b_manifest and model_b_manifest.exists() and load_json(model_b_manifest).get("artifact_type") == "daily_model_signal" else str(policy.get("default_model_id") or MODEL_A)
+    default_model = str(policy.get("default_model_id") or MODEL_A)
+    production_model_ids = _production_model_ids(registry, policy)
+    if default_model not in production_model_ids:
+        default_model = MODEL_A if MODEL_A in production_model_ids else ""
+    selected_model = (
+        MODEL_B
+        if (
+            MODEL_B in production_model_ids
+            and model_b_manifest
+            and model_b_manifest.exists()
+            and load_json(model_b_manifest).get("artifact_type") == "daily_model_signal"
+        )
+        else default_model
+    )
+    if not selected_model:
+        paper_apply_allowed = False
+        blocked_reason = "production_model_unavailable"
+        message = "模型配置未通过产品准入检查，暂不能进行模拟应用。"
     return {
-        "ok": clean_signal_available,
+        "ok": clean_signal_available and bool(selected_model),
         "schema_version": "yz3_productization_status_v1",
         "signal_asof": resolved_signal_asof,
         "models": _clean_models(registry),
         "production_strategies": _clean_strategies(registry),
         "selected_model_id": selected_model,
+        "model_selection_status": "ready" if selected_model else "production_model_unavailable",
         "selected_strategy_rule_id": selected_strategy,
         "execution_price_mode": "next_open",
         "execution_price_status": execution_status,

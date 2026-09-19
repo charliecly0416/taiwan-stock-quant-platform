@@ -1,0 +1,6 @@
+{
+  "fixture_id": "synthetic_positive_v1",
+  "target_asof": "2099-06-30",
+  "evidence_mode": "trusted_publication",
+  "symbols": ["SYNTHETIC_SYMBOL_A", "SYNTHETIC_SYMBOL_B"]
+}

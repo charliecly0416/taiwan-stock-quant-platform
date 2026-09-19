@@ -249,6 +249,47 @@ def test_backtest_route_defaults_twstock_persist_false(client, monkeypatch):
     assert persisted == []
 
 
+def test_backtest_route_rejects_twstock_persist_true_override(client, monkeypatch):
+    from app.routes import backtest as backtest_routes
+    from app.utils import auth as auth_utils
+
+    persisted = []
+
+    def fake_verify_token(_raw):
+        return {"sub": "tester", "user_id": 1, "role": "user"}
+
+    monkeypatch.setattr(auth_utils, "verify_token", fake_verify_token)
+    monkeypatch.setattr(backtest_routes.backtest_service, "run", lambda **_kwargs: {"totalReturn": 0, "totalTrades": 0, "equityCurve": [], "trades": [], "executionAssumptions": {}, "metrics": {}, "dataQuality": {}, "trading": {"orders_enabled": False, "connects_to_broker": False}})
+    monkeypatch.setattr(backtest_routes.backtest_service, "persist_run", lambda **kwargs: persisted.append(kwargs) or 1001)
+
+    response = client.post(
+        "/api/indicator/backtest",
+        headers={"Authorization": "Bearer test", "Content-Type": "application/json"},
+        json={"indicatorCode": _INDICATOR, "market": "TWStock", "symbol": "2330", "timeframe": "1D", "startDate": "2025-01-02", "endDate": "2025-01-08", "persist": True},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["data"]["runId"] is None
+    assert persisted == []
+
+
+def test_backtest_route_does_not_persist_failed_twstock_run(client, monkeypatch):
+    from app.routes import backtest as backtest_routes
+    from app.utils import auth as auth_utils
+
+    persisted = []
+    monkeypatch.setattr(auth_utils, "verify_token", lambda _raw: {"sub": "tester", "user_id": 1, "role": "user"})
+    monkeypatch.setattr(backtest_routes.backtest_service, "run", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("synthetic failure")))
+    monkeypatch.setattr(backtest_routes.backtest_service, "persist_run", lambda **kwargs: persisted.append(kwargs) or 1002)
+
+    response = client.post(
+        "/api/indicator/backtest",
+        headers={"Authorization": "Bearer test", "Content-Type": "application/json"},
+        json={"indicatorCode": _INDICATOR, "market": "TWStock", "symbol": "2330", "timeframe": "1D", "startDate": "2025-01-02", "endDate": "2025-01-08"},
+    )
+    assert response.status_code == 500
+    assert persisted == []
+
+
 def test_backtest_route_rejects_twstock_non_daily_timeframe(client, monkeypatch):
     from app.utils import auth as auth_utils
 

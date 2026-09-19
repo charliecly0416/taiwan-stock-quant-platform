@@ -1,0 +1,7 @@
+{
+  "sample_name": "fail_p1b_a_altered_baseline_when_ready",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

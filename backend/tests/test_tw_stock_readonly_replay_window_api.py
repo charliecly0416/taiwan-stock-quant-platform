@@ -41,7 +41,7 @@ def test_readonly_replay_window_clean_model_a_detail_ok():
     assert data["summary"]
 
 
-def test_readonly_replay_window_clean_model_b_detail_ok():
+def test_readonly_replay_window_rejects_shadow_model_b_detail():
     resp = _client().get(
         "/api/tw-stock/readonly-replay-window",
         query_string={
@@ -52,13 +52,10 @@ def test_readonly_replay_window_clean_model_b_detail_ok():
         },
     )
     payload = resp.get_json()
-    assert resp.status_code == 200
+    assert resp.status_code == 400
     data = payload["data"]
-    assert data["ok"] is True
-    assert data["model_id"] == "e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025"
-    assert data["execution_price_mode"] == "next_open"
-    assert data["checksum"]["ok"] is True
-    assert data["summary"]
+    assert data["ok"] is False
+    assert data["status"] == "deprecated_model_id"
 
 
 def test_readonly_replay_window_rejects_training_window_by_backend():
@@ -122,8 +119,8 @@ def test_readonly_replay_window_index_get_returns_clean_windows_only():
     assert data["ok"] is True
     assert data["schema_version"] == "readonly_replay_window_index_d7_v1"
     assert "e4_frozen_qlib_2023_2025_ltr" not in str(data["windows"])
-    assert len(data["windows"]) == 2
-    assert {row["model_id"] for row in data["windows"]} == {"e4_frozen_qlib_2018_2022", "e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025"}
+    assert len(data["windows"]) == 1
+    assert {row["model_id"] for row in data["windows"]} == {"e4_frozen_qlib_2018_2022"}
     assert all(row["strategy_rule"] == "top50_exit_one_worst_sell" for row in data["windows"])
     assert all(row["checksum"]["ok"] is True for row in data["windows"])
 
@@ -224,7 +221,7 @@ def test_readonly_replay_window_index_filters_old_model_defaults():
     data = replay_index.load_readonly_replay_window_index()
     serialized = str(data.get("windows"))
     assert "e4_frozen_qlib_2023_2025_ltr" not in serialized
-    assert len(data["windows"]) == 2
-    assert {row["model_id"] for row in data["windows"]} == {"e4_frozen_qlib_2018_2022", "e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025"}
+    assert len(data["windows"]) == 1
+    assert {row["model_id"] for row in data["windows"]} == {"e4_frozen_qlib_2018_2022"}
     assert all(row["strategy_rule"] == "top50_exit_one_worst_sell" for row in data["windows"])
     assert all(row["checksum"]["ok"] is True for row in data["windows"])

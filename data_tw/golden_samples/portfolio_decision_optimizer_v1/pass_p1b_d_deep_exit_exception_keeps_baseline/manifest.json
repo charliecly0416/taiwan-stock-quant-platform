@@ -1,0 +1,7 @@
+{
+  "sample_name": "pass_p1b_d_deep_exit_exception_keeps_baseline",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": true
+  }
+}

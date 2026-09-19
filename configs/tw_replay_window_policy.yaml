@@ -39,7 +39,24 @@ models:
     allowed_replay_start_min: '2026-01-01'
     source_manifest: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e3_orthogonal_ltr_training/phasee3_training_manifest.json
     source_training_report: docs/tw_extended_oos_qlib_orthogonal_ltr/PHASEE0_CONTRACT_AND_FEASIBILITY_AUDIT_REPORT_CN.md
-    production_selectable: true
+    # Model B remains an isolated research/shadow candidate until MB-0..MB-3
+    # gates and an explicit baseline admission authorization are complete.
+    production_selectable: false
+    frontend_selectable: false
+    production_default: false
+    research_only: true
+    diagnostic_only: true
+    eligible_for_baseline: false
+    allowed_consumers:
+    - research
+    - readonly_comparison
+    forbidden_consumers:
+    - frontend_default
+    - default_candidate
+    - provider_publish
+    - accepted_latest_switch
+    - broker
+    - order
 diagnostic_rules:
   one_sell_one_buy_buggy_e8r:
     display_name: 单换手异常候选（研究）

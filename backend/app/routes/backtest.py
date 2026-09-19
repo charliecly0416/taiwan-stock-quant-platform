@@ -228,11 +228,15 @@ def run_backtest():
         enable_mtf = data.get('enableMtf', True)
         if isinstance(enable_mtf, str):
             enable_mtf = enable_mtf.lower() in ['true', '1', 'yes']
-        # persist toggle: TWStock read-only research defaults to no DB write.
-        persist_default = False if market == 'TWStock' else True
-        persist = data.get('persist', persist_default)
-        if isinstance(persist, str):
-            persist = persist.lower() in ['true', '1', 'yes']
+        # TWStock is a readonly research surface: force no DB write even when
+        # an untrusted client sends persist=true. Other markets retain legacy
+        # persistence behavior.
+        if market == 'TWStock':
+            persist = False
+        else:
+            persist = data.get('persist', True)
+            if isinstance(persist, str):
+                persist = persist.lower() in ['true', '1', 'yes']
 
         if market == 'TWStock':
             if str(timeframe or '').strip() != '1D':
@@ -413,6 +417,13 @@ def run_backtest():
         logger.error(traceback.format_exc())
         try:
             data = data if isinstance(data, dict) else {}
+            error_market = DataSourceFactory.normalize_market(str(data.get('market', '') or ''))
+            if error_market == 'TWStock':
+                return jsonify({
+                    'code': 0,
+                    'msg': f'Backtest failed: {str(e)}',
+                    'data': None
+                }), 500
             user_id = g.user_id
             indicator_id = data.get('indicatorId')
             backtest_service.persist_run(
@@ -895,4 +906,3 @@ def ai_analyze_backtest_runs():
         logger.error(f"ai_analyze_backtest_runs failed: {e}")
         logger.error(traceback.format_exc())
         return jsonify({'code': 0, 'msg': str(e), 'data': None}), 500
-

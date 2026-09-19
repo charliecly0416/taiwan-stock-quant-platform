@@ -1,0 +1,7 @@
+{
+  "sample_name": "pass_p1b_d_short_holding_blocks_replacement",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": true
+  }
+}

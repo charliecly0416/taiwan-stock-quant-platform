@@ -144,6 +144,7 @@ export function applyTwStockPaperPortfolioDecision (data = {}) {
       decision_artifact_id: data.decision_artifact_id || data.decisionArtifactId,
       input_checksum: data.input_checksum || data.inputChecksum,
       idempotency_key: data.idempotency_key || data.idempotencyKey,
+      paper_only: true,
       confirmed_by_user: data.confirmed_by_user === true,
       confirm_text: data.confirm_text || data.confirmText || '确认应用到模拟账户'
     }
@@ -159,6 +160,7 @@ export function resetTwStockPaperPortfolio (data = {}) {
       current_epoch: data.current_epoch || data.currentEpoch,
       idempotency_key: data.idempotency_key || data.idempotencyKey,
       input_checksum: data.input_checksum || data.inputChecksum,
+      paper_only: true,
       confirmed_by_user: data.confirmed_by_user === true,
       confirm_text: data.confirm_text || data.confirmText || '确认重置模拟账户',
       reset_initial_cash: data.reset_initial_cash || data.resetInitialCash
@@ -201,11 +203,11 @@ export function runTwStockReadonlyBacktest (data) {
     url: '/api/indicator/backtest',
     method: 'post',
     data: {
+      ...data,
       market: 'TWStock',
       timeframe: '1D',
       persist: false,
-      enableMtf: false,
-      ...data
+      enableMtf: false
     }
   })
 }

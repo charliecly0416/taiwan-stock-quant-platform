@@ -1,0 +1,12 @@
+/path/to/taiwan-stock-quant-platform/logs/*.log
+/path/to/taiwan-stock-quant-platform/data_tw/ops/daily_auto_update/cron.log {
+    daily
+    rotate 14
+    size 20M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su chuliyang chuliyang
+}

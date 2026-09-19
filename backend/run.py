@@ -111,18 +111,7 @@ def main():
     # Keep startup messages ASCII-only and short.
     print("QuantDinger Python API v2.2.2")
     
-    # ========== Critical Security Check for SECRET_KEY ==========
-    # In production (DEBUG=False), the SECRET_KEY MUST NOT use the default example value.
-    # This prevents attackers from forging JWT tokens with admin privileges.
-    default_secret = "quantdinger-secret-key-change-me"
-    current_secret = Config.SECRET_KEY
-    if not Config.DEBUG and current_secret == default_secret:
-        import secrets as _secrets
-        new_key = _secrets.token_hex(32)
-        os.environ["SECRET_KEY"] = new_key
-        print("[AUTO] SECRET_KEY was default; generated random key for this session.")
-        print("[TIP]  Set a persistent SECRET_KEY in backend/.env for production.")
-    
+    # create_app validates the persistent signing key for CLI and WSGI alike.
     print(f"Service starting at: http://{Config.HOST}:{Config.PORT}")
     
     # Flask dev server is for local development only.

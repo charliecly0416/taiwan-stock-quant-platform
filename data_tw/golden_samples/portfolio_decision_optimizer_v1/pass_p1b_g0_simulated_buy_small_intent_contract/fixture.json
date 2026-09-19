@@ -1,0 +1,112 @@
+{
+  "p1b_g0_fixture": true,
+  "mechanism": "partial_intent_contract_support",
+  "signal_date": "2026-06-19",
+  "order_intent_fields": [
+    "signal_date",
+    "instrument",
+    "intent_action",
+    "intent_reason",
+    "primary_reason_code",
+    "strategy_rule",
+    "candidate_rank",
+    "buy_rank",
+    "full_qlib_rank",
+    "max_buy_count",
+    "max_sell_count",
+    "model_name",
+    "signal_artifact",
+    "partial_intent_kind",
+    "partial_intent_policy",
+    "partial_intent_note",
+    "readonly_only",
+    "simulation_only",
+    "not_order",
+    "not_target_position",
+    "not_investment_advice"
+  ],
+  "candidate_order_intents": [
+    {
+      "signal_date": "2026-06-19",
+      "instrument": "TW2330",
+      "intent_action": "buy",
+      "intent_reason": "simulated_buy_small",
+      "primary_reason_code": "simulated_buy_small",
+      "strategy_rule": "portfolio_decision_optimizer_v1",
+      "candidate_rank": 8,
+      "buy_rank": 1,
+      "full_qlib_rank": 8,
+      "max_buy_count": 1,
+      "max_sell_count": 1,
+      "model_name": "fixture_model",
+      "signal_artifact": "golden_fixture",
+      "partial_intent_kind": "simulated_buy_small",
+      "partial_intent_policy": "simulation_only_contract_probe",
+      "partial_intent_note": "contract-only partial intent without quantity weight cash execution or broker fields",
+      "readonly_only": true,
+      "simulation_only": true,
+      "not_order": true,
+      "not_target_position": true,
+      "not_investment_advice": true
+    }
+  ],
+  "pass_claim": {
+    "claims_phase_pass": false,
+    "real_order_allowed": false,
+    "broker_allowed": false,
+    "quick_trade_allowed": false,
+    "default_candidate": false,
+    "production_default": false,
+    "return_verified": false,
+    "can_submit_order": false
+  },
+  "artifact_output_path": "",
+  "model_signal_fields": [
+    "date",
+    "instrument",
+    "model_name",
+    "model_family",
+    "candidate_rank",
+    "buy_score",
+    "raw_score",
+    "score_rank",
+    "full_qlib_rank",
+    "signal_asof",
+    "available_at",
+    "source_artifact"
+  ],
+  "portfolio_state_fields": [
+    "asof_date",
+    "instrument",
+    "quantity",
+    "cost_basis",
+    "current_holding_flag",
+    "holding_days",
+    "cash"
+  ],
+  "portfolio_state_rows": [
+    {
+      "asof_date": "2026-06-19",
+      "instrument": "TW2330",
+      "quantity": 1,
+      "cost_basis": 10,
+      "current_holding_flag": true,
+      "holding_days": 8,
+      "cash": 100000
+    }
+  ],
+  "execution_readiness": {
+    "next_open_ready": true,
+    "execution_price_status": "ready"
+  },
+  "execution_config": {
+    "execution_price_mode": "next_open",
+    "fee_rate": 0.001425,
+    "tax_rate": 0.003,
+    "min_lot_policy": "simulation_lot_size"
+  },
+  "strategy_config": {
+    "target_holding_count": 1,
+    "all_gates_enabled": false
+  }
+}

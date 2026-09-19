@@ -1,0 +1,8 @@
+{
+  "sample_name": "fail_p1b_g0_partial_intent_with_execution_quantity",
+  "fixture": "fixture.json",
+  "expected": "expected.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

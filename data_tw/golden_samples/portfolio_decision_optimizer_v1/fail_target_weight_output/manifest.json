@@ -1,0 +1,7 @@
+{
+  "sample_name": "fail_target_weight_output",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

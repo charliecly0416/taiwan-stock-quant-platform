@@ -1,0 +1,7 @@
+{
+  "sample_name": "fail_p1b_a_execution_price_in_order_intent",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

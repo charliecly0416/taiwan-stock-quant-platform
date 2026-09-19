@@ -1,0 +1,7 @@
+{
+  "sample_name": "pass_p1b_a_ready_matches_baseline",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": true
+  }
+}

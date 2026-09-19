@@ -1,0 +1,7 @@
+{
+  "sample_name": "pass_p1b_c_gap_blocks_weak_replacement",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": true
+  }
+}

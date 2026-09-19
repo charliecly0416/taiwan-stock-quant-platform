@@ -90,6 +90,61 @@ def test_twii_schema_validator_excludes_total_return_index_from_twii_identity():
     assert update_tw_stock_daily.validate_twii_response_rows(rows, target_asof="2026-08-31")["ok"] is True
 
 
+def test_twii_schema_failure_uses_same_run_yahoo_fallback_and_preserves_twse_evidence(tmp_path, monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        content = json.dumps([{"日期": "1150916", "收盤指數": "22000", "指數名稱": "發行量加權股價指數"}]).encode()
+        headers = {"Date": "Thu, 17 Sep 2026 10:33:41 GMT"}
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return json.loads(self.content)
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=lambda *args, **kwargs: FakeResponse()))
+
+    def fake_run(command, *, cwd, env, text, capture_output, timeout, check):
+        output = Path(command[command.index("--output") + 1])
+        output.mkdir(parents=True)
+        (output / "twii_daily_raw.json").write_text("{}", encoding="utf-8")
+        (output / "twii_intraday_1m_raw.json").write_text("{}", encoding="utf-8")
+        (output / "TWII_NORMALIZED.csv").write_text(
+            "date,open,high,low,close,volume,vwap,factor,source\n"
+            "2026-09-16,1,1,1,1,1,1,1,yahoo\n"
+            "2026-09-17,2,2,2,2,2,2,1,yahoo\n",
+            encoding="utf-8",
+        )
+        (output / "TWII_CAPTURE_MANIFEST.json").write_text(json.dumps({
+            "schema_version": "modelb.test.yahoo.v1",
+            "target_asof": "2026-09-17",
+            "acquisition_run_id": "daily_tw_stock_auto_update_20260917_20260917T103002Z",
+            "endpoint": "https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII",
+            "requests": {"daily": {}, "intraday": {}},
+            "server_date_utc": {},
+            "fetched_at": "2026-09-17T10:35:00+00:00",
+            "available_at": "2026-09-17T10:35:00+00:00",
+            "pit_status": "PASS",
+            "validator_status": "PASS_CANDIDATE_AWAITING_INDEPENDENT_REVIEW",
+        }), encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(update_tw_stock_daily.subprocess, "run", fake_run)
+    run_id = "daily_tw_stock_auto_update_20260917_20260917T103002Z"
+    capture = update_tw_stock_daily._real_hsa8_twii_capture(
+        start="2026-09-16", end="2026-09-17", output_dir=str(tmp_path), acquisition_run_id=run_id,
+    )
+
+    assert capture["provider"] == "Yahoo Finance"
+    assert capture["acquisition_run_id"] == run_id
+    assert capture["target_asof"] == "2026-09-17"
+    assert capture["validator_status"] == "PASS_CANDIDATE_AWAITING_INDEPENDENT_REVIEW"
+    assert capture["fallback"]["status"] == "PASS_CANDIDATE"
+    assert Path(capture["fallback"]["rejected_twse_adapter"]).is_file()
+    assert json.loads((tmp_path / "twii.twse_failure.adapter_output.json").read_text())["validator_status"] == "BLOCKED_PROVIDER_SCHEMA"
+    assert all(Path(item).is_file() for item in capture["raw_paths"] + capture["normalized_paths"])
+
+
 def test_finmind_hsa8_capture_derives_only_explicit_target_date_scope():
     source = SCRIPT_PATH.read_text(encoding="utf-8")
     assert '"validator_status": "PASS" if records' not in source

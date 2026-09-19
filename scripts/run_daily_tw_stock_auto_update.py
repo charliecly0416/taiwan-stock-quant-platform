@@ -45,6 +45,7 @@ from tw_daily_runtime_stages import (
     run_stage_orchestrator,
     runtime_truth,
 )
+from tw_daily_stage_adapters import build_named_stage_adapters, stage_contract_summary
 
 # ARCH-2: the descriptor is the single source for runtime model identity and
 # baseline policy.  Legacy orchestration functions below remain unchanged and
@@ -111,6 +112,9 @@ MBCDS3_DAILY_SHADOW_ACCUMULATOR_BUILDER = ROOT / "scripts/build_tw_mbcds3_shadow
 MBCDS3_DAILY_SHADOW_ROOT = ROOT / "data_tw/experiments/model_b_compatibility_daily_shadow"
 MBCDS3_DAILY_SHADOW_DEFAULT_ACCUMULATOR = MBCDS3_DAILY_SHADOW_ROOT / "mbcds3_daily_auto_accumulator"
 MBCDS3_DAILY_SHADOW_DEFAULT_INVENTORY_NAME = "mbcds3_compatibility_inventory.csv"
+B19R2R_DAILY_SHADOW_RUNNER = ROOT / "scripts/run_modelb_b19r2r_daily_shadow.py"
+B19R2R_TWII_CAPTURE_RUNNER = ROOT / "scripts/capture_modelb_b19r2r_twii_yahoo_v2.py"
+B19R2R_DAILY_SHADOW_ROOT = ROOT / "data_tw/experiments/modelb_b19r2r_daily_shadow"
 MBCDS35_FEATURE_BUILDER = ROOT / "scripts/build_tw_mbcds2_isolated_feature_input.py"
 MBCDS35_FROZEN_SCORER = ROOT / "scripts/run_tw_mbcds35_compatibility_frozen_scorer.py"
 MBCDS35_LEDGER = ROOT / "scripts/build_tw_mbcds35_prospective_oos_ledger.py"
@@ -1830,6 +1834,170 @@ def parse_json_stdout(command_result: dict[str, Any]) -> dict[str, Any]:
         return {}
 
 
+def next_session_open_for_asof(asof: str, *, calendar_path: Path = CALENDAR) -> str:
+    """Return the next known Taiwan session open as an RFC3339 UTC value."""
+    target = date.fromisoformat(str(asof))
+    dates: list[date] = []
+    try:
+        for raw in calendar_path.read_text(encoding="utf-8").splitlines():
+            value = raw.strip()[:10]
+            if value:
+                try:
+                    parsed = date.fromisoformat(value)
+                except ValueError:
+                    continue
+                if parsed > target:
+                    dates.append(parsed)
+    except OSError:
+        dates = []
+    if dates:
+        next_day = min(dates)
+    else:
+        next_day = target + timedelta(days=1)
+        while next_day.weekday() >= 5:
+            next_day += timedelta(days=1)
+    # Taiwan cash-session open is 09:00 Asia/Taipei = 01:00 UTC.
+    return f"{next_day.isoformat()}T01:00:00+00:00"
+
+
+def _model_a_signal_dir_from_gate(model_signal_gate: dict[str, Any]) -> Path | None:
+    """Find the validated Model A artifact directory exposed by the gate."""
+    summary = model_signal_gate.get("summary") if isinstance(model_signal_gate.get("summary"), dict) else {}
+    isolated = model_signal_gate.get("isolated_existing_artifact") if isinstance(model_signal_gate.get("isolated_existing_artifact"), dict) else {}
+    artifacts = isolated.get("artifacts") if isinstance(isolated.get("artifacts"), dict) else {}
+    candidates = [summary.get("model_a_signal_path"), artifacts.get("model_signal")]
+    for value in candidates:
+        if not str(value or "").strip():
+            continue
+        path = resolve_path(str(value))
+        if path.name in {"manifest.json", "signals.csv", "schema.json", "validator_report.json"}:
+            path = path.parent
+        if path.is_dir():
+            return path
+    return None
+
+
+def run_b19r2r_daily_shadow_nonblocking(
+    *,
+    enabled: bool,
+    asof: str,
+    job_id: str,
+    job_dir: Path,
+    model_signal_gate: dict[str, Any],
+    same_run_handoff_validation: Path,
+    source_acquisition_run_id: str,
+    provider_snapshot: Path,
+    decision_cutoff: str,
+    next_session_open: str,
+    command_runner=None,
+) -> dict[str, Any]:
+    """Run the research-only B19R2R shadow without affecting the mainline."""
+    result: dict[str, Any] = {
+        "enabled": bool(enabled),
+        "attempted": False,
+        "ok": True,
+        "shadow_ok": False,
+        "status": "DISABLED_BY_DEFAULT" if not enabled else "NOT_ATTEMPTED",
+        "mainline_blocking": False,
+        "production_allowed": False,
+        "no_apply": True,
+        "pending_asof_set": False,
+        "output_dir": rel_path(job_dir / "b19r2r_daily_shadow"),
+    }
+    if not enabled:
+        return result
+    result["attempted"] = True
+    output_dir = job_dir / "b19r2r_daily_shadow"
+    twii_capture_dir = job_dir / "b19r2r_twii_capture"
+    try:
+        if not model_signal_gate.get("ok"):
+            raise ValueError("MODEL_A_GATE_NOT_READY")
+        model_a_dir = _model_a_signal_dir_from_gate(model_signal_gate)
+        required = {
+            "model_a_signal_dir": model_a_dir,
+            "handoff_validation": same_run_handoff_validation,
+            "provider_snapshot": provider_snapshot,
+        }
+        missing = [name for name, path in required.items() if path is None or not Path(path).exists()]
+        if not source_acquisition_run_id.strip():
+            missing.append("source_acquisition_run_id")
+        if not decision_cutoff.strip():
+            missing.append("decision_cutoff")
+        if not next_session_open.strip():
+            missing.append("next_session_open")
+        if missing:
+            raise ValueError("MISSING_" + "_".join(missing).upper())
+        runner = command_runner or run_cmd
+        capture_argv = [
+            PYTHON,
+            str(B19R2R_TWII_CAPTURE_RUNNER.relative_to(ROOT)),
+            "--output",
+            rel_path(twii_capture_dir),
+        ]
+        capture_result = runner(
+            capture_argv,
+            cwd=ROOT,
+            stdout_path=job_dir / "b19r2r_twii_capture_stdout.json",
+            stderr_path=job_dir / "b19r2r_twii_capture_stderr.txt",
+            timeout=180,
+            env={
+                "B19YTWII_RESEARCH_ROOT": str(job_dir),
+                "B19YTWII_TARGET_ASOF": asof,
+                "B19YTWII_ACQUISITION_RUN_ID": source_acquisition_run_id,
+                "B19YTWII_SESSION_CLOSE_UTC": f"{asof}T05:30:00+00:00",
+                "B19YTWII_NEXT_OPEN_UTC": next_session_open,
+            },
+        )
+        result["twii_capture"] = capture_result
+        if not capture_result.get("ok"):
+            result["status"] = "B19R2R_BLOCKED_TWII_CAPTURE"
+            result["warning"] = str(capture_result.get("stderr_tail") or "twii_capture_failed")
+            result["runner_returncode"] = capture_result.get("returncode")
+            return result
+
+        # The PIT cutoff is sealed only after every input, including the
+        # just-captured TWII row, is available and before feature scoring.
+        effective_decision_cutoff = datetime.now(timezone.utc).isoformat()
+        result["requested_decision_cutoff"] = decision_cutoff
+        result["decision_cutoff"] = effective_decision_cutoff
+        argv = [
+            PYTHON,
+            str(B19R2R_DAILY_SHADOW_RUNNER.relative_to(ROOT)),
+            "--asof", asof,
+            "--output-dir", rel_path(output_dir),
+            "--model-a-signal-dir", rel_path(Path(model_a_dir)),
+            "--handoff-validation", rel_path(same_run_handoff_validation),
+            "--source-acquisition-run-id", source_acquisition_run_id,
+            "--provider-snapshot", rel_path(provider_snapshot),
+            "--decision-cutoff", effective_decision_cutoff,
+            "--next-session-open", next_session_open,
+            "--twii-csv", rel_path(twii_capture_dir / "TWII_NORMALIZED.csv"),
+            "--twii-manifest", rel_path(twii_capture_dir / "TWII_CAPTURE_MANIFEST.json"),
+            "--json",
+        ]
+        runner_result = runner(
+            argv,
+            cwd=ROOT,
+            stdout_path=job_dir / "b19r2r_daily_shadow_stdout.json",
+            stderr_path=job_dir / "b19r2r_daily_shadow_stderr.txt",
+            timeout=1200,
+        )
+        result["runner"] = runner_result
+        result["runner_returncode"] = runner_result.get("returncode")
+        payload = parse_json_stdout(runner_result)
+        if payload:
+            result["runner_payload"] = payload
+        result["shadow_ok"] = bool(runner_result.get("ok")) and bool(payload.get("ok", runner_result.get("ok")))
+        result["status"] = str(payload.get("status") or ("READY" if result["shadow_ok"] else "RUNNER_FAILED"))
+        if not result["shadow_ok"]:
+            result["warning"] = str(payload.get("status") or runner_result.get("stderr_tail") or "b19r2r_daily_shadow_failed")
+    except Exception as exc:
+        result["status"] = f"BLOCKED_{type(exc).__name__.upper()}"
+        result["warning"] = str(exc)
+        result["shadow_ok"] = False
+    return result
+
+
 def protected_latest_fingerprints(
     *,
     readonly_latest_path: Path = READONLY_SNAPSHOT_LATEST,
@@ -1866,6 +2034,78 @@ def should_run_full_orthogonal_refresh(
         and not skip_finmind
         and finmind_scope == "full"
     )
+
+
+def run_b19r2r_for_accepted_day_nonblocking(
+    *,
+    job: dict[str, Any],
+    job_dir: Path,
+    asof: str,
+    symbols: list[str],
+) -> dict[str, Any]:
+    """Reuse the published A bundle for a full-scope research-only run."""
+    try:
+        pointer = read_json(CONTROLLED_MODEL_SIGNAL_LATEST)
+        if pointer.get("signal_asof", pointer.get("asof")) != asof:
+            raise ValueError("PUBLISHED_MODEL_A_ASOF_MISMATCH")
+        artifact_dir = str(pointer.get("canonical_artifact_dir") or "")
+        model_a_dir = resolve_path(artifact_dir)
+        if not artifact_dir or not model_a_dir.is_dir():
+            raise ValueError("PUBLISHED_MODEL_A_ARTIFACT_MISSING")
+        manifest = read_json(model_a_dir / "manifest.json")
+        source_run_id = str(job.get("acquisition_logical_run_id") or "")
+        if not source_run_id or manifest.get("source_acquisition_run_id") != source_run_id:
+            raise ValueError("PUBLISHED_MODEL_A_ACQUISITION_RUN_MISMATCH")
+        # The snapshot must belong to the daily job that published this exact
+        # A artifact. Never fall back to the mutable current provider.
+        provider_snapshot = None
+        origin_job_id = None
+        for path in sorted(OPS_ROOT.glob("*/job.json"), reverse=True):
+            previous = read_json(path)
+            if previous.get("asof") != asof or previous.get("latest_after") != asof:
+                continue
+            if previous.get("acquisition_logical_run_id") != source_run_id:
+                continue
+            gate = previous.get("model_signal_gate") or {}
+            if not gate.get("ok") or _model_a_signal_dir_from_gate(gate) != model_a_dir:
+                continue
+            publish_id = str(previous.get("publish_job_id") or "")
+            if not publish_id or Path(publish_id).name != publish_id:
+                continue
+            candidate = QLIB / "data_tw/experiments/option_c_ops" / publish_id / "tmp/formal_provider_rebuild"
+            if candidate.is_dir():
+                provider_snapshot = candidate
+                origin_job_id = previous.get("job_id")
+                break
+        if provider_snapshot is None:
+            raise ValueError("PUBLISHED_MODEL_A_PROVIDER_SNAPSHOT_MISSING")
+        job["same_run_handoff"] = build_real_same_run_handoff(job=job, job_dir=job_dir, symbols=symbols)
+        cutoff = utc_now()
+        job["b19r2r_decision_cutoff"] = cutoff
+        result = run_b19r2r_daily_shadow_nonblocking(
+            enabled=True,
+            asof=asof,
+            job_id=str(job["job_id"]),
+            job_dir=job_dir,
+            model_signal_gate={"ok": True, "summary": {"model_a_signal_path": rel_path(model_a_dir)}},
+            same_run_handoff_validation=job_dir / "same_run_handoff_validation.json",
+            source_acquisition_run_id=str(job.get("acquisition_logical_run_id") or ""),
+            provider_snapshot=provider_snapshot,
+            decision_cutoff=str(cutoff),
+            next_session_open=next_session_open_for_asof(asof),
+        )
+        job["b19r2r_decision_cutoff"] = str(result.get("decision_cutoff") or cutoff)
+        result["reused_model_a_job_id"] = origin_job_id
+        result["reused_provider_snapshot"] = rel_path(provider_snapshot)
+        return result
+    except Exception as exc:
+        return {
+            "enabled": True, "attempted": True, "ok": True,
+            "shadow_ok": False, "status": "BLOCKED_ACCEPTED_DAY_INPUT",
+            "warning": str(exc), "mainline_blocking": False,
+            "production_allowed": False, "no_apply": True,
+            "pending_asof_set": False,
+        }
 
 
 def observed_target_scope_from_capture(capture: dict[str, Any], *, asof: str) -> set[str]:
@@ -2241,7 +2481,18 @@ def run_ador_no_publish_orchestration_dry_run(
             return {"ok": True, "status": "planned_no_write", "stage": name, "asof": asof, "job_id": job_id}
         return callback
 
-    stage_facade = build_stage_facade(**{name: _plan_stage(name) for name in stage_calls})
+    named_adapters = build_named_stage_adapters(
+        acquisition=_plan_stage("acquisition"),
+        readiness=_plan_stage("readiness"),
+        model_a_signal=_plan_stage("signal"),
+        model_b_shadow=_plan_stage("model_b_shadow"),
+        strategy=_plan_stage("strategy"),
+        artifact_publish=_plan_stage("artifact_publish"),
+        ops_status=_plan_stage("ops_status"),
+    )
+    # Keep the existing six-stage order/failure behavior while making each
+    # ownership boundary explicit for the incremental migration.
+    stage_facade = {name: named_adapters[name] for name in stage_calls}
     stage_result = run_stage_orchestrator(
         stage_facade,
         context={"asof": asof, "job_id": job_id, "mode": "no_publish_dry_run"},
@@ -2256,7 +2507,8 @@ def run_ador_no_publish_orchestration_dry_run(
     )
     stage_result.update({"stage_order": stage_order, "stage_calls": stage_calls,
                          "provider_calls": 0, "publish_calls": stage_calls["artifact_publish"],
-                         "order_calls": 0, "latest_parity": bool(stage_result.get("protected_fingerprint_audit", {}).get("ok"))})
+                         "order_calls": 0, "latest_parity": bool(stage_result.get("protected_fingerprint_audit", {}).get("ok")),
+                         "named_stage_contracts": stage_contract_summary(named_adapters)})
     after = protected_latest_fingerprints(
         readonly_latest_path=readonly_latest_path,
         agent_latest_path=agent_latest_path,
@@ -6431,6 +6683,19 @@ def build_real_same_run_handoff(*, job: dict[str, Any], job_dir: Path, symbols: 
         "institutional_flow": "institutional",
         "margin_short": "margin",
     }
+
+    def artifact_records(paths: list[Path], roles: list[str]) -> list[dict[str, Any]]:
+        """Expose the same path/checksum contract consumed by MBCDS3."""
+        records: list[dict[str, Any]] = []
+        for path, role in zip(paths, roles, strict=False):
+            fingerprint = file_fingerprint(path)
+            records.append({
+                "path": str(path),
+                "role": role,
+                "sha256": str(fingerprint.get("sha256") or ""),
+            })
+        return records
+
     sources: list[dict[str, Any]] = []
     for family, segment in family_segment.items():
         result = segment_results.get(segment) if isinstance(segment_results.get(segment), dict) else {}
@@ -6479,6 +6744,10 @@ def build_real_same_run_handoff(*, job: dict[str, Any], job_dir: Path, symbols: 
             # makes the strict override comparison fail before PIT validation.
             "raw_files": [str(path) for path in raw_paths],
             "normalized_files": [str(path) for path in normalized_paths],
+            "artifacts": artifact_records(
+                [*raw_paths, *normalized_paths, *([resolve_path(str(segment_capture.get("adapter_output_path")))] if segment_capture.get("adapter_output_path") else [])],
+                [*("provider_raw_response" for _ in raw_paths), *("provider_normalized_payload" for _ in normalized_paths), *( ["adapter_output"] if segment_capture.get("adapter_output_path") else [])],
+            ),
         })
     # TWII is deliberately explicit: no calendar, cache, inventory, or stdout substitution.
     sources.append({
@@ -6507,6 +6776,12 @@ def build_real_same_run_handoff(*, job: dict[str, Any], job_dir: Path, symbols: 
         "adapter_output_files": [str(resolve_path(str((capture.get("twii", {}) or {}).get("adapter_output_path"))))] if (capture.get("twii", {}) or {}).get("adapter_output_path") else [],
         "raw_files": [str(resolve_path(str(item))) for item in (capture.get("twii", {}) or {}).get("raw_paths", [])],
         "normalized_files": [str(resolve_path(str(item))) for item in (capture.get("twii", {}) or {}).get("normalized_paths", [])],
+        "artifacts": artifact_records(
+            [*([resolve_path(str(item)) for item in (capture.get("twii", {}) or {}).get("raw_paths", [])]),
+             *([resolve_path(str(item)) for item in (capture.get("twii", {}) or {}).get("normalized_paths", [])]),
+             *([resolve_path(str((capture.get("twii", {}) or {}).get("adapter_output_path")))] if (capture.get("twii", {}) or {}).get("adapter_output_path") else [])],
+            [*("provider_raw_response" for _ in (capture.get("twii", {}) or {}).get("raw_paths", [])), *("provider_normalized_payload" for _ in (capture.get("twii", {}) or {}).get("normalized_paths", [])), *( ["adapter_output"] if (capture.get("twii", {}) or {}).get("adapter_output_path") else [])],
+        ),
     })
     report = {"ok": False, "status": "STOP", "reason": "handoff_not_built", "job_id": run_id, "target_asof": asof, "sources": sources}
     try:
@@ -6908,6 +7183,12 @@ def main() -> int:
         help="Explicit non-default MBCDS3 isolated daily append gate; never changes production/latest.",
     )
     parser.add_argument(
+        "--enable-b19r2r-shadow",
+        action="store_true",
+        default=env_flag("TW_DAILY_AUTO_ENABLE_B19R2R_SHADOW", False),
+        help="Explicit non-default B19R2R research shadow gate; failures never block the daily mainline.",
+    )
+    parser.add_argument(
         "--mbcds3-daily-shadow-inventory",
         default=os.getenv("TW_MBCDS3_DAILY_SHADOW_INVENTORY", ""),
         help="Optional isolated same-run compatibility inventory; default is <job_dir>/mbcds3_compatibility_inventory.csv.",
@@ -7123,6 +7404,7 @@ def main() -> int:
         "asof": asof,
         "asof_source": asof_source,
         "asof_resolution": asof_resolution,
+        "finmind_scope": args.finmind_scope,
         "started_at": utc_now(),
         "research_only": True,
         "trading": {"orders_enabled": False, "connects_to_broker": False, "research_signal_not_order": True},
@@ -7162,6 +7444,17 @@ def main() -> int:
         "mbcds3_daily_shadow_enabled": bool(args.enable_mbcds3_daily_shadow),
         "mbcds3_daily_shadow_attempted": False,
         "mbcds3_daily_shadow_status": "DISABLED_BY_DEFAULT",
+        "b19r2r_daily_shadow": {
+            "enabled": bool(args.enable_b19r2r_shadow),
+            "attempted": False,
+            "ok": True,
+            "shadow_ok": False,
+            "status": "DISABLED_BY_DEFAULT" if not args.enable_b19r2r_shadow else "NOT_ATTEMPTED",
+            "mainline_blocking": False,
+            "production_allowed": False,
+            "no_apply": True,
+            "pending_asof_set": False,
+        },
         "provider_candidate_refresh_gate_enabled": bool(args.enable_provider_candidate_refresh),
         "fpala_formal_accepted_latest_automation_enabled": bool(args.enable_fpala_formal_accepted_latest_automation),
         "fpala_no_publish": bool(args.fpala_no_publish),
@@ -7345,6 +7638,39 @@ def main() -> int:
                 enabled=bool(args.enable_mbcds3_daily_shadow),
             )
             write_json(job_dir / "job.json", job)
+            if (
+                args.enable_b19r2r_shadow
+                and not args.enable_strict_e4_readonly_chain
+                and evidence["protected_latest_unchanged"]["all_protected_paths_unchanged"]
+            ):
+                # A is already accepted for this day. Full acquisition is now
+                # a shadow-only concern, including incomplete source coverage.
+                # B's own Exact-50/TW7769/PIT gate decides readiness; do not
+                # republish A/provider or put research failures into A pending.
+                if args.enable_model_signal_gate:
+                    shadow = run_b19r2r_for_accepted_day_nonblocking(
+                        job=job, job_dir=job_dir, asof=asof, symbols=symbols,
+                    )
+                else:
+                    shadow = {
+                        "enabled": True, "attempted": False, "ok": True,
+                        "shadow_ok": False, "status": "BLOCKED_MODEL_A_GATE_DISABLED",
+                        "mainline_blocking": False, "production_allowed": False,
+                        "no_apply": True, "pending_asof_set": False,
+                    }
+                job["b19r2r_daily_shadow"] = shadow
+                job["full_orthogonal_refresh_status"] = evidence["status"]
+                job["accepted_day_shadow_only"] = True
+                job.update({
+                    "status": "accepted_day_shadow_ready" if shadow.get("shadow_ok") else "accepted_day_shadow_blocked",
+                    "finished_at": utc_now(),
+                    "latest_after": latest_asof(),
+                })
+                if not shadow.get("shadow_ok"):
+                    job["b19r2r_daily_shadow_warning"] = shadow.get("warning") or shadow.get("status")
+                finalize_job(job, job_dir=job_dir, asof=asof, args=args)
+                print(json.dumps(job, ensure_ascii=False, indent=2))
+                return 0
             if not evidence["ok"]:
                 # An incomplete full-scope capture is retryable acquisition
                 # failure. Keep the target pending so the next cron run can
@@ -7623,6 +7949,47 @@ def main() -> int:
         print(json.dumps(job, ensure_ascii=False, indent=2))
         return 2
 
+    if args.enable_b19r2r_shadow:
+        # B19R2R binds to the completed Model A artifact.  Its cutoff must be
+        # captured after the Model A gate returns, otherwise a manifest created
+        # during the gate can appear newer than the cutoff and fail closed.
+        b19r2r_cutoff = utc_now()
+        job["b19r2r_decision_cutoff"] = b19r2r_cutoff
+        cutoff_value = b19r2r_cutoff
+        if isinstance(cutoff_value, datetime):
+            cutoff_value = cutoff_value.isoformat()
+        publish_job_id = str(job.get("publish_job_id") or "")
+        provider_snapshot = (
+            QLIB / "data_tw/experiments/option_c_ops" / publish_job_id / "tmp/formal_provider_rebuild"
+            if publish_job_id
+            else QLIB / "data_tw/experiments/option_c_ops" / "missing_publish_job" / "tmp/formal_provider_rebuild"
+        )
+        b19r2r_shadow = run_b19r2r_daily_shadow_nonblocking(
+            enabled=bool(args.enable_model_signal_gate and model_signal_gate.get("ok")),
+            asof=asof,
+            job_id=job_id,
+            job_dir=job_dir,
+            model_signal_gate=model_signal_gate,
+            same_run_handoff_validation=job_dir / "same_run_handoff_validation.json",
+            source_acquisition_run_id=str(job.get("acquisition_logical_run_id") or ""),
+            provider_snapshot=provider_snapshot,
+            decision_cutoff=str(cutoff_value or ""),
+            next_session_open=next_session_open_for_asof(asof),
+        )
+        job["b19r2r_decision_cutoff"] = str(
+            b19r2r_shadow.get("decision_cutoff") or b19r2r_cutoff
+        )
+        if not args.enable_model_signal_gate:
+            b19r2r_shadow.update({
+                "enabled": True,
+                "status": "BLOCKED_MODEL_A_GATE_DISABLED",
+                "warning": "B19R2R requires a successful Model A gate",
+            })
+        job["b19r2r_daily_shadow"] = b19r2r_shadow
+        if b19r2r_shadow.get("attempted") and not b19r2r_shadow.get("shadow_ok"):
+            job["b19r2r_daily_shadow_warning"] = b19r2r_shadow.get("warning") or b19r2r_shadow.get("status")
+        write_json(job_dir / "job.json", job)
+
     mbcds3_source_availability_ledger = build_mbcds3_source_availability_ledger(
         asof=asof,
         job=job,
@@ -7787,6 +8154,17 @@ def main() -> int:
                 protected_after=runtime_protected_after,
             )
         job["runtime_protected_after"] = runtime_protected_after
+
+    # Legacy provider publish is an explicitly authorized write path too. Keep
+    # the same post-run fingerprints at the top level so its provider/latest
+    # mutation is auditable without relying on nested child artifacts.
+    if "runtime_protected_after" not in job:
+        job["runtime_protected_after"] = protected_latest_fingerprints(
+            readonly_latest_path=READONLY_SNAPSHOT_LATEST,
+            agent_latest_path=AGENT_DAILY_PROMPT_LATEST,
+            provider_latest_path=LATEST,
+            legacy_latest_path=ROOT / "data_tw/experiments/option_c_daily_signal/latest_signal.json",
+        )
 
     clear_pending_asof(asof)
     job.update({"status": "daily_auto_update_passed", "finished_at": utc_now(), "latest_after": latest_asof(), "pending_asof_cleared": True})

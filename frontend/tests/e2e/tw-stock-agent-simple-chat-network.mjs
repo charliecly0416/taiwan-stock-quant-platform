@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { chromium } from '/tmp/travel-agent-e2e/node_modules/playwright/index.mjs'
+import { chromium } from 'playwright'
 
 const baseUrl = process.env.TW_STOCK_AGENT_BASE_URL || 'http://127.0.0.1:8000'
 const artifactDir = process.env.TW_STOCK_AGENT_E2E_ARTIFACT_DIR || '/tmp/tw_agent_simple_chat_network'

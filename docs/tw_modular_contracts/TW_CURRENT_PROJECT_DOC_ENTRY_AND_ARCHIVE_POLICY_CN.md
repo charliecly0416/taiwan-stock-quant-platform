@@ -8,16 +8,17 @@
 
 按以下顺序阅读即可建立当前项目认知：
 
-1. `docs/tw_modular_contracts/TW_PROJECT_DEVELOPMENT_CONSTITUTION_CN.md`
-2. `docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`
-3. `docs/tw_modular_contracts/TW_MODULAR_PIPELINE_FUTURE_DEVELOPMENT_GUIDE_CN.md`
-4. `docs/tw_modular_contracts/TW_DEVELOPER_TEST_AND_EXPERIMENT_PLAYBOOK_CN.md`
-5. `docs/tw_modular_contracts/TW_CURRENT_STRATEGY_CONTEXT_API_FIELD_DICTIONARY_CN.md`
-6. `docs/tw_modular_contracts/TW_DAILY_AUTO_UPDATE_RUNBOOK_CN.md`
-7. `docs/tw_modular_daily_update_productization/PHASEYZ_STRICT_E4_PRODUCTIZATION_FINAL_SUMMARY_CN.md`
-8. `docs/tw_modular_daily_update_productization/PHASEX_PAPER_PORTFOLIO_STRATEGY_AND_SIMULATION_APP_FINAL_SUMMARY_CN.md`
+1. `AGENTS.md`
+2. `docs/CODEX_HANDOFF_CN.md`
+3. `docs/PROJECT_INTRO_CN.md`
+4. `docs/PRODUCT_OPERATIONS_REVIEW_CN.md`
+5. `docs/ops/DAILY_OPERATIONS_CHECKLIST_CN.md`
+6. `docs/ops/STABLE_OPERATIONS_RUNBOOK_CN.md`
+7. `docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`
+8. `docs/tw_modular_contracts/TW_PROJECT_DEVELOPMENT_CONSTITUTION_CN.md`
+9. `docs/DEVELOPMENT_ONBOARDING_CN.md`
 
-这些文档覆盖最高层开发原则、当前模块边界、模型与策略选择、日更链路、前端/API 串联、模拟账户和验收方式。
+这些文档先说明当前运行事实和日常处理方式，再进入模块边界与开发规则。专项合同、字段字典、日更细节和历史最终总结从 `docs/DEVELOPMENT_ONBOARDING_CN.md` 按任务进入，不需要在接手时全部通读。
 
 ## 2. 当前项目结构原则
 
@@ -33,16 +34,19 @@
 
 ## 3. 当前核心模型与默认策略
 
-当前前端和产品化链路只保留两个重要模型：
+当前运行状态以 `configs/active_baseline_descriptor.yaml` 为准：
 
-- `e4_frozen_qlib_2018_2022`：冻结 qlib 底座。
-- `e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025`：冻结 qlib + 正交 LTR，当前默认候选。
+- `e4_frozen_qlib_2018_2022`：Model A，当前唯一 active baseline。
+- `modelb_b19r2r_lambdarank_exact50_78f_v2`：Model A+B 的研究候选，只读历史比较与自动影子链，不是默认模型。
+- `e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025`：旧 LTR 研究产物，保留追溯，不作为当前默认候选。
+
+模型开发阶段可以暂时冻结；真实影子运行、收益结算和运维验收不能因此视为完成。当前产品审查与剩余事项见 `docs/PRODUCT_OPERATIONS_REVIEW_CN.md`。
 
 默认策略规则保持 `top50_exit_one_worst_sell`，但真实页面应通过模型/策略选择、只读 snapshot 和 replay window 展示，不允许把策略写死到前端或模型内部。
 
 ## 4. 历史文档怎么处理
 
-历史阶段文档已经压缩归档到：
+仍有当前追溯价值的历史阶段文档集中在：
 
 - `docs/archive/phase_history/README_CN.md`
 
@@ -53,7 +57,9 @@
 - 修复过程工作文档。
 - 执行者/审查者提示词。
 
-归档不是删除证据。需要追溯某条路线时，从归档索引按原目录查找。日常开发和审查不应从历史阶段报告入手，应优先读当前合同、指南、runbook、最终总结和 checklist。
+2026-09-18 的仓库物理瘦身已删除 1376 个无当前入站引用的历史文档，以及 157 个退出运行/测试闭包的历史实验脚本。删除项没有丢失：精确清单、逐文件 SHA256、恢复命令和隔离恢复验证保存在仓库外备份中。完整范围和恢复方式见 `docs/ops/REPOSITORY_SLIMMING_REPORT_CN.md`。
+
+需要追溯仍保留的路线时，从归档索引按原目录查找；需要精确复现已退休实验时，先从对应备份恢复。日常开发和审查应优先读当前合同、指南、runbook、最终总结和 checklist。
 
 ## 5. 新开发必须遵守的最低门槛
 

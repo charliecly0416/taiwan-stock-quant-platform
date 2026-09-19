@@ -1,0 +1,8 @@
+{
+  "sample_name": "fail_p1b_g_unknown_partial_reason",
+  "fixture": "fixture.json",
+  "expected": "expected.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

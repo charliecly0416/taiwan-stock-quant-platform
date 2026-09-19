@@ -1,245 +1,125 @@
-# Taiwan Stock Quant Platform 项目介绍与原理
+# Taiwan Stock Quant Platform 项目介绍
 
-## 项目定位
+状态基准日期：2026-09-19。
 
-Taiwan Stock Quant Platform 是一个独立打包的台股研究平台，目标是把原本分散在 QuantDinger、QuantDinger-Vue、qlib、Scrapling/Yahoo/FinMind 数据脚本中的能力整合成一个可持续运行的单仓库项目。
+## 1. 这是一个什么产品
 
-项目核心不是自动交易系统，而是研究、分析、可视化和人工复盘系统。它会生成台股量化排序、趋势分析、交叉分析和 Agent 问答结果，但不会连接券商下单，不会生成可执行订单，也不会写入真实仓位。
+这是一个面向台股研究者的每日复盘工作台。它把“数据是哪一天的、候选来自哪个模型、为什么值得研究、历史表现如何、模拟账户发生了什么”放进同一个可追溯流程。
 
-## 闭环链路
+用户不需要先理解 qlib、LightGBM 或 artifact 合同。打开台股研究页面后，可以依次完成：
 
-完整生产闭环如下：
+1. 检查模型日期、行情日期和系统状态。
+2. 浏览 Model A 的 Top30/Top50 候选与技术背景。
+3. 查看单一标的的 K 线、趋势指标和研究解释。
+4. 在相同、已审计的历史窗口比较 Model A 与 Model A+B。
+5. 查看只读历史模拟和 simulation-only 模拟账户。
 
-```text
-FinMind/TWSE raw 数据补数
-Yahoo/Scrapling 复权行情补数
--> qlib normalized CSV
--> qlib bin provider
--> Alpha158 + LightGBM frozen model
--> Option C 150 股票每日研究排序
--> accepted latest 信号产物
--> QuantDinger backend 读取信号、趋势、技术状态、位置风险、交叉分析、Agent context
--> 只读组合策略回放和模拟账户研究闭环
--> QuantDinger-Vue 前端以用户第一视角展示
--> 人工观察、模拟复盘与后续 Decision Model 研究
-```
+产品的核心价值不是“给出必涨股票”，而是减少研究者每天核对日期、来源、排名、策略口径和运行状态的成本，并让每个结论都能追溯到对应产物。
 
-这个闭环分为两条数据口径：
+前端入口：`http://127.0.0.1:8000/#/tw-stock-monitor`。
 
-- qlib 主链路：使用 Yahoo/Scrapling 复权价格，服务于模型预测和横截面排序。
-- QuantDinger raw 链路：使用 FinMind/TWSE 原始数据，服务于 K 线、趋势、交叉分析和展示。
+## 2. 当前产品口径
 
-两条链路不会静默混用价格口径。Yahoo 当日数据不可用时，系统会进入等待重试状态，而不是把 FinMind raw 价格直接混入 qlib provider。
-
-## 模块组成
-
-### backend
-
-`backend/` 来自 QuantDinger 后端，主要承担：
-
-- 台股 raw 数据 API
-- qlib Option C accepted latest 读取
-- qlib ops/dry-run/publish 门禁
-- 台股趋势分析
-- qlib 与 QuantDinger raw 数据交叉分析
-- Agent context 和问答接口
-- 研究安全边界和只读约束
-
-### frontend
-
-`frontend/` 来自 QuantDinger-Vue，主要承担：
-
-- 台股研究页面，首屏优先展示当前 Top30/Top50 和今日复盘重点
-- qlib Top30/Top50 研究排序展示
-- qlib、QuantDinger 趋势、MA/RSI/MACD/Bollinger 技术状态和价格位置风险的交叉分析
-- 5 个用户可理解的只读组合策略回放
-- 模拟账户研究闭环、K 线交易 marker 和持仓复盘
-- Agent 问答面板
-- 内部数据状态、历史 run、dry-run 等诊断信息不再作为普通用户主流程展示
-
-### qlib_pipeline
-
-`qlib_pipeline/` 保存 qlib 台股研究脚本和配置：
-
-- Yahoo/Scrapling Option C refresh
-- qlib provider publish
-- daily signal generation
-- Alpha158/LightGBM 配置
-- 台股 handler/strategy 扩展
-- dump/export 工具
-
-大型 qlib 数据和模型产物不提交到 Git，而是放在 ignored 的 `qlib_pipeline/data_tw/` 和 `qlib_pipeline/mlruns/`。
-
-### crawler
-
-`crawler/` 保存 Yahoo/Scrapling 和 FinMind supplement 相关脚本，用于行情采集、补数和数据契约说明。
-
-### scripts
-
-`scripts/` 保存独立项目级别的入口脚本：
-
-- `bootstrap_full_production_assets.py`：从本机原生产资产复制 qlib 数据和模型。
-- `verify_full_production_loop.py`：验证最大生产闭环。
-- `verify_self_contained_closed_loop.py`：生成轻量 demo 闭环。
-- `run_daily_tw_stock_auto_update.py`：每日无人值守自动更新入口。
-
-## 当前用户第一页面原则
-
-当前前端不再把开发/运维诊断面板作为主流程。普通用户进入台股研究页后，应该优先得到三个答案：
-
-1. 今天 Top30/Top50 里哪些最值得先看。
-2. 为什么：模型排名、趋势、技术状态、价格位置风险是否一致。
-3. 过去表现如何：只读组合规则历史回放，不写模拟账户，不连接券商。
-
-因此，数据状态、历史研究 run、dry-run 等内容只作为维护或历史测试资产，不作为当前页面的一键验收标准。
-
-## 当前收敛后的组合策略框架
-
-当前项目只保留 5 个用户可理解的主策略作为前端策略回放口径：
-
-| 策略 key | 用户名称 | 作用 |
+| 角色 | 当前状态 | 用途 |
 | --- | --- | --- |
-| `rank_rotate_top30` | 跌出 Top30 轮动 | 反应更快，交易更频繁，用作中间参考。 |
-| `rank_rotate_top50` | 跌出 Top50 轮动 | 更稳，持仓跌出 Top50 才做风险减少。 |
-| `rank_rotate_top50_adaptive_score` | Top50 自适应 score | 正常市况继承 Top50，谨慎/下跌市况只允许校准 score 区间候选补仓。 |
-| `rank_rotate_top50_adaptive_score_risk_control` | Top50 自适应 score + 风控 | 高级对照，市场差且组合回撤扩大时暂停补仓。 |
-| `confirmed_exit` | 连续转弱才复盘 | 不因单日波动退出，连续转弱后才风险复盘，降低过度交易。 |
+| Model A：`e4_frozen_qlib_2018_2022` | 唯一 active baseline | 生成当前候选与默认研究链路 |
+| B19R2R：`modelb_b19r2r_lambdarank_exact50_78f_v2` | 冻结的 research challenger | 在 Model A 同日 Top50 内重排，参与只读比较与自动影子 |
+| 旧 Orthogonal LTR | legacy research artifact | 保留追溯和兼容路径，不是当前 challenger |
+| `top50_exit_one_worst_sell` | 默认策略规则 | 以 `next_open` 口径执行只读回放或受控模拟流程 |
 
-`direct_rank`、`position_filter`、`pullback_entry`、`rank_rotate_top30_adaptive_score` 等研究对照项不再作为普通用户前端主策略展示。
+B19R2R 使用 LightGBM LambdaRank 和 78 个 PIT-safe 特征。TW7769 因正交数据不可用而被明确排除，并且不补位。它不能改变 Model A 的候选边界，也不能写入 provider/accepted latest、前端默认模型、模拟账户或订单链路。
 
-## 下一阶段：Decision Model
+历史只读回放中，A+B 在已审计窗口优于 A，但联合确认 gate 仍未全部通过。历史回放可以加快研究，不能替代按目标交易日生成的 prospective shadow 和后续收益结算。因此当前没有把 B19R2R 纳入 baseline。
 
-当前规则策略阶段已经形成 baseline。下一阶段建议尝试二阶段 Decision Model，但不直接做自动交易模型：
+## 3. 为什么比较页面“不可应用”
 
-```text
-qlib baseline rank/score + 大盘状态 + 技术状态 + 价格位置风险 + FinMind 补充特征 + 持仓状态
--> Candidate Generator 扩大候选池
--> Entry Model / Exit Risk Model
--> 只读组合回放对比当前 5 个 baseline 策略
+比较页面用于回答“同一窗口下，不同模型与策略的结果有什么差异”。它的所有下拉选择只改变展示，不修改默认模型、latest 指针或模拟账户，所以 API 明确返回 `no_apply=true`。
+
+这不表示 Model A 在整个产品中都不能使用。Model A 已经是 active baseline；符合门禁的模拟账户动作由独立的 paper-portfolio 流程处理。比较页不承担配置发布或账户变更职责，这样可以避免用户在查看历史结果时意外改变当前运行状态。
+
+## 4. 系统如何工作
+
+```mermaid
+flowchart LR
+    D[行情与来源证据] --> F[PIT-safe 特征]
+    F --> A[Model A]
+    A --> S[ModelSignalArtifact]
+    S --> R[StrategyRule]
+    R --> I[OrderIntentArtifact]
+    I --> P[价格与费用回放]
+    P --> V[Readonly API / 工作台]
+    S --> V
+    S --> B[B19R2R 研究影子]
+    B --> C[比较与 prospective 证据]
+    C --> V
+    S --> G[受控模拟账户]
 ```
 
-Decision Model 的输出应是 `entry_score`、`exit_risk_score` 和 `confidence`，用于研究排序和风险复盘，不直接生成真实买卖指令。
+每层只消费上游的标准产物：
 
-## Option C 150 股票研究排序
+- 数据层记录来源、日期、可得时间和覆盖范围。
+- 特征层执行 PIT 检查，禁止未来信息进入模型。
+- 模型层只输出分数与排名，不输出交易动作。
+- 策略层把标准信号转成可审查的意图。
+- 回放层应用固定执行价、费用和窗口规则。
+- API 与前端只展示已经验证的 artifact。
+- 模拟账户可以写 simulation-only 状态，但不连接真实券商。
 
-当前 qlib 主线使用 Option C 150 股票 universe。每日更新后，模型会对这 150 支股票生成横截面研究排序。
+模块合同、registry、validator 和 checksum 共同保证一项实验不能仅凭“历史收益较好”直接进入默认产品。
 
-重要语义：
+## 5. 日更与故障隔离
 
-- `qlib_score` 是横截面排序分数。
-- 分数不是收益率、胜率、涨幅或买入概率。
-- Top30/Top50 是研究观察候选，不是交易指令。
-- `research_signal_not_order=true` 是强制边界。
+本机有两类日更任务：
 
-## accepted latest 机制
+- 两小时 daily lane 维护 Model A 主链状态。
+- 工作日台北时间 22:45 的 full lane 补充正交来源并尝试 B19R2R 影子。
 
-前端、Agent 和交叉分析不直接读取临时模型输出，而是读取 `accepted latest`。
+Model A 主链与 B19 影子分开判定。B19 `BLOCKED` 且 `mainline_blocking=false` 时，Model A 仍可保持 ready，主链 pending 也不应被污染。周末和台湾市场休市日保持上一个有效交易日是正常行为。
 
-更新 accepted latest 需要通过门禁：
+`GET /api/health` 只表示进程存活。`GET /api/ready` 还会只读检查 PostgreSQL、registry、Model A、策略快照、Agent prompt 和运行时安全边界。它不访问行情 provider，也不运行模型。
 
-1. provider 数据必须包含目标 `asof`。
-2. dry-run 必须通过。
-3. normal signal 产物必须是 accepted。
-4. Top30/Top50 行数、finite score、研究标记必须通过校验。
-5. latest 更新前会备份，失败不会替换 latest。
+## 6. 安全边界
 
-这样可以避免半成品、等待态或失败产物被前端误展示。
+当前部署用于研究和人工复核：
 
-## 每日自动更新原理
+- 不连接真实券商，不自动下单，不输出目标仓位。
+- 后台订单、持仓监控、策略恢复和支付 worker 默认关闭。
+- Agent 只读取验证后的每日上下文，不能调用交易工具。
+- 评分、排名、历史收益不等于上涨概率、收益承诺或投资建议。
+- 密钥、数据库 URL 和真实生产资产不进入 Git。
 
-每日自动更新入口是：
+仓库保留部分上游 QuantDinger 交易相关模块，因为它们仍在 import/router 闭包内。当前研究部署通过启动门禁和 readiness 保证这些能力未启用；这也意味着不能把项目描述成已经彻底移除所有继承代码。
 
-```bash
-python scripts/run_daily_tw_stock_auto_update.py
-```
+## 7. 当前成熟度与限制
 
-它会：
+Model A 研究产品已经完成本机只读部署验收、数据库与产物备份、隔离恢复演练、日志轮转、前后端回归和工作台 fixture 验收，适合进入稳定维护，也适合作为面试项目展示。
 
-1. 自动选择 Asia/Taipei 当天日期。
-2. 如果存在 `pending_asof.json`，优先继续处理 pending 日期。
-3. 用 FinMind 更新 QuantDinger raw 数据库。
-4. 用 Yahoo/Scrapling 拉取 qlib 复权行情。
-5. 发布 qlib provider。
-6. 通过 accepted latest scheduler 更新 latest。
-7. 成功后清除 pending。
+仍需如实说明的限制：
 
-如果收盘后 Yahoo 数据尚未开放，脚本会写入：
+- 当前证据是单机部署，不代表多机高可用。
+- B19R2R 当前精确实现仍需合法交易日的 scheduled full-lane 证据。
+- B19 prospective outcome 自动结算与准入评估尚未闭环。
+- 后端已建立合同边界并拆分部分 route，但仍有较大的继承服务与入口文件。
+- fresh checkout 不包含生产行情、数据库和冻结模型，不能仅靠 Git 重现 live prediction。
 
-```text
-data_tw/ops/daily_auto_update/pending_asof.json
-```
+## 8. 仓库地图
 
-后续定时任务即使跨午夜，也会继续优先拉这个日期，直到成功或人工处理。
+| 路径 | 内容 |
+| --- | --- |
+| `backend/app/routes/` | Flask API 与拆分后的台股 route |
+| `backend/app/services/` | 台股上下文、回放、运维状态、Agent 和模拟账户服务 |
+| `frontend/src/views/tw-stock-monitor/` | 台股研究工作台与子组件 |
+| `scripts/` | 日更编排、artifact builder、validator、备份和验收工具 |
+| `configs/` | baseline、模块 registry、产品 artifact 和回放策略 |
+| `data_tw/`、`qlib_pipeline/data_tw/` | 本机忽略的 live artifact、模型与市场数据 |
+| `docs/tw_modular_contracts/` | 模块合同、开发原则和详细 runbook |
+| `docs/ops/` | 稳定运维、日常检查、备份与瘦身记录 |
 
-## Agent 原理
+## 9. 推荐入口
 
-Agent 模块不是自由访问全系统的交易助手。它的上下文来自受控后端：
-
-- accepted latest qlib 排序
-- 交叉分析结果
-- raw 趋势指标
-- freshness 和数据口径信息
-- 研究安全边界
-
-支持的问题包括：
-
-- 今天 Top30 是哪些？
-- 哪些股票模型和趋势都支持？
-- 哪些需要人工复盘？
-- 某只股票的 qlib rank、score、trend 指标是多少？
-- 当前数据新鲜度如何？
-
-不支持的问题包括：
-
-- 下单
-- 仓位建议
-- 自动交易
-- 收益承诺
-- 绕过 qlib ops 门禁
-
-## 安全边界
-
-项目默认研究模式：
-
-- `orders_enabled=false`
-- `connects_to_broker=false`
-- `research_signal_not_order=true`
-- 不自动提交订单
-- 不写真实仓位
-- 不把模型输出描述成买卖建议
-
-如果未来要接入真实交易，必须作为独立项目或独立受控模块处理，不能复用当前研究闭环默认安全假设。
-
-## 数据与模型资产策略
-
-仓库提交代码、配置、脚本、文档和测试，不提交大型生成资产。
-
-常见 ignored 资产：
-
-- `data_tw/`
-- `qlib_pipeline/data_tw/`
-- `qlib_pipeline/mlruns/`
-- `frontend/dist/`
-
-原因是 qlib provider、normalized CSV 和模型记录通常很大，更适合作为 GitHub Release artifact、对象存储资产，或通过脚本重新生成。
-
-## 项目当前能力边界
-
-已经具备：
-
-- 台股 150 股票 2015 至今生产数据资产的接入路径
-- qlib Option C daily signal
-- accepted latest 发布门禁
-- FinMind/QuantDinger raw 数据补数
-- Yahoo/Scrapling qlib 数据补数
-- 后端读取、交叉分析、Agent
-- 前端展示
-- 每日无人值守重试机制
-
-仍需部署者提供：
-
-- PostgreSQL
-- Python/Node 运行环境
-- 可选 FinMind token
-- qlib 大型数据和模型资产，或重新生成这些资产
-- 系统 cron/systemd 定时任务安装
+- 新 Codex/维护者：`docs/CODEX_HANDOFF_CN.md`
+- 日常运维：`docs/ops/DAILY_OPERATIONS_CHECKLIST_CN.md`
+- 开发接手：`docs/DEVELOPMENT_ONBOARDING_CN.md`
+- 产品审查结论：`docs/PRODUCT_OPERATIONS_REVIEW_CN.md`
+- 面试演示：`docs/INTERVIEW_DEMO_CN.md`
+- 使用与安装：`docs/USER_GUIDE_CN.md`

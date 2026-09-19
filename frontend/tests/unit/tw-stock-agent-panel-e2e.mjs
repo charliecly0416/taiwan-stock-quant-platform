@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
-import { chromium } from '/tmp/travel-agent-e2e/node_modules/playwright/index.mjs'
+import { chromium } from 'playwright'
 
 const baseUrl = process.env.TW_STOCK_AGENT_BASE_URL || 'http://127.0.0.1:8000'
 const screenshotDir = process.env.TW_STOCK_AGENT_SCREENSHOT_DIR || '/tmp/quantdinger_tw_agent_e2e'

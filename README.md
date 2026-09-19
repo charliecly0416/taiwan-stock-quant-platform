@@ -4,12 +4,26 @@ A standalone packaged Taiwan stock research platform that combines QuantDinger b
 
 The project is designed for research and human review. It does not place broker orders by default, and the Taiwan stock monitor keeps generated recommendations in a read-only research workflow.
 
+## Current Product Status
+
+The active baseline is **Model A only** (`e4_frozen_qlib_2018_2022`) with `top50_exit_one_worst_sell`. B19R2R is a frozen LightGBM LambdaRank reranker over Model A's same-day Top50, using 78 PIT-safe features and excluding TW7769 without substitution. It is a research challenger in the readonly comparison workbench and an isolated automatic shadow, not the production default.
+
+The daily lane maintains Model A artifacts; the weekday full lane captures orthogonal sources and attempts the A+B shadow. A shadow blocker must not change the baseline or the mainline pending state. Successful configuration checks do not prove a real scheduled shadow has completed. See [product and operations review](docs/PRODUCT_OPERATIONS_REVIEW_CN.md) for acceptance evidence and remaining limits.
+
+The product helps a researcher inspect dated candidates, compare audited historical model/strategy results, and review a simulation account. Historical comparisons cannot be applied from the comparison page. Agent explanations are optional; inspecting artifacts does not require an LLM call.
+
 
 ## Chinese Documentation
 
-- [当前项目文档入口与归档政策](docs/tw_modular_contracts/TW_CURRENT_PROJECT_DOC_ENTRY_AND_ARCHIVE_POLICY_CN.md)
 - [项目介绍与原理](docs/PROJECT_INTRO_CN.md)
+- [新 Codex 接手指南](docs/CODEX_HANDOFF_CN.md)
+- [日常运维清单](docs/ops/DAILY_OPERATIONS_CHECKLIST_CN.md)
+- [稳定运维手册](docs/ops/STABLE_OPERATIONS_RUNBOOK_CN.md)
+- [开发接手指南](docs/DEVELOPMENT_ONBOARDING_CN.md)
+- [当前项目文档入口与归档政策](docs/tw_modular_contracts/TW_CURRENT_PROJECT_DOC_ENTRY_AND_ARCHIVE_POLICY_CN.md)
 - [使用文档](docs/USER_GUIDE_CN.md)
+- [产品、工程与稳定运维审查](docs/PRODUCT_OPERATIONS_REVIEW_CN.md)
+- [面试演示与工程说明](docs/INTERVIEW_DEMO_CN.md)
 - [模块化研究管线未来开发规范](docs/tw_modular_contracts/TW_MODULAR_PIPELINE_FUTURE_DEVELOPMENT_GUIDE_CN.md)
 - [项目模块地图与链路串联说明](docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md)
 - [开发、测试与实验手册](docs/tw_modular_contracts/TW_DEVELOPER_TEST_AND_EXPERIMENT_PLAYBOOK_CN.md)
@@ -34,11 +48,11 @@ The project is designed for research and human review. It does not place broker 
 - qlib Option C normalized data export, accepted latest artifact consumption, ops integration, EOD automation wrappers, and scheduler support.
 - Built-in Yahoo/Scrapling crawler handoff scripts, FinMind/TWSE archive/export scripts, and qlib Option C production pipeline scripts.
 - QuantDinger cross-analysis between qlib research signals, trend data, technical state, and entry-position risk.
-- Read-only strategy replay with the current five user-facing portfolio rules: Top30 rotation, Top50 rotation, Top50 adaptive score, Top50 adaptive score plus risk control, and confirmed-weakness review.
+- Read-only strategy replay using registered strategies and audited windows; the active rule is `top50_exit_one_worst_sell`. Historical research rules are not interchangeable production defaults.
 - Taiwan stock simulation account workflow for research-only observation, manual review, K-line markers, and performance review.
 - OpenAI Agent module for questions such as top ranked stocks, trend metrics, freshness, and research-only review context.
 - Frontend dashboard focused on current Top30/Top50 ranking, today's review priorities, cross-analysis, K-line charts, strategy replay, Agent panel, and safety labels. Internal data-status, dry-run, and historical-run diagnostics are no longer part of the normal user-first page flow.
-- Decision Model design documentation for the next phase: a second-stage model over qlib rank/score, market regime, technical state, FinMind supplemental features, and holding state.
+- Artifact contracts, validators and research evidence for model/strategy extensions; B19R2R development is frozen while its prospective shadow evidence accumulates.
 
 ## Safety Boundary
 
@@ -60,6 +74,8 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp ../.env.example .env
+# Set a persistent SECRET_KEY and your own ADMIN_PASSWORD in backend/.env.
+# Generate the signing key with: python -c "import secrets; print(secrets.token_hex(32))"
 python run.py
 ```
 
@@ -75,7 +91,21 @@ pnpm dev
 By default the frontend expects the backend API to be available through `/api` proxy settings in `vite.config.js`.
 
 
-## Full Production Closed Loop
+## Production Assets
+
+Production data and frozen models are local assets and are not distributed in git. A fresh checkout cannot reproduce live predictions without supplying those assets. Demo fixtures verify reader contracts and must remain separate from live latest pointers. Do not run an asset replacement or demo generator against an operating deployment as a health check.
+
+Use `GET /api/health` as the process liveness probe. Use `GET /api/ready` for local product readiness: it performs a read-only PostgreSQL probe and checks the registry and Model A -> readonly snapshot -> Agent prompt pointer chain. It never contacts a market-data provider or runs a model. A missing or inconsistent dependency returns HTTP 503 with bounded error codes and no filesystem paths, connection strings, or secret values.
+
+The current product workbench has a self-contained fixture acceptance path. It builds the frontend, starts a temporary local preview, runs healthy and injected-failure desktop/tablet/mobile checks, then stops the preview:
+
+```bash
+cd frontend && corepack pnpm install
+corepack pnpm exec playwright install chromium
+corepack pnpm test:product-fixture
+```
+
+Evidence is written under `tmp/product_fixture_acceptance/`; the fixture dates are intentionally sealed demo data and are not evidence of live market freshness.
 
 To reproduce the original local production effect with the existing qlib assets on this machine:
 

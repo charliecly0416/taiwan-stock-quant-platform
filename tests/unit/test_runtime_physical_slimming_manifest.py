@@ -167,6 +167,81 @@ def test_generated_manifest_excludes_build_and_cache_trees(golden_runtime: dict)
     )
 
 
+def test_literal_paths_into_ignored_build_trees_are_not_recorded(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "repo"
+    source = root / "scripts/root.py"
+    ignored = root / "frontend/dist/index.html"
+    source.parent.mkdir(parents=True)
+    ignored.parent.mkdir(parents=True)
+    source.write_text('BUILD_OUTPUT = "frontend/dist/index.html"\n', encoding="utf-8")
+    ignored.write_text("generated", encoding="utf-8")
+    cron = root / "installed.cron"
+    cron.write_text(
+        "0 1 * * * python scripts/run_daily_tw_stock_auto_update.py --one\n"
+        "0 2 * * * python scripts/run_daily_tw_stock_auto_update.py --two\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(builder, "ACTIVE_ROOTS", ["scripts/root.py"])
+    monkeypatch.setattr(builder, "CONFIG_ROOTS", [])
+    monkeypatch.setattr(builder, "PROTECTED_PATHS", [])
+    monkeypatch.setattr(builder, "DAPR_TARGETS", [])
+    monkeypatch.setattr(builder, "CONTROL_PATHS", [])
+    monkeypatch.setattr(builder, "TEST_ROOTS", ())
+    manifest = builder.build_manifest(
+        root,
+        cron,
+        cron,
+        "2026-09-18T00:00:00+00:00",
+        git_snapshot=(False, {}, []),
+    )
+
+    assert not any(item["target_path"] == "frontend/dist/index.html" for item in manifest["records"])
+
+
+def test_operational_roots_and_root_variable_paths_are_kept(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "repo"
+    source = root / "scripts/ensure.sh"
+    gunicorn = root / "backend/gunicorn_config.py"
+    source.parent.mkdir(parents=True)
+    gunicorn.parent.mkdir(parents=True)
+    source.write_text(
+        'exec python --config "$ROOT/backend/gunicorn_config.py"\n',
+        encoding="utf-8",
+    )
+    gunicorn.write_text("workers = 1\n", encoding="utf-8")
+    cron = root / "installed.cron"
+    cron.write_text(
+        "0 1 * * * python scripts/run_daily_tw_stock_auto_update.py --one\n"
+        "0 2 * * * python scripts/run_daily_tw_stock_auto_update.py --two\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(builder, "ACTIVE_ROOTS", ["scripts/ensure.sh"])
+    monkeypatch.setattr(builder, "CONFIG_ROOTS", [])
+    monkeypatch.setattr(builder, "PROTECTED_PATHS", [])
+    monkeypatch.setattr(builder, "DAPR_TARGETS", [])
+    monkeypatch.setattr(builder, "CONTROL_PATHS", [])
+    monkeypatch.setattr(builder, "TEST_ROOTS", ())
+    manifest = builder.build_manifest(
+        root,
+        cron,
+        cron,
+        "2026-09-18T00:00:00+00:00",
+        git_snapshot=(False, {}, []),
+    )
+
+    records = manifest["records"]
+    assert any(
+        item["source_path"] == "scripts/ensure.sh"
+        and item["target_path"] == "backend/gunicorn_config.py"
+        and item["runtime_scope"] == "production_runtime"
+        for item in records
+    )
+
+
 def test_path_escape_and_cron_drift_fail(golden_runtime: dict) -> None:
     current_manifest = golden_runtime["manifest"]
     escaped = copy.deepcopy(current_manifest)

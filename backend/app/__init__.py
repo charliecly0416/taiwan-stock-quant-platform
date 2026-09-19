@@ -100,7 +100,7 @@ def start_portfolio_monitor():
     To enable it, set ENABLE_PORTFOLIO_MONITOR=true.
     """
     import os
-    enabled = os.getenv("ENABLE_PORTFOLIO_MONITOR", "true").lower() == "true"
+    enabled = os.getenv("ENABLE_PORTFOLIO_MONITOR", "false").lower() == "true"
     if not enabled:
         logger.info("Portfolio monitor is disabled. Set ENABLE_PORTFOLIO_MONITOR=true to enable.")
         return
@@ -124,9 +124,7 @@ def start_pending_order_worker():
     To enable it, set ENABLE_PENDING_ORDER_WORKER=true.
     """
     import os
-    # Local deployment: default to enabled so queued orders can be dispatched automatically.
-    # To disable it, set ENABLE_PENDING_ORDER_WORKER=false explicitly.
-    if os.getenv('ENABLE_PENDING_ORDER_WORKER', 'true').lower() != 'true':
+    if os.getenv('ENABLE_PENDING_ORDER_WORKER', 'false').lower() != 'true':
         logger.info("Pending order worker is disabled (paper mode). Set ENABLE_PENDING_ORDER_WORKER=true to enable.")
         return
     try:
@@ -195,7 +193,7 @@ def restore_running_strategies():
     """
     import os
     # You can disable auto-restore to avoid starting many threads on low-resource hosts.
-    if os.getenv('DISABLE_RESTORE_RUNNING_STRATEGIES', 'false').lower() == 'true':
+    if os.getenv('DISABLE_RESTORE_RUNNING_STRATEGIES', 'true').lower() == 'true':
         logger.info("Startup strategy restore is disabled via DISABLE_RESTORE_RUNNING_STRATEGIES")
         return
 
@@ -260,7 +258,7 @@ def _schedule_post_restore_position_sync() -> None:
     import threading
     import time
 
-    if os.getenv("POSITION_SYNC_ENABLED", "true").lower() != "true":
+    if os.getenv("POSITION_SYNC_ENABLED", "false").lower() != "true":
         return
 
     try:
@@ -292,7 +290,11 @@ def create_app(config_name='default'):
     Returns:
         Flask app
     """
+    from app.config.settings import validate_secret_key
+    signing_key = validate_secret_key()
     app = Flask(__name__)
+    app.config['SECRET_KEY'] = signing_key
+    app.config['TESTING'] = config_name == 'testing'
     app.json_provider_class = SafeJSONProvider
     app.json = SafeJSONProvider(app)
 
@@ -404,4 +406,3 @@ def create_app(config_name='default'):
         restore_running_strategies()
     
     return app
-

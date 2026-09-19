@@ -13,13 +13,16 @@ def _yaml(path: str) -> dict:
     return yaml.safe_load((ROOT / path).read_text(encoding="utf-8")) or {}
 
 
-def test_yz0_registry_production_models_are_strict_two_e4_ids():
+def test_yz0_registry_keeps_model_b_out_of_production_selection():
     registry = _yaml("configs/tw_modular_registry.yaml")
     production = set((registry["production_models"]["production_selectable"] or {}).keys())
-    assert production == {
-        "e4_frozen_qlib_2018_2022",
-        "e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025",
-    }
+    assert production == {"e4_frozen_qlib_2018_2022"}
+    research = registry["production_models"]["research_only"]
+    model_b = research["e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025"]
+    assert model_b["frontend_selectable"] is False
+    assert model_b["production_default"] is False
+    assert model_b["production_allowed"] is False
+    assert model_b["research_only"] is True
     forbidden = " ".join(production).lower()
     for token in ["p3", "o4", "fresh", "bridge", "2023_2025_ltr"]:
         assert token not in forbidden

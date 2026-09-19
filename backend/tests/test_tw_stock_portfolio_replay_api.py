@@ -73,8 +73,8 @@ def test_portfolio_replay_api_contract(client, monkeypatch):
 
 
 def test_portfolio_replay_route_slice_avoids_write_services():
-    source = Path("backend/app/routes/tw_stock.py").read_text()
-    assert '@tw_stock_bp.route("/rank-tech-cross/portfolio-replay", methods=["POST"])' in source
-    route_slice = source.split('@tw_stock_bp.route("/rank-tech-cross/portfolio-replay"', 1)[1].split('@tw_stock_bp.route("/cross-analysis/symbol', 1)[0]
+    source = Path("backend/app/routes/tw_stock_replay_routes.py").read_text()
+    assert '@tw_stock_replay_bp.route("/rank-tech-cross/portfolio-replay", methods=["POST"])' in source
+    route_slice = source.split('@tw_stock_replay_bp.route("/rank-tech-cross/portfolio-replay"', 1)[1]
     forbidden = ["tw_stock_sim_account_service", "draft(", "confirm(", "BacktestService", "monitor scan", "alerts", "publish", "refresh"]
     assert not any(term in route_slice for term in forbidden)

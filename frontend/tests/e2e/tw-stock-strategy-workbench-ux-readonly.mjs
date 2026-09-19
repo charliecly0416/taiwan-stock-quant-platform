@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { chromium } from '/tmp/travel-agent-e2e/node_modules/playwright/index.mjs'
+import { chromium } from 'playwright'
 
 const baseUrl = process.env.TW_STOCK_MONITOR_BASE_URL || 'http://127.0.0.1:8000'
 const artifactDir = process.env.TW_UI2D_WORKBENCH_ARTIFACT_DIR || path.resolve(process.cwd(), '../tmp/tw_ui2d_workbench_acceptance')
+const faultIsolation = process.env.TW_UI2D_FAULT_ISOLATION === 'true'
 await mkdir(artifactDir, { recursive: true })
 
 function apiResponse (data) {
@@ -48,18 +49,21 @@ function currentStrategyContextPayload () {
   return {
     ok: true,
     status: 'ready',
+    context: {
     signal_asof: '2026-06-18',
-    target_trade_date: '2026-06-19',
+    target_date: '2026-06-19',
     default_model_id: 'e4_frozen_qlib_2018_2022',
-    display_model_id: 'e4_frozen_qlib_2023_2025_ltr',
+    display_model_id: 'e4_frozen_qlib_2018_2022',
     strategy_rule: 'top50_exit_one_worst_sell',
-    ranking_source: 'ltr_rerank_within_qlib_top50',
+    ranking_source: 'qlib_model_a',
     candidate_boundary: 'qlib_top50',
     qlib_top50_count: 50,
     qlib_top150_count: 150,
     ltr_top50_count: 50,
     ltr_top_symbol: '2330',
     top_ltr_symbol: '2330',
+    },
+    rankings: { qlib_top50: [{ instrument: 'TW2330', score_rank: 1 }], qlib_top150: [] },
     trading: tradingFlags()
   }
 }
@@ -152,6 +156,56 @@ function replayWindowPayload () {
     },
     checksum: { ok: true, checked_file_count: 6 },
     sources: { readonly_replay_manifest: 'fixture/replay/manifest.json', window_index_manifest: 'fixture/replay/index.json' }
+  }
+}
+
+function modelStrategyComparisonPayload (rawUrl) {
+  const params = new URL(rawUrl).searchParams
+  const modelId = params.get('model_id') || 'model_a_only'
+  return {
+    ok: true,
+    schema_version: 'readonly_model_strategy_comparison_api_v1',
+    readonly_only: true,
+    no_apply: true,
+    runtime_effect: 'none',
+    catalog: {
+      models: [
+        { model_id: 'model_a_only', display_name: 'Model A', role: 'active_baseline', comparison_selectable: true },
+        { model_id: 'model_a_plus_b_b19r2r', display_name: 'Model A + Model B (B19R2R)', role: 'research_challenger', comparison_selectable: true }
+      ],
+      strategies: [
+        { strategy_id: 'top50_exit_one_worst_sell', display_name: 'Top 50 / exit one worst', comparison_selectable: true },
+        { strategy_id: 'phase1c_ltr_simple_daily', display_name: 'Legacy LTR simple daily', compatibility: 'legacy_lineage_only', comparison_selectable: false, compatible_model_ids: [] }
+      ],
+      windows: [{ window_id: 'b19r2r_retrospective_20260722_20260901', display_name: '历史回放 30 日' }],
+      combinations: [
+        { combination_id: 'model_a_30d', model_id: 'model_a_only', strategy_id: 'top50_exit_one_worst_sell', window_id: 'b19r2r_retrospective_20260722_20260901', comparison_selectable: true },
+        { combination_id: 'model_ab_30d', model_id: 'model_a_plus_b_b19r2r', strategy_id: 'top50_exit_one_worst_sell', window_id: 'b19r2r_retrospective_20260722_20260901', comparison_selectable: true }
+      ]
+    },
+    selected: {
+      model_id: modelId,
+      strategy_id: 'top50_exit_one_worst_sell',
+      window_id: 'b19r2r_retrospective_20260722_20260901',
+      combination_id: modelId === 'model_a_only' ? 'model_a_30d' : 'model_ab_30d'
+    },
+    result: { model_id: modelId },
+    comparison: {
+      results: [
+        { model_id: 'model_a_only', model_role: 'active_baseline', metrics: { net_return: 0.00995096, max_drawdown: -0.0770845, fee_tax: 13194.7678, turnover: 4.9645611, top5_abs_contribution_share: 0.4519841 }, gate_status: 'BASELINE_DESCRIPTOR_ACTIVE_MODEL_A_ONLY' },
+        { model_id: 'model_a_plus_b_b19r2r', model_role: 'research_challenger', metrics: { net_return: 0.08079706, max_drawdown: -0.05199786, fee_tax: 12640.0892, turnover: 4.6111538, top5_abs_contribution_share: 0.5074759 }, gate_status: 'FAIL_ALL_JOINT_CONFIRMATION_GATES_AS_HISTORICAL_DIAGNOSTIC' }
+      ],
+      delta: { net_return_b_minus_a: 0.0708461 },
+      diagnostics: {
+        bootstrap_95pct_lower_bound: { measured_value: -0.0056257, threshold: 0, status: 'FAIL' },
+        negative_twii20_regime_return_delta: { measured_value: -0.0481254, threshold: -0.02, status: 'FAIL' },
+        concentration: { top5_abs_contribution_share: { measured_value: 0.5074759, threshold: 0.45, status: 'FAIL' } },
+        failed_gate_ids: ['negative_twii20_regime_return_delta']
+      }
+    },
+    status: { selection_changes_display_only: true, can_apply: false, baseline_admission_allowed: false },
+    safety: { http_method: 'GET_ONLY', paper_portfolio_write: false, runtime_write: false, baseline_or_production_change: false },
+    sources: { catalog: 'fixture/readonly_model_strategy_comparison/catalog.json' }
   }
 }
 
@@ -300,6 +354,7 @@ function readonlyOpsStatusPayload () {
       route_scope: 'GET only'
     },
     next_action_hint: 'provider/raw latest 已到 2026-06-21，qlib accepted latest 仍为 2026-06-18；等待桥接验证通过后才会推进。',
+    b19r2r_shadow: { state: 'BLOCKED', asof: '2026-06-18', last_ready_asof: null, mainline_blocking: false, production_allowed: false, no_apply: true },
     ui_wording_contract: {
       warnings: ['本状态只读，不刷新 provider、不切换 accepted/latest、不发布 controlled signal/snapshot/Agent prompt。']
     },
@@ -361,7 +416,9 @@ await page.route('**/api/indicator/backtest/tw-stock/templates**', route => fulf
 await page.route('**/api/indicator/kline**', route => fulfillJson(route, []))
 
 await page.route('**/api/tw-stock/current-strategy-context**', route => fulfillJson(route, currentStrategyContextPayload()))
-await page.route('**/api/tw-stock/phase-yz/productization-status**', route => fulfillJson(route, phaseYZStatusPayload()))
+await page.route('**/api/tw-stock/phase-yz/productization-status**', route => faultIsolation
+  ? fulfillJson(route, { ok: false, message: '模拟账户状态暂不可读' }, 503)
+  : fulfillJson(route, phaseYZStatusPayload()))
 await page.route('**/api/tw-stock/readonly-strategy-snapshot**', route => fulfillJson(route, readonlyStrategySnapshotPayload()))
 await page.route('**/api/tw-stock/tradingagents-readonly-analysis/latest**', route => fulfillJson(route, {
   ok: true,
@@ -397,6 +454,10 @@ await page.route('**/api/tw-stock/tradingagents-readonly-analysis/latest**', rou
 }))
 await page.route('**/api/tw-stock/readonly-replay-window-index**', route => fulfillJson(route, replayIndexPayload()))
 await page.route('**/api/tw-stock/readonly-replay-window**', route => fulfillJson(route, replayWindowPayload()))
+await page.route('**/api/tw-stock/readonly/model-strategy-comparison**', route => {
+  assert.equal(route.request().method().toUpperCase(), 'GET')
+  return fulfillJson(route, modelStrategyComparisonPayload(route.request().url()))
+})
 await page.route('**/api/tw-stock/paper-portfolio/latest-decision**', route => fulfillJson(route, paperLatestDecision()))
 await page.route('**/api/tw-stock/paper-portfolio/state**', route => fulfillJson(route, paperState()))
 await page.route('**/api/tw-stock/paper-portfolio/apply-runs**', route => fulfillJson(route, { ok: true, items: [] }))
@@ -422,7 +483,9 @@ await page.route('**/api/tw-stock/cross-analysis/latest**', route => fulfillJson
 await page.route('**/api/tw-stock/rank-tech-cross/latest**', route => fulfillJson(route, { ok: true, status: 'accepted', items: [], qlib: { asof: '2026-06-18' }, trading: tradingFlags() }))
 await page.route('**/api/tw-stock/ltr-readonly-explanation**', route => fulfillJson(route, { ok: true, methods: [] }))
 await page.route('**/api/tw-stock/ltr-optional-sim-strategies**', route => fulfillJson(route, { ok: true, strategies: [] }))
-await page.route('**/api/tw-stock/monitor/config**', route => fulfillJson(route, { name: 'default', symbols: ['2330'], enabled: false }))
+await page.route('**/api/tw-stock/monitor/config**', route => faultIsolation
+  ? fulfillJson(route, { ok: false, message: '监控配置暂不可读' }, 503)
+  : fulfillJson(route, { name: 'default', symbols: ['2330'], enabled: false }))
 await page.route('**/api/tw-stock/monitor/alerts**', route => fulfillJson(route, { items: [] }))
 await page.route('**/api/tw-stock/monitor/history**', route => fulfillJson(route, { items: [] }))
 await page.route('**/api/tw-stock/monitor/scan-logs**', route => fulfillJson(route, { health: { status: 'ok' } }))
@@ -442,14 +505,39 @@ await page.addInitScript(({ expiresAt }) => {
 }, { expiresAt })
 
 await page.goto(`${baseUrl}/#/tw-stock-monitor`, { waitUntil: 'domcontentloaded' })
-await page.waitForFunction(() => {
-  const text = document.body.innerText
-  return text.includes('数据链路状态') && text.includes('策略总览') && text.includes('候选名单') && text.includes('历史模拟') && text.includes('模拟账户状态') && text.includes('外部研究摘要') && text.includes('策略解释助手')
-}, null, { timeout: 45000 })
+await page.waitForSelector('.tw-stock-monitor', { timeout: 45000 })
+const comparisonPanel = page.getByTestId('readonly-model-strategy-comparison-panel')
+await comparisonPanel.waitFor()
+const comparisonText = await comparisonPanel.innerText()
+assert.ok(comparisonText.includes('8.08%'))
+assert.ok(comparisonText.includes('研究候选，联合门槛未通过'))
+assert.ok(comparisonText.includes('都不能在本页直接应用'))
+assert.equal(await page.getByTestId('data-freshness-technical-details').getAttribute('open'), null)
+await page.getByTestId('data-freshness-technical-details').locator('summary').click()
+assert.ok((await page.getByTestId('b19r2r-shadow-status').innerText()).includes('影子信号阻断'))
+assert.ok((await page.getByTestId('b19r2r-shadow-status').innerText()).includes('不阻塞 Model A 日更'))
+await page.getByTestId('data-freshness-technical-details').locator('summary').click()
+await page.waitForFunction(() => document.querySelector('[data-testid="strategy-workbench-overview-card"]').innerText.includes('2026-06-18'))
+const initialContextRequests = allRequests.filter(item => item.url.includes('/api/tw-stock/current-strategy-context'))
+assert.equal(initialContextRequests.length, 1, 'initial strategy context should be fetched once')
+if (faultIsolation) {
+  await page.waitForFunction(() => document.body.innerText.includes('监控配置暂不可读；模型信号、候选名单与历史比较仍独立加载'))
+  assert.ok((await page.getByTestId('readonly-strategy-snapshot-panel').innerText()).includes('台积电'))
+}
+await comparisonPanel.locator('.ant-select').first().click()
+await page.getByText('Model A + Model B (B19R2R)（研究候选，联合门槛未通过）', { exact: true }).last().click()
+await page.waitForFunction(() => document.body.innerText.includes('Model A + Model B (B19R2R)（研究候选，联合门槛未通过） · Top 50 / exit one worst'))
+const advancedToggle = page.getByRole('checkbox', { name: '高级研究与运维' })
+assert.equal(await advancedToggle.isChecked(), false)
+assert.equal(await page.getByTestId('rank-tech-portfolio-replay-readonly').isVisible(), false)
+await advancedToggle.check()
+assert.equal(await page.getByTestId('rank-tech-portfolio-replay-readonly').isVisible(), true)
+assert.ok((await page.locator('.tw-stock-monitor').innerText()).includes('模拟账户说明'))
 await page.getByTestId('qlib-sim-draft').first().click()
 await page.waitForFunction(() => document.body.innerText.includes('当前策略工作台为只读模式，不生成模拟交易草稿'))
 assert.equal(await page.evaluate(() => window.localStorage.getItem('tw-stock-sim-draft-context')), null)
 assert.ok(!page.url().includes('/tw-stock-sim-account'))
+await advancedToggle.uncheck()
 await Promise.all([
   page.waitForResponse(response => response.url().includes('/api/tw-stock/agent/simple-chat') && response.status() === 200),
   page.getByTestId('paper-portfolio-panel').getByText('解释原因').click()
@@ -461,7 +549,7 @@ async function viewportAudit (name, width, height) {
   await page.waitForTimeout(500)
   const metrics = await page.evaluate(() => {
     const text = document.body.innerText
-  const required = ['数据链路状态', 'Raw / 行情', 'qlib accepted latest', 'controlled signal latest', 'readonly strategy snapshot latest', 'Agent DailyAgentPromptArtifact latest', 'latest natural cron job', 'latest DAPR18 evidence job', 'DAPR18 dry-run/publish flags', 'blocker', 'next_action_hint', 'provider/raw latest 已到 2026-06-21', 'qlib accepted latest 仍为 2026-06-18', '策略总览', '候选名单', '历史模拟', '模拟账户状态', '模拟账户说明', '外部研究摘要', '策略解释助手', '不构成交易建议', '不连接券商', '不产生真实交易委托', '当前策略工作台为只读模式，不生成模拟交易草稿']
+    const required = ['数据链路状态', '查看数据链路详情', 'provider/raw latest 已到 2026-06-21', 'qlib accepted latest 仍为 2026-06-18', '策略总览', '模型与策略对比', '8.08%', '研究候选，联合门槛未通过', '都不能在本页直接应用', '候选名单', '历史模拟', '模拟账户状态', '解释原因', '策略解释助手', '不构成交易建议', '不连接券商', '不产生真实交易委托']
     const forbiddenMain = ['统一策略上下文', 'YZ Clean E4 产品化', 'clean registry', 'execution_price_mode: next_open', '只展示 Model A / Model B', 'paper_order_intent_artifact_path', 'ReplayWindowPolicy', 'final equity', 'turnover_proxy_by_notional_over_avg_equity', '生成模拟草稿']
     const visibleText = Array.from(document.querySelectorAll('body *')).filter(el => {
       const style = window.getComputedStyle(el)
@@ -471,7 +559,7 @@ async function viewportAudit (name, width, height) {
     const openDrawerCount = Array.from(document.querySelectorAll('.ant-drawer.ant-drawer-open')).length
     const openTechPanelCount = Array.from(document.querySelectorAll('.ant-collapse-item-active')).length
     const buttonOverflow = Array.from(document.querySelectorAll('button')).filter(el => el.scrollWidth > el.clientWidth + 2).map(el => el.innerText.trim()).filter(Boolean)
-    const cardOverflow = Array.from(document.querySelectorAll('.ant-card, .paper-portfolio-panel, .readonly-strategy-snapshot, .readonly-replay-window, .tw-stock-agent-panel')).filter(el => el.scrollWidth > el.clientWidth + 2).map(el => (el.getAttribute('data-testid') || el.className || '').toString())
+    const cardOverflow = Array.from(document.querySelectorAll('.ant-card, .paper-portfolio-panel, .readonly-strategy-snapshot, .readonly-replay-window, .readonly-comparison, .tw-stock-agent-panel')).filter(el => el.scrollWidth > el.clientWidth + 2).map(el => (el.getAttribute('data-testid') || el.className || '').toString())
     return {
       width: window.innerWidth,
       height: window.innerHeight,
@@ -482,11 +570,18 @@ async function viewportAudit (name, width, height) {
       forbidden_visible: forbiddenMain.filter(item => visibleText.includes(item)),
       open_drawer_count: openDrawerCount,
       open_tech_panel_count: openTechPanelCount,
+      freshness_details_collapsed: !document.querySelector('[data-testid="data-freshness-technical-details"]').open,
       button_overflow: buttonOverflow,
       card_overflow: cardOverflow
     }
   })
   await page.screenshot({ path: path.join(artifactDir, `${name}.png`), fullPage: true })
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.waitForTimeout(200)
+  await page.screenshot({ path: path.join(artifactDir, `${name}-first-screen.png`) })
+  for (const [label, selector] of [['comparison', '[data-testid="readonly-model-strategy-comparison-panel"]'], ['candidates', '[data-testid="readonly-strategy-snapshot-panel"]'], ['agent', '#daov-section-agent']]) {
+    await page.locator(selector).screenshot({ path: path.join(artifactDir, `${name}-${label}.png`) })
+  }
   return metrics
 }
 
@@ -500,6 +595,7 @@ const networkAudit = {
   schema_version: 'tw_ui2d_workbench_network_audit.v1',
   request_count: allRequests.length,
   simple_chat_request_count: simpleChatCount,
+  model_strategy_comparison_requests: allRequests.filter(item => item.url.includes('/api/tw-stock/readonly/model-strategy-comparison')),
   forbidden_request_count: forbiddenRequests.length,
   forbidden_requests: forbiddenRequests,
   suspicious_requests: suspiciousRequests,
@@ -540,6 +636,8 @@ await writeFile(path.join(artifactDir, 'console_audit.json'), JSON.stringify(con
 await browser.close()
 
 assert.equal(simpleChatCount, 1)
+assert.ok(networkAudit.model_strategy_comparison_requests.length >= 2)
+assert.ok(networkAudit.model_strategy_comparison_requests.every(item => item.method === 'GET'))
 assert.equal(networkAudit.forbidden_request_count, 0, JSON.stringify(networkAudit.forbidden_requests, null, 2))
 assert.equal(networkAudit.monitor_config_write_count, 0)
 assert.equal(networkAudit.monitor_scan_post_count, 0)
@@ -547,7 +645,8 @@ assert.equal(networkAudit.monitor_alerts_write_count, 0)
 assert.equal(networkAudit.ops_dry_run_post_count, 0)
 assert.equal(networkAudit.frontend_openai_direct_request_count, 0)
 assert.equal(networkAudit.broker_quick_trade_order_request_count, 0)
-assert.equal(networkAudit.failed_response_count, 0, JSON.stringify(networkAudit.failed_responses, null, 2))
+const unexpectedFailedResponses = networkAudit.failed_responses.filter(item => !faultIsolation || !item.url.match(/\/api\/tw-stock\/(monitor\/config|phase-yz\/productization-status)/))
+assert.equal(unexpectedFailedResponses.length, 0, JSON.stringify(unexpectedFailedResponses, null, 2))
 assert.equal(consoleAudit.console_error_count, 0, JSON.stringify(consoleAudit.console_errors, null, 2))
 assert.equal(consoleAudit.page_error_count, 0, JSON.stringify(consoleAudit.page_errors, null, 2))
 assert.equal(audit.required_text_passed, true, JSON.stringify(viewportResults, null, 2))
@@ -556,5 +655,6 @@ assert.equal(audit.overflow_passed, true, JSON.stringify(viewportResults, null, 
 assert.equal(audit.drawer_default_closed_passed, true, JSON.stringify(viewportResults, null, 2))
 assert.equal(audit.button_overflow_passed, true, JSON.stringify(viewportResults, null, 2))
 assert.equal(audit.technical_details_default_collapsed, true, JSON.stringify(viewportResults, null, 2))
+assert.ok(Object.values(viewportResults).every(item => item.freshness_details_collapsed))
 
 console.log(JSON.stringify({ artifactDir, audit, networkAudit, consoleAudit }, null, 2))

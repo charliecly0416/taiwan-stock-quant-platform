@@ -417,7 +417,7 @@ def audit_r16_daily_readonly_diff(path: str) -> dict[str, Any]:
     )
     m3_validator = ROOT / "scripts/validate_tw_daily_orchestrator_m3.py"
     prompt_builder_test = ROOT / "backend/tests/test_tw_stock_agent_daily_prompt_builder.py"
-    prompt_orchestration_test = ROOT / "backend/tests/test_tw_stock_agent_daily_prompt_orchestration.py"
+    prompt_orchestration_test = ROOT / "tests/unit/test_tw_daily_readonly_snapshot_integration.py"
     prompt_validator_test = ROOT / "backend/tests/test_tw_stock_agent_daily_prompt_validator.py"
     authorized = (
         not required_missing

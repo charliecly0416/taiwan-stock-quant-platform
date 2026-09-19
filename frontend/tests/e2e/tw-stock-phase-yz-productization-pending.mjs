@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { chromium } from '/tmp/travel-agent-e2e/node_modules/playwright/index.mjs'
+import { chromium } from 'playwright'
 
 const baseUrl = process.env.TW_STOCK_MONITOR_BASE_URL || 'http://127.0.0.1:8000'
 const outDir = process.env.TW_STOCK_PHASE_YZ3_E2E_DIR || '/tmp/quantdinger_tw_phase_yz3_e2e'

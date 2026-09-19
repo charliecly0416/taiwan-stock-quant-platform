@@ -1,7 +1,20 @@
 name: Backend TWStock Research Stack
 
 on:
+  push:
+    branches: [main, master]
+    paths: ['backend/**', 'scripts/**', 'configs/**', 'schemas/**', 'tests/**', '.github/workflows/backend-tw-stock-research.yml']
+  pull_request:
+    branches: [main, master]
+    paths: ['backend/**', 'scripts/**', 'configs/**', 'schemas/**', 'tests/**', '.github/workflows/backend-tw-stock-research.yml']
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tw-stock-backend-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -12,7 +25,8 @@ jobs:
       ENABLE_PENDING_ORDER_WORKER: 'false'
       ENABLE_PORTFOLIO_MONITOR: 'false'
       ENABLE_TW_STOCK_MONITOR_WORKER: 'false'
-      PYTHONPATH: backend
+      DISABLE_RESTORE_RUNNING_STRATEGIES: 'true'
+      PYTHONPATH: .:backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,5 +38,8 @@ jobs:
           python -m pip install --upgrade pip
           grep -v "MetaTrader5" requirements.txt > /tmp/requirements_ci.txt
           pip install -r /tmp/requirements_ci.txt
+          pip install 'pytest>=8,<9'
       - name: Run TWStock research verification
         run: python backend/scripts/verify_tw_stock_research_stack.py
+      - name: Verify research startup safety
+        run: python -m pytest backend/tests/test_research_startup_safety.py -q

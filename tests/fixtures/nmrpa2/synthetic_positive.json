@@ -1,0 +1,226 @@
+{
+    "contract_id": "SYNTHETIC_CONTRACT",
+    "decision_date": "SYNTHETIC_TD_120",
+    "decision_time": "SYNTHETIC_TIME_DECISION_CUTOFF",
+    "calendar": {
+        "available_at": "SYNTHETIC_TIME_BEFORE_CUTOFF",
+        "trading_dates": {
+            "SYNTHETIC_DATE_GRID_SPEC": {
+                "start": 0,
+                "count": 131
+            }
+        }
+    },
+    "formal_active_symbols": [
+        "SYNTHETIC_SYMBOL_A",
+        "SYNTHETIC_SYMBOL_B"
+    ],
+    "twii_close": {
+        "SYNTHETIC_SERIES_SPEC": {
+            "start": 1000,
+            "step": 1,
+            "count": 121
+        }
+    },
+    "symbols": {
+        "SYNTHETIC_SYMBOL_A": {
+            "score": 2.0,
+            "available_at": "SYNTHETIC_TIME_BEFORE_CUTOFF",
+            "rank_history": [
+                2,
+                2,
+                2,
+                2,
+                2
+            ],
+            "top30_history": [
+                true,
+                true
+            ],
+            "top50_history": [
+                true
+            ],
+            "price": {
+                "close": {
+                    "SYNTHETIC_SERIES_SPEC": {
+                        "start": 10,
+                        "step": 0.1,
+                        "count": 121
+                    }
+                },
+                "volume": {
+                    "SYNTHETIC_SERIES_SPEC": {
+                        "start": 100,
+                        "step": 1,
+                        "count": 121
+                    }
+                },
+                "vwap": {
+                    "SYNTHETIC_SERIES_SPEC": {
+                        "start": 10.1,
+                        "step": 0.1,
+                        "count": 121
+                    }
+                },
+                "expected_date_grid_last20": {
+                    "SYNTHETIC_DATE_GRID_SPEC": {
+                        "start": 101,
+                        "count": 20
+                    }
+                },
+                "observed_close_date_grid_last20": {
+                    "SYNTHETIC_DATE_GRID_SPEC": {
+                        "start": 101,
+                        "count": 20
+                    }
+                }
+            },
+            "institutional": {
+                "source_state": "confirmed_absent",
+                "absence_evidence": {
+                    "evidence_version": "SYNTHETIC_EVIDENCE_V1",
+                    "source_kind": "institutional",
+                    "decision_date": "SYNTHETIC_TD_120",
+                    "checked_at": "SYNTHETIC_TIME_BEFORE_CUTOFF",
+                    "authoritative_scope_id": "SYNTHETIC_SCOPE_ALL",
+                    "expected_symbol_set_sha256": "5d5791c4049cae002ad86461615237fc7f5cf3be9975ef94fdb365de7b1f8687",
+                    "expected_date": "SYNTHETIC_TD_120",
+                    "request_or_batch_manifest_path": "SYNTHETIC_MANIFEST_ID",
+                    "request_or_batch_manifest_sha256": "43256ad636741c7e9f8825d878140c70bc1d7915aefb8d0c5d59d1492ccbfc29",
+                    "request_manifest_payload": {"source_kind": "institutional", "decision_date": "SYNTHETIC_TD_120", "expected_symbols": ["SYNTHETIC_SYMBOL_A", "SYNTHETIC_SYMBOL_B"]},
+                    "immutable_response_or_audit_path": "SYNTHETIC_AUDIT_ID",
+                    "immutable_response_or_audit_sha256": "2594945cdcff6e8687822a736055bfdfc17459f5368935c4b2071413d1fc57a0",
+                    "immutable_response_or_audit_payload": {"source_kind": "institutional", "decision_date": "SYNTHETIC_TD_120", "returned_rows": []},
+                    "response_scope_start": "SYNTHETIC_TD_120",
+                    "response_scope_end": "SYNTHETIC_TD_120",
+                    "queried_symbol_count": 2,
+                    "returned_symbol_count": 0,
+                    "returned_rows": [],
+                    "returned_symbol_set_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                    "absent_symbol_set_sha256": "5d5791c4049cae002ad86461615237fc7f5cf3be9975ef94fdb365de7b1f8687",
+                    "result_class": "authoritative_complete_zero_rows"
+                }
+            },
+            "margin": {
+                "source_state": "confirmed_absent",
+                "absence_evidence": {
+                    "evidence_version": "SYNTHETIC_EVIDENCE_V1",
+                    "source_kind": "margin",
+                    "decision_date": "SYNTHETIC_TD_120",
+                    "checked_at": "SYNTHETIC_TIME_BEFORE_CUTOFF",
+                    "authoritative_scope_id": "SYNTHETIC_SCOPE_ALL",
+                    "expected_symbol_set_sha256": "5d5791c4049cae002ad86461615237fc7f5cf3be9975ef94fdb365de7b1f8687",
+                    "expected_date": "SYNTHETIC_TD_120",
+                    "request_or_batch_manifest_path": "SYNTHETIC_MANIFEST_ID",
+                    "request_or_batch_manifest_sha256": "fc4bf62b0e9bd2c240011f12bab2263661aac782263c9064ad331869ea188de2",
+                    "request_manifest_payload": {"source_kind": "margin", "decision_date": "SYNTHETIC_TD_120", "expected_symbols": ["SYNTHETIC_SYMBOL_A", "SYNTHETIC_SYMBOL_B"]},
+                    "immutable_response_or_audit_path": "SYNTHETIC_AUDIT_ID",
+                    "immutable_response_or_audit_sha256": "2da9b0578f243901d5d25bd9b5d9298c5a532c1e48c2c955eaeeebd77788947c",
+                    "immutable_response_or_audit_payload": {"source_kind": "margin", "decision_date": "SYNTHETIC_TD_120", "returned_rows": []},
+                    "response_scope_start": "SYNTHETIC_TD_120",
+                    "response_scope_end": "SYNTHETIC_TD_120",
+                    "queried_symbol_count": 2,
+                    "returned_symbol_count": 0,
+                    "returned_rows": [],
+                    "returned_symbol_set_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                    "absent_symbol_set_sha256": "5d5791c4049cae002ad86461615237fc7f5cf3be9975ef94fdb365de7b1f8687",
+                    "result_class": "authoritative_complete_zero_rows"
+                }
+            }
+        },
+        "SYNTHETIC_SYMBOL_B": {
+            "score": 1.0,
+            "available_at": "SYNTHETIC_TIME_BEFORE_CUTOFF",
+            "rank_history": [],
+            "top30_history": [],
+            "top50_history": [],
+            "price": {
+                "close": {
+                    "SYNTHETIC_SERIES_SPEC": {
+                        "start": 20,
+                        "step": 0.05,
+                        "count": 121
+                    }
+                },
+                "volume": {
+                    "SYNTHETIC_SERIES_SPEC": {
+                        "start": 200,
+                        "step": 1,
+                        "count": 121
+                    }
+                },
+                "vwap": {
+                    "SYNTHETIC_SERIES_SPEC": {
+                        "start": 20.1,
+                        "step": 0.05,
+                        "count": 121
+                    }
+                },
+                "expected_date_grid_last20": {
+                    "SYNTHETIC_DATE_GRID_SPEC": {
+                        "start": 101,
+                        "count": 20
+                    }
+                },
+                "observed_close_date_grid_last20": {
+                    "SYNTHETIC_DATE_GRID_SPEC": {
+                        "start": 101,
+                        "count": 20
+                    }
+                }
+            },
+            "institutional": {
+                "source_state": "confirmed_absent",
+                "absence_evidence": {
+                    "evidence_version": "SYNTHETIC_EVIDENCE_V1",
+                    "source_kind": "institutional",
+                    "decision_date": "SYNTHETIC_TD_120",
+                    "checked_at": "SYNTHETIC_TIME_BEFORE_CUTOFF",
+                    "authoritative_scope_id": "SYNTHETIC_SCOPE_ALL",
+                    "expected_symbol_set_sha256": "5d5791c4049cae002ad86461615237fc7f5cf3be9975ef94fdb365de7b1f8687",
+                    "expected_date": "SYNTHETIC_TD_120",
+                    "request_or_batch_manifest_path": "SYNTHETIC_MANIFEST_ID",
+                    "request_or_batch_manifest_sha256": "43256ad636741c7e9f8825d878140c70bc1d7915aefb8d0c5d59d1492ccbfc29",
+                    "request_manifest_payload": {"source_kind": "institutional", "decision_date": "SYNTHETIC_TD_120", "expected_symbols": ["SYNTHETIC_SYMBOL_A", "SYNTHETIC_SYMBOL_B"]},
+                    "immutable_response_or_audit_path": "SYNTHETIC_AUDIT_ID",
+                    "immutable_response_or_audit_sha256": "2594945cdcff6e8687822a736055bfdfc17459f5368935c4b2071413d1fc57a0",
+                    "immutable_response_or_audit_payload": {"source_kind": "institutional", "decision_date": "SYNTHETIC_TD_120", "returned_rows": []},
+                    "response_scope_start": "SYNTHETIC_TD_120",
+                    "response_scope_end": "SYNTHETIC_TD_120",
+                    "queried_symbol_count": 2,
+                    "returned_symbol_count": 0,
+                    "returned_rows": [],
+                    "returned_symbol_set_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                    "absent_symbol_set_sha256": "5d5791c4049cae002ad86461615237fc7f5cf3be9975ef94fdb365de7b1f8687",
+                    "result_class": "authoritative_complete_zero_rows"
+                }
+            },
+            "margin": {
+                "source_state": "confirmed_absent",
+                "absence_evidence": {
+                    "evidence_version": "SYNTHETIC_EVIDENCE_V1",
+                    "source_kind": "margin",
+                    "decision_date": "SYNTHETIC_TD_120",
+                    "checked_at": "SYNTHETIC_TIME_BEFORE_CUTOFF",
+                    "authoritative_scope_id": "SYNTHETIC_SCOPE_ALL",
+                    "expected_symbol_set_sha256": "5d5791c4049cae002ad86461615237fc7f5cf3be9975ef94fdb365de7b1f8687",
+                    "expected_date": "SYNTHETIC_TD_120",
+                    "request_or_batch_manifest_path": "SYNTHETIC_MANIFEST_ID",
+                    "request_or_batch_manifest_sha256": "fc4bf62b0e9bd2c240011f12bab2263661aac782263c9064ad331869ea188de2",
+                    "request_manifest_payload": {"source_kind": "margin", "decision_date": "SYNTHETIC_TD_120", "expected_symbols": ["SYNTHETIC_SYMBOL_A", "SYNTHETIC_SYMBOL_B"]},
+                    "immutable_response_or_audit_path": "SYNTHETIC_AUDIT_ID",
+                    "immutable_response_or_audit_sha256": "2da9b0578f243901d5d25bd9b5d9298c5a532c1e48c2c955eaeeebd77788947c",
+                    "immutable_response_or_audit_payload": {"source_kind": "margin", "decision_date": "SYNTHETIC_TD_120", "returned_rows": []},
+                    "response_scope_start": "SYNTHETIC_TD_120",
+                    "response_scope_end": "SYNTHETIC_TD_120",
+                    "queried_symbol_count": 2,
+                    "returned_symbol_count": 0,
+                    "returned_rows": [],
+                    "returned_symbol_set_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                    "absent_symbol_set_sha256": "5d5791c4049cae002ad86461615237fc7f5cf3be9975ef94fdb365de7b1f8687",
+                    "result_class": "authoritative_complete_zero_rows"
+                }
+            }
+        }
+    }
+}

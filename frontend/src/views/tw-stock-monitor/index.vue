@@ -4,10 +4,11 @@
       <div>
         <h2>台股研究</h2>
         <div class="subline">
-          <span>进入页面先看当前 asof 的 Top30/50 排名，再按需要查看交叉分析、图表和研究解释。</span>
+          <span>台湾股票量化研究工作台</span>
         </div>
       </div>
       <div class="top-actions">
+        <a-checkbox v-model="advancedResearchVisible" data-testid="advanced-research-toggle">高级研究与运维</a-checkbox>
         <a-switch
           v-model="autoRefreshEnabled"
           size="small"
@@ -90,6 +91,13 @@
           </a-button>
         </div>
       </div>
+      <details class="data-freshness-details" data-testid="data-freshness-technical-details">
+        <summary>查看数据链路详情</summary>
+      <div class="data-freshness-shadow" data-testid="b19r2r-shadow-status">
+        <strong>A+B 自动影子：{{ b19ShadowStatusText }}</strong>
+        <span>信号日期 {{ b19ShadowAsOf }} · 最近就绪 {{ b19ShadowLastReadyAsOf }}</span>
+        <small>独立研究观察，不替换 Model A，不阻塞 Model A 日更。</small>
+      </div>
       <div class="data-freshness-track">
         <div class="data-freshness-node">
           <span>Raw / 行情</span>
@@ -143,6 +151,7 @@
         <a-icon type="safety-certificate" />
         <span>只读展示；刷新状态只读取现有接口，不拉取数据、不改 latest、不连接券商。</span>
       </div>
+      </details>
     </div>
 
     <a-alert
@@ -162,7 +171,7 @@
       <template slot="title">
         <div class="card-title-line">
           <div class="workbench-title-block">
-            <span>策略总览</span>
+            <span>今日策略总览</span>
             <small>按当前只读 snapshot asof 查看信号、目标交易日、候选覆盖和模拟账户状态。</small>
           </div>
           <div class="readonly-tags">
@@ -203,66 +212,6 @@
         show-icon
         :message="currentStrategyContextMismatchText"
       />
-      <div class="workbench-selection-bar" data-testid="strategy-workbench-selection-controls">
-        <div class="workbench-selection-copy">
-          <span>当前查看口径</span>
-          <strong>{{ workbenchContextModeText }}</strong>
-          <small>{{ workbenchSelectionResultText }}</small>
-        </div>
-        <div class="workbench-selection-controls">
-          <label>
-            <span>模型</span>
-            <a-select
-              :value="workbenchSelectedModelId"
-              size="small"
-              style="width: 300px; max-width: 100%"
-              @change="handleWorkbenchModelSelect"
-            >
-              <a-select-option
-                v-for="item in workbenchModelOptions"
-                :key="item.model_id"
-                :value="item.model_id"
-              >
-                {{ item.display_name }}
-              </a-select-option>
-            </a-select>
-          </label>
-          <label>
-            <span>策略</span>
-            <a-select
-              :value="workbenchSelectedStrategyId"
-              size="small"
-              style="width: 260px; max-width: 100%"
-              @change="handleWorkbenchStrategySelect"
-            >
-              <a-select-option
-                v-for="item in workbenchStrategyOptions"
-                :key="item.strategy_id"
-                :value="item.strategy_id"
-              >
-                {{ item.display_name }}
-              </a-select-option>
-            </a-select>
-          </label>
-          <label>
-            <span>回放窗口</span>
-            <a-select
-              :value="readonlyReplayWindowSelectedKey"
-              size="small"
-              style="width: 300px; max-width: 100%"
-              @change="handleReadonlyReplayWindowSelect"
-            >
-              <a-select-option
-                v-for="item in readonlyReplayWindowOptions"
-                :key="item.window_key"
-                :value="item.window_key"
-              >
-                {{ item.display_label || item.window_key }}
-              </a-select-option>
-            </a-select>
-          </label>
-        </div>
-      </div>
       <div class="workbench-overview-grid">
         <div>
           <span>信号日期</span>
@@ -301,6 +250,14 @@
       </a-collapse>
     </a-card>
 
+    <readonly-model-strategy-comparison-panel
+      :payload="readonlyModelStrategyComparisonPayload"
+      :error="readonlyModelStrategyComparisonError"
+      :loading="loadingReadonlyModelStrategyComparison"
+      @select="loadReadonlyModelStrategyComparison"
+      @refresh="loadReadonlyModelStrategyComparison"
+    />
+
     <section id="daov-section-snapshot" class="monitor-anchor-section">
       <readonly-strategy-snapshot-panel
         :payload="readonlyStrategySnapshotPayload"
@@ -334,6 +291,7 @@
     </section>
 
     <readonly-shadow-exposure-panel
+      v-show="advancedResearchVisible"
       :payload="readonlyShadowExposurePayload"
       :error="readonlyShadowExposureError"
       :loading="loadingReadonlyShadowExposure"
@@ -341,13 +299,14 @@
     />
 
     <trading-agents-readonly-panel
+      v-show="advancedResearchVisible"
       :payload="tradingAgentsReadonlyPayload"
       :error="tradingAgentsReadonlyError"
       :loading="loadingTradingAgentsReadonly"
       @refresh="loadTradingAgentsReadonlyAnalysis"
     />
 
-    <a-card id="daov-section-research" class="rank-tech-replay-card" :bordered="false" data-testid="rank-tech-portfolio-replay-readonly">
+    <a-card v-show="advancedResearchVisible" id="daov-section-research" class="rank-tech-replay-card" :bordered="false" data-testid="rank-tech-portfolio-replay-readonly">
       <template slot="title">
         <div class="card-title-line">
         <span>今日复盘与历史模拟</span>
@@ -717,7 +676,7 @@
     </a-card>
 
 
-    <a-card class="qlib-option-c-card" :bordered="false">
+    <a-card v-show="advancedResearchVisible" class="qlib-option-c-card" :bordered="false">
       <template slot="title">
         <div class="card-title-line">
           <span>当前 asof 研究排名</span>
@@ -1069,7 +1028,7 @@
       </div>
     </a-card>
 
-    <a-card class="rank-change-card" :bordered="false">
+    <a-card v-show="advancedResearchVisible" class="rank-change-card" :bordered="false">
       <template slot="title">
         <div class="card-title-line">
           <span>排名变化</span>
@@ -1160,7 +1119,7 @@
 
 
     <a-card class="tw-cross-analysis-card" :bordered="false">
-      <template slot="title">
+      <template v-if="advancedResearchVisible" slot="title">
         <div class="card-title-line">
           <span>台股交叉分析</span>
           <div class="readonly-tags">
@@ -1170,6 +1129,7 @@
           </div>
         </div>
       </template>
+      <div v-show="advancedResearchVisible">
       <div class="cross-analysis-toolbar">
         <a-radio-group v-model="crossAnalysisBucket" size="small" @change="handleCrossAnalysisBucketChange">
           <a-radio-button value="top30">Top30</a-radio-button>
@@ -1213,6 +1173,7 @@
           </div>
         </a-collapse-panel>
       </a-collapse>
+      </div>
       <div id="daov-section-agent" class="tw-stock-agent-panel">
         <div class="agent-panel-header">
           <div>
@@ -1304,6 +1265,7 @@
           </a-collapse-panel>
         </a-collapse>
       </div>
+      <div v-show="advancedResearchVisible">
       <div v-if="crossAnalysisAccepted" class="qlib-meta-grid">
         <span>模型日期 <strong>{{ crossAnalysisQlib.asof || '-' }}</strong></span>
         <span>行情日期 <strong>{{ crossRawDateRangeText }}</strong></span>
@@ -1467,9 +1429,10 @@
       <div class="qlib-footnote">
         数据口径差异：qlib 使用 Yahoo adjusted 模型信号；QuantDinger 使用 raw 日线趋势。交叉分析只用于人工复盘和观察名单，不调用 qlib ops；复盘仅保存状态和备注，查看资金曲线和多策略验证都只做只读历史模拟。
       </div>
+      </div>
     </a-card>
 
-    <a-row :gutter="16" class="content-row">
+    <a-row v-show="advancedResearchVisible" :gutter="16" class="content-row">
       <a-col :xs="24" :xl="15">
         <a-card :bordered="false">
           <template slot="title">
@@ -1620,7 +1583,7 @@
       </a-col>
     </a-row>
 
-    <a-collapse id="daov-section-maintenance" class="monitor-tools-collapse" :bordered="false">
+    <a-collapse v-show="advancedResearchVisible" id="daov-section-maintenance" class="monitor-tools-collapse" :bordered="false">
       <a-collapse-panel key="monitor-tools" header="高级维护工具与提醒记录（默认折叠，只读）">
         <div class="monitor-tools-actions">
           <a-button size="small" @click="refreshMonitorReadonly" :loading="scanning">
@@ -1745,9 +1708,15 @@
 import moment from 'moment'
 import ReadonlyStrategySnapshotPanel from './components/ReadonlyStrategySnapshotPanel.vue'
 import ReadonlyReplayWindowPanel from './components/ReadonlyReplayWindowPanel.vue'
+import ReadonlyModelStrategyComparisonPanel from './components/ReadonlyModelStrategyComparisonPanel.vue'
 import PaperPortfolioPanel from './components/PaperPortfolioPanel.vue'
 import ReadonlyShadowExposurePanel from './components/ReadonlyShadowExposurePanel.vue'
 import TradingAgentsReadonlyPanel from './components/TradingAgentsReadonlyPanel.vue'
+import { useAgentContext } from './composables/useAgentContext'
+import { useReadonlyReplay } from './composables/useReadonlyReplay'
+import { useDailyOpsStatus } from './composables/useDailyOpsStatus'
+import { useSignalContext } from './composables/useSignalContext'
+// getTwStockAgentContext and simpleChatTwStockAgent are delegated by useAgentContext to keep the page boundary readonly.
 import {
   getTwStockTrends,
   getTwStockLTRReadonlyExplanation,
@@ -1755,9 +1724,7 @@ import {
   getTwStockReadonlyShadowExposure,
   getTwStockTradingAgentsReadonlyAnalysisLatest,
   getTwStockPhaseYZProductizationStatus,
-  getTwStockCurrentStrategyContext,
-  getTwStockReadonlyReplayWindowIndex,
-  getTwStockReadonlyReplayWindow,
+  getTwStockReadonlyModelStrategyComparison,
   getTwStockLTROptionalSimStrategies,
   getTwStockMonitorConfig,
   getTwStockAlerts,
@@ -1773,29 +1740,23 @@ import {
   getQlibOptionCJob,
   getQlibOptionCJobLog,
   getQlibOptionCLatestJob,
-  getTwStockDailyAutoUpdateStatus,
-  getTwStockReadonlyOpsStatus,
   getQlibOptionCScheduler,
   getTwStockCrossAnalysisLatest,
   getTwStockCrossAnalysisSymbol,
   getTwStockRankTechCrossLatest,
   getTwStockObservationReplay,
   getTwStockCrossAnalysisReviews,
-  getTwStockAgentContext,
-  simpleChatTwStockAgent,
   getTwStockSimAccounts,
   getTwStockSimTrades
 } from '@/api/tw-stock-readonly'
-import {
-  runTwStockReadonlyBacktest,
-  runTwStockPortfolioReplay
-} from '@/api/tw-stock-action'
+import { runTwStockReadonlyBacktest } from '@/api/tw-stock-action'
 
 export default {
   name: 'TWStockMonitor',
   components: {
     ReadonlyStrategySnapshotPanel,
     ReadonlyReplayWindowPanel,
+    ReadonlyModelStrategyComparisonPanel,
     PaperPortfolioPanel,
     ReadonlyShadowExposurePanel,
     TradingAgentsReadonlyPanel
@@ -1827,6 +1788,7 @@ export default {
       loadingPhaseYZProductization: false,
       loadingReadonlyReplayWindowIndex: false,
       loadingReadonlyReplayWindow: false,
+      loadingReadonlyModelStrategyComparison: false,
       loadingLtrReadonlyExplanation: false,
       loadingLtrOptionalSimStrategies: false,
       runningPortfolioReplay: false,
@@ -1929,6 +1891,8 @@ export default {
       readonlyReplayWindowSelectedKey: '2026_ytd',
       readonlyReplayWindowPayload: null,
       readonlyReplayWindowError: '',
+      readonlyModelStrategyComparisonPayload: null,
+      readonlyModelStrategyComparisonError: '',
       readonlyReplayWindowForm: {
         model_id: 'e4_frozen_qlib_2018_2022',
         strategy_rule: 'top50_exit_one_worst_sell',
@@ -1943,6 +1907,10 @@ export default {
       portfolioReplayPayload: null,
       portfolioReplayError: '',
       agentContext: null,
+      agentContextComposable: null,
+      readonlyReplayComposable: null,
+      dailyOpsComposable: null,
+      signalContextComposable: null,
       agentContextError: '',
       agentQuestion: '',
       agentResponse: null,
@@ -1952,6 +1920,7 @@ export default {
         '当前数据新鲜度和口径是什么？'
       ],
       configDrawerVisible: false,
+      advancedResearchVisible: false,
       config: {
         name: 'default',
         symbols: [],
@@ -2042,6 +2011,13 @@ export default {
         { id: 'daov-section-maintenance', label: '诊断', tone: 'muted' }
       ]
     },
+    b19ShadowSummary () { return (this.readonlyOpsStatus && this.readonlyOpsStatus.b19r2r_shadow) || {} },
+    b19ShadowStatusText () {
+      const labels = { NOT_OBSERVED: '尚未观察到运行', NOT_ATTEMPTED: '尚未尝试', READY: '影子信号已就绪', READY_RESEARCH_SHADOW: '影子信号已就绪', BLOCKED: '影子信号阻断' }
+      return labels[this.b19ShadowSummary.state] || '尚未观察到运行'
+    },
+    b19ShadowAsOf () { return this.b19ShadowSummary.asof || '-' },
+    b19ShadowLastReadyAsOf () { return this.b19ShadowSummary.last_ready_asof || '-' },
     currentStrategyContext () {
       return (this.currentStrategyContextPayload && this.currentStrategyContextPayload.context) || {}
     },
@@ -2175,12 +2151,12 @@ export default {
     workbenchOverviewStatusText () {
       if (this.currentStrategyContextError || this.phaseYZProductizationError) return '需复核'
       if (!this.currentStrategyContextPayload && !this.phaseYZProductizationPayload) return '待读取'
-      return this.phaseYZPaperApplyDisabled ? '等待开盘价' : '可用于模拟账户'
+      return '只读查看'
     },
     workbenchOverviewStatusColor () {
       if (this.currentStrategyContextError || this.phaseYZProductizationError) return 'red'
       if (!this.currentStrategyContextPayload && !this.phaseYZProductizationPayload) return 'default'
-      return this.phaseYZPaperApplyDisabled ? 'orange' : 'green'
+      return 'blue'
     },
     workbenchTargetTradingDay () {
       return this.phaseYZTargetNextTradingDay !== '-' ? this.phaseYZTargetNextTradingDay : this.currentContextTargetDate
@@ -2188,8 +2164,8 @@ export default {
     workbenchOverviewStatusMessage () {
       if (this.currentStrategyContextError) return this.currentStrategyContextError
       if (this.phaseYZProductizationError) return this.phaseYZProductizationError
-      if (this.phaseYZPaperApplyDisabled) return '等待目标交易日开盘价，暂不能应用到模拟账户。'
-      return `只读策略信息已就绪，snapshot asof ${this.freshnessSnapshotDateText}，可用于人工复盘和模拟账户流程。`
+      if (this.phaseYZPaperApplyDisabled) return '模拟链路仍在等待目标交易日开盘价；本页面只读，不写入模拟账户。'
+      return `只读策略信息已就绪，snapshot asof ${this.freshnessSnapshotDateText}；本页面不写入模拟账户。`
     },
     workbenchBaseModelId () {
       const models = (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.models) || []
@@ -2214,15 +2190,10 @@ export default {
       return `Model A Qlib ${this.currentContextQlibCoverageText}`
     },
     workbenchPaperApplyStatusText () {
-      return this.phaseYZPaperApplyDisabled ? '暂不能应用' : '可应用'
+      return '只读查看'
     },
     workbenchPaperApplyReasonText () {
-      if (!this.phaseYZPaperApplyDisabled) return '仅影响模拟账户，不连接券商。'
-      const reason = this.phaseYZBlockedReasonText
-      if (!reason || reason === '-' || reason === 'execution_price_unavailable' || reason === 'execution_price_pending' || reason === 'next_open_unavailable') {
-        return '等待目标交易日开盘价'
-      }
-      return reason
+      return '此工作台不写入模拟账户'
     },
     workbenchRankingSource () {
       return this.currentStrategyContext.ranking_source || '-'
@@ -3345,23 +3316,8 @@ export default {
     this.initializeBacktestDates()
     this.loadBacktestTemplates()
     this.loadQlibWatchDraft()
-    this.loadQlibHealth()
-    this.loadQlibSignals()
-    this.loadRankChanges()
     this.loadQlibRuns()
     this.loadQlibScheduler()
-    this.loadQlibOpsLatest()
-    this.loadReadonlyOpsStatus()
-    this.loadDailyAutoUpdateStatus()
-    this.loadCrossAnalysis()
-    this.loadCurrentStrategyContext()
-    this.loadReadonlyStrategySnapshot()
-    this.loadReadonlyShadowExposure()
-    this.loadReadonlyReplayWindowIndex()
-    this.loadRankTechCrossLatest()
-    this.loadLtrReadonlyExplanation()
-    this.loadLtrOptionalSimStrategies()
-    this.loadTwStockAgentContext()
     this.refreshAll()
     window.addEventListener('resize', this.redrawCharts)
   },
@@ -3440,9 +3396,12 @@ export default {
     },
     scrollToSection (sectionId) {
       if (!sectionId || typeof document === 'undefined') return
-      const element = document.getElementById(sectionId)
-      if (!element || typeof element.scrollIntoView !== 'function') return
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      if (['daov-section-research', 'daov-section-maintenance'].includes(sectionId)) this.advancedResearchVisible = true
+      this.$nextTick(() => {
+        const element = document.getElementById(sectionId)
+        if (!element || typeof element.scrollIntoView !== 'function') return
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
     },
     buildReadonlyStatusSummaryPayload () {
       return {
@@ -3594,7 +3553,11 @@ export default {
       this.loadingDailyAutoUpdateStatus = true
       this.dailyAutoUpdateError = ''
       try {
-        const data = this.unwrap(await getTwStockDailyAutoUpdateStatus())
+        // Legacy call shape: getTwStockDailyAutoUpdateStatus()
+        if (!this.dailyOpsComposable) this.dailyOpsComposable = useDailyOpsStatus()
+        const bundle = await this.dailyOpsComposable.load()
+        if (bundle.errors && bundle.errors.daily) throw bundle.errors.daily
+        const data = this.unwrap(bundle && bundle.daily)
         this.dailyAutoUpdateStatus = data || null
       } catch (error) {
         const response = error && error.response && error.response.data
@@ -3608,7 +3571,11 @@ export default {
       this.loadingReadonlyOpsStatus = true
       this.readonlyOpsStatusError = ''
       try {
-        const data = this.unwrap(await getTwStockReadonlyOpsStatus())
+        // Legacy call shape: getTwStockReadonlyOpsStatus()
+        if (!this.dailyOpsComposable) this.dailyOpsComposable = useDailyOpsStatus()
+        const bundle = await this.dailyOpsComposable.load()
+        if (bundle.errors && bundle.errors.readonly) throw bundle.errors.readonly
+        const data = this.unwrap(bundle && bundle.readonly)
         this.readonlyOpsStatus = data || null
       } catch (error) {
         const response = error && error.response && error.response.data
@@ -3717,7 +3684,9 @@ export default {
       this.loadingAgentContext = true
       this.agentContextError = ''
       try {
-        const data = this.unwrap(await getTwStockAgentContext({ maxItems: 10 }))
+        // Legacy call shape: getTwStockAgentContext({ maxItems: 10 })
+        if (!this.agentContextComposable) this.agentContextComposable = useAgentContext()
+        const data = this.unwrap(await this.agentContextComposable.load({ maxItems: 10 }))
         this.agentContext = data || null
         this.refreshAgentSuggestedQuestions(data)
       } catch (error) {
@@ -3779,7 +3748,9 @@ export default {
       this.sendingAgentQuestion = true
       this.agentError = ''
       try {
-        const data = this.unwrap(await simpleChatTwStockAgent({
+        // Legacy call shape: simpleChatTwStockAgent({ question, symbol, maxItems })
+        if (!this.agentContextComposable) this.agentContextComposable = useAgentContext()
+        const data = this.unwrap(await this.agentContextComposable.ask({
           question: text,
           symbol: this.chartSymbol || '',
           maxItems: 10
@@ -3870,7 +3841,10 @@ export default {
       this.loadingCurrentStrategyContext = true
       this.currentStrategyContextError = ''
       try {
-        const data = this.unwrap(await getTwStockCurrentStrategyContext())
+        // Legacy call shape: getTwStockCurrentStrategyContext()
+        if (!this.signalContextComposable) this.signalContextComposable = useSignalContext()
+        const bundle = await this.signalContextComposable.load()
+        const data = this.unwrap(bundle && bundle.context)
         this.currentStrategyContextPayload = data || null
       } catch (error) {
         const response = error && error.response && error.response.data
@@ -3905,11 +3879,31 @@ export default {
         this.ltrOptionalSimSelected = strategyId
       }
     },
+    async loadReadonlyModelStrategyComparison (params = {}) {
+      this.loadingReadonlyModelStrategyComparison = true
+      this.readonlyModelStrategyComparisonError = ''
+      try {
+        const query = {}
+        ;['model_id', 'strategy_id', 'window_id'].forEach(key => {
+          if (params && params[key]) query[key] = params[key]
+        })
+        const data = this.unwrap(await getTwStockReadonlyModelStrategyComparison(query))
+        this.readonlyModelStrategyComparisonPayload = data || null
+      } catch (error) {
+        const response = error && error.response && error.response.data
+        this.readonlyModelStrategyComparisonPayload = response && response.data ? response.data : null
+        this.readonlyModelStrategyComparisonError = (response && response.msg) || error.message || '模型与策略只读比较暂不可用。'
+      } finally {
+        this.loadingReadonlyModelStrategyComparison = false
+      }
+    },
     async loadReadonlyReplayWindowIndex () {
       this.loadingReadonlyReplayWindowIndex = true
       this.readonlyReplayWindowIndexError = ''
       try {
-        const data = this.unwrap(await getTwStockReadonlyReplayWindowIndex())
+        // Legacy call shape: getTwStockReadonlyReplayWindowIndex()
+        if (!this.readonlyReplayComposable) this.readonlyReplayComposable = useReadonlyReplay()
+        const data = this.unwrap(await this.readonlyReplayComposable.loadIndex())
         this.readonlyReplayWindowIndexPayload = data || null
         if (!this.readonlyReplayWindowSelectedPreset && this.readonlyReplayWindowOptions.length) {
           this.readonlyReplayWindowSelectedKey = this.readonlyReplayWindowOptions[0].window_key
@@ -3987,7 +3981,9 @@ export default {
       const start = this.readonlyReplayWindowForm.start && this.readonlyReplayWindowForm.start.format ? this.readonlyReplayWindowForm.start.format('YYYY-MM-DD') : this.readonlyReplayWindowForm.start
       const end = this.readonlyReplayWindowForm.end && this.readonlyReplayWindowForm.end.format ? this.readonlyReplayWindowForm.end.format('YYYY-MM-DD') : this.readonlyReplayWindowForm.end
       try {
-        const data = this.unwrap(await getTwStockReadonlyReplayWindow({
+        // Legacy call shape: getTwStockReadonlyReplayWindow({ model_id, strategy_rule, start, end })
+        if (!this.readonlyReplayComposable) this.readonlyReplayComposable = useReadonlyReplay()
+        const data = this.unwrap(await this.readonlyReplayComposable.loadWindow({
           model_id: this.readonlyReplayWindowForm.model_id,
           strategy_rule: this.readonlyReplayWindowForm.strategy_rule,
           start,
@@ -4020,9 +4016,11 @@ export default {
       this.runningPortfolioReplay = true
       this.portfolioReplayError = ''
       try {
+        // Legacy call shape: runTwStockPortfolioReplay({ ...range, persist: false })
         const range = this.portfolioReplayDateRange()
         const maxItems = this.rankTechBucket === 'top50' ? 50 : 30
-        const data = this.unwrap(await runTwStockPortfolioReplay({
+        if (!this.readonlyReplayComposable) this.readonlyReplayComposable = useReadonlyReplay()
+        const data = this.unwrap(await this.readonlyReplayComposable.simulate({
           ...range,
           bucket: this.rankTechBucket,
           maxItems,
@@ -4874,8 +4872,12 @@ export default {
     async refreshAll () {
       this.loading = true
       try {
-        await this.loadConfig()
-        await Promise.all([this.loadTrends(), this.loadAlerts(), this.loadScanLogs(), this.loadReadonlyOpsStatus(), this.loadQlibHealth(), this.loadQlibSignals(), this.loadRankChanges(), this.loadDailyAutoUpdateStatus(), this.loadQlibOpsLatest(), this.loadCrossAnalysis(), this.loadCurrentStrategyContext(), this.loadPhaseYZProductizationStatus(), this.loadReadonlyStrategySnapshot(), this.loadReadonlyShadowExposure(), this.loadReadonlyReplayWindowIndex(), this.loadRankTechCrossLatest(), this.loadLtrReadonlyExplanation(), this.loadLtrOptionalSimStrategies(), this.loadTwStockAgentContext(), this.loadChartSymbolOptions()])
+        const monitorReads = this.loadConfig()
+          .then(() => Promise.allSettled([this.loadTrends(), this.loadAlerts(), this.loadScanLogs(), this.loadChartSymbolOptions()]))
+          .catch(() => {
+            this.degradedNotice = '监控配置暂不可读；模型信号、候选名单与历史比较仍独立加载。可稍后刷新重试。'
+          })
+        await Promise.allSettled([monitorReads, this.loadReadonlyOpsStatus(), this.loadQlibHealth(), this.loadQlibSignals(), this.loadRankChanges(), this.loadDailyAutoUpdateStatus(), this.loadQlibOpsLatest(), this.loadCrossAnalysis(), this.loadCurrentStrategyContext(), this.loadPhaseYZProductizationStatus(), this.loadReadonlyStrategySnapshot(), this.loadReadonlyShadowExposure(), this.loadReadonlyReplayWindowIndex(), this.loadReadonlyModelStrategyComparison(), this.loadRankTechCrossLatest(), this.loadLtrReadonlyExplanation(), this.loadLtrOptionalSimStrategies(), this.loadTwStockAgentContext()])
         this.lastRefreshedAt = new Date().toLocaleTimeString()
         this.syncAutoRefreshTimer()
       } finally {
@@ -4885,6 +4887,7 @@ export default {
     async loadConfig () {
       const data = this.unwrap(await getTwStockMonitorConfig({ name: this.config.name || 'default' }))
       this.config = Object.assign({}, this.config, data || {})
+      this.degradedNotice = ''
       if (data && data.degraded) {
         this.degradedNotice = '資料庫暫不可用：已載入預設台股清單，可查看趨勢；提醒與歷史不會持久保存。'
       }
@@ -5794,6 +5797,27 @@ export default {
   gap: 10px;
 }
 
+.data-freshness-details summary {
+  cursor: pointer;
+  color: #475467;
+  font-size: 12px;
+  padding: 8px 0;
+}
+
+.data-freshness-details summary:focus-visible {
+  outline: 2px solid #1890ff;
+  outline-offset: 2px;
+}
+
+.data-freshness-shadow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+  color: #475467;
+  font-size: 12px;
+}
+
 .data-freshness-ops-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -6645,7 +6669,6 @@ export default {
     justify-content: flex-start;
   }
 
-  .summary-grid,
   .workbench-overview-grid,
   .data-freshness-track,
   .data-freshness-ops-grid,
@@ -6664,6 +6687,19 @@ export default {
   .readonly-candidate-layout,
   .readonly-replay-track {
     grid-template-columns: 1fr;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summary-grid .metric-card {
+    padding: 10px;
+    min-height: 76px;
+  }
+
+  .summary-grid .metric-card strong {
+    font-size: 18px;
   }
 
   .readonly-candidate-row {

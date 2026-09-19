@@ -11,13 +11,10 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_POLICY = ROOT / "configs/tw_replay_window_policy.yaml"
-REQUIRED_MODELS = {
-    "e4_frozen_qlib_2023_2025_ltr",
-    "fresh_qlib_2025_ltr",
-    "fresh_qlib_adaptive",
-    "frozen_qlib_2018_2022",
-    "frozen_qlib_2025_ltr",
-}
+MODEL_A = "e4_frozen_qlib_2018_2022"
+MODEL_B = "e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025"
+REQUIRED_MODELS = {MODEL_A, MODEL_B}
+EXPECTED_POLICY_VERSION = "replay_window_policy_yz0_clean_v1"
 
 
 def rel(path: Path) -> str:
@@ -61,7 +58,8 @@ def validate_policy(policy_path: Path) -> dict[str, Any]:
     latest = parse_date(policy.get("latest_available_signal_date"))
     allowed_min = parse_date(policy.get("allowed_replay_start_min"))
     models = policy.get("models") or {}
-    checks.append(check("policy_version", str(policy.get("policy_version")) == "replay_window_policy_d4_v1", str(policy.get("policy_version"))))
+    policy_version = str(policy.get("policy_version") or "")
+    checks.append(check("policy_version", policy_version == EXPECTED_POLICY_VERSION, policy_version))
     checks.append(check("fixed_window_only", policy.get("fixed_window_only") is True))
     checks.append(check("user_selectable_range_disabled", policy.get("user_selectable_range_enabled") is False))
     checks.append(check("available_window_metadata_only", policy.get("available_window_metadata_only") is True))
@@ -71,6 +69,23 @@ def validate_policy(policy_path: Path) -> dict[str, Any]:
     checks.append(check("disallow_training_overlap", policy.get("disallow_training_overlap") is True))
     checks.append(check("disallow_future_beyond_signal", policy.get("disallow_future_beyond_signal") is True))
     checks.append(check("required_models_present", REQUIRED_MODELS.issubset(set(models)), sorted(models).__repr__()))
+    model_a = models.get(MODEL_A) or {}
+    model_b = models.get(MODEL_B) or {}
+    checks.append(check("canonical_default_model", str(policy.get("default_model_id")) == MODEL_A, str(policy.get("default_model_id"))))
+    checks.append(check("model_a_production_selectable", model_a.get("production_selectable") is True))
+    checks.append(check(
+        "model_b_research_shadow_only",
+        model_b.get("production_selectable") is False
+        and model_b.get("frontend_selectable") is False
+        and model_b.get("production_default") is False
+        and model_b.get("research_only") is True
+        and model_b.get("diagnostic_only") is True
+        and model_b.get("eligible_for_baseline") is False,
+    ))
+    checks.append(check(
+        "production_model_set_is_model_a_only",
+        {key for key, value in models.items() if (value or {}).get("production_selectable") is True} == {MODEL_A},
+    ))
     model_traceable = True
     model_window_ok = True
     overlap_bad: list[str] = []

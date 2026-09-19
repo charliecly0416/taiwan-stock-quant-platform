@@ -1,0 +1,8 @@
+{
+  "sample_name": "pass_p1b_g_partial_adjustment_maps_sell_buy_to_simulated_partial",
+  "fixture": "fixture.json",
+  "expected": "expected.json",
+  "expected_validator_result": {
+    "ok": true
+  }
+}

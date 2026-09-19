@@ -11,6 +11,7 @@ from typing import Any
 from app.services.tw_stock_daily_auto_update_status import (
     DEFAULT_OPS_ROOT,
     TWStockDailyAutoUpdateStatusService,
+    recent_status_artifact_paths,
 )
 from app.services.tw_stock_qlib_option_c import DEFAULT_SIGNAL_ROOT, research_only_trading_flags
 
@@ -164,6 +165,8 @@ class TWStockReadonlyOpsStatusService:
             "controlled_signal_latest": self._controlled_signal_latest(controlled_doc, readiness),
             "readonly_strategy_snapshot_latest": self._readonly_snapshot_latest(snapshot_doc, readiness),
             "agent_prompt_latest": self._agent_prompt_latest(agent_doc, readiness),
+            "b19r2r_shadow": self._b19r2r_shadow(daily_status),
+            "readiness_scope": "status_observation_only",
             "latest_natural_cron_job": self._latest_natural_cron_job(latest_job_path, latest_job, daily_chain, blocker, daily_status, natural_publish_state),
             "latest_dapr18_evidence_job": self._latest_dapr18_evidence_job(dapr18_dir, dapr18_job, summary, readiness, publish_state),
             "dapr18_controls": self._dapr18_controls(latest_job, summary, publish_state, evidence_binding),
@@ -188,6 +191,7 @@ class TWStockReadonlyOpsStatusService:
 
     def _latest_job(self, warnings: list[str]) -> tuple[Path | None, dict[str, Any]]:
         paths = sorted(self.ops_root.glob("*/job.json")) if self.ops_root.exists() else []
+        paths = recent_status_artifact_paths(paths)
         candidates: list[tuple[datetime, Path, dict[str, Any]]] = []
         for path in paths:
             doc = _safe_json(path, warnings)
@@ -206,6 +210,7 @@ class TWStockReadonlyOpsStatusService:
 
     def _latest_dapr18_dir(self, warnings: list[str]) -> Path | None:
         paths = sorted(self.ops_root.glob("*/dapr18_controlled_latest_orchestration_summary.json")) if self.ops_root.exists() else []
+        paths = recent_status_artifact_paths(paths)
         if not paths:
             warnings.append("dapr18_controlled_latest_orchestration_summary.json:missing")
             return None
@@ -221,6 +226,20 @@ class TWStockReadonlyOpsStatusService:
             candidates.append((sort_time, path.parent))
         candidates.sort(key=lambda item: item[0], reverse=True)
         return candidates[0][1]
+
+    def _b19r2r_shadow(self, daily_status: dict[str, Any]) -> dict[str, Any]:
+        raw = daily_status.get("b19r2r_shadow")
+        raw = raw if isinstance(raw, dict) else {}
+        state = raw.get("state")
+        return {
+            "state": state if state in {"NOT_OBSERVED", "NOT_ATTEMPTED", "READY", "BLOCKED"} else "NOT_OBSERVED",
+            "observed": raw.get("observed") is True,
+            "attempted": raw.get("attempted") is True,
+            "shadow_ok": raw.get("shadow_ok") is True,
+            "mainline_blocking": False, "production_allowed": False, "no_apply": True,
+            "job_id": raw.get("job_id"), "asof": raw.get("asof"),
+            "finished_at": raw.get("finished_at"), "last_ready_asof": raw.get("last_ready_asof"),
+        }
 
     def _read_from_dir(self, directory: Path | None, name: str, warnings: list[str]) -> dict[str, Any]:
         if directory is None:

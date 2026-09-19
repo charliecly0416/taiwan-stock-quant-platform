@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { chromium } from '/tmp/travel-agent-e2e/node_modules/playwright/index.mjs'
+import { chromium } from 'playwright'
 
 const baseUrl = process.env.TW_STOCK_MONITOR_BASE_URL || 'http://127.0.0.1:8000'
 const artifactDir = process.env.MTRP11_ACCEPTANCE_ARTIFACT_DIR || path.resolve(process.cwd(), 'data_tw/ops/mtrp11_readonly_acceptance')

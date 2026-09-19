@@ -2,6 +2,8 @@ import json
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
+
 from app.services.tw_stock_agent_daily_prompt import TWStockAgentDailyPromptLoader
 from app.services.tw_stock_agent_guardrails import RESEARCH_ONLY_DISCLAIMER
 from app.services.tw_stock_agent_openai import MockTWStockAgentOpenAIAdapter, TWStockAgentOpenAIConfig, TWStockAgentOpenAIAdapter
@@ -347,7 +349,8 @@ def test_simple_chat_route_ignores_artifact_dir_in_production(client, monkeypatc
                 "context_digest": {},
             }
 
-    monkeypatch.setenv("FLASK_ENV", "production")
+    monkeypatch.delenv("FLASK_ENV", raising=False)
+    monkeypatch.setitem(client.application.config, "TESTING", False)
     monkeypatch.setattr(tw_stock_route, "tw_stock_agent_simple_chat_service", FakeSimpleChatService())
 
     resp = client.post("/api/tw-stock/agent/simple-chat", json={"question": "今天策略是什么？", "artifactDir": "/tmp/dev-artifact"})
@@ -356,6 +359,57 @@ def test_simple_chat_route_ignores_artifact_dir_in_production(client, monkeypatc
     assert resp.status_code == 200
     assert payload["code"] == 1
     assert calls[0]["artifact_dir"] is None
+
+
+def test_simple_chat_testing_override_and_numeric_string_are_supported(client, monkeypatch):
+    from app.routes import tw_stock as tw_stock_route
+
+    calls = []
+
+    class FakeService:
+        def chat(self, **kwargs):
+            calls.append(kwargs)
+            return {"ok": True}
+
+    monkeypatch.setattr(tw_stock_route, "tw_stock_agent_simple_chat_service", FakeService())
+    monkeypatch.setitem(client.application.config, "TESTING", True)
+    response = client.post("/api/tw-stock/agent/simple-chat", json={
+        "question": "today", "artifact_dir": "/tmp/fixture", "max_items": "3",
+    })
+    assert response.status_code == 200
+    assert calls == [{"question": "today", "symbol": "", "max_items": 3, "artifact_dir": "/tmp/fixture"}]
+
+
+@pytest.mark.parametrize("max_items", ["invalid", 0, 51, True, 2.5, [], None])
+def test_simple_chat_invalid_item_limit_is_rejected_before_service(client, monkeypatch, max_items):
+    from app.routes import tw_stock as tw_stock_route
+
+    monkeypatch.setattr(tw_stock_route, "tw_stock_agent_simple_chat_service", object())
+    response = client.post("/api/tw-stock/agent/simple-chat", json={"question": "today", "maxItems": max_items})
+    assert response.status_code == 400
+    assert response.get_json()["data"]["status"] == "invalid_request"
+
+
+def test_loader_relative_pointer_paths_are_independent_of_working_directory(tmp_path, monkeypatch):
+    from app.services import tw_stock_agent_daily_prompt as loader_module
+
+    artifact_dir = _build_artifact(tmp_path)
+    manifest = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))
+    (tmp_path / "latest.json").write_text(json.dumps({
+        "artifact_type": "tw_agent_daily_prompt_latest",
+        "artifact_dir": "artifact",
+        "manifest": "artifact/manifest.json",
+        "checksum": manifest["checksum"],
+    }), encoding="utf-8")
+    backend_dir = tmp_path / "backend"
+    backend_dir.mkdir()
+    monkeypatch.setattr(loader_module, "ROOT", tmp_path)
+    for cwd in (tmp_path, backend_dir):
+        monkeypatch.chdir(cwd)
+        artifact = loader_module.TWStockAgentDailyPromptLoader(latest_path="latest.json").load()
+        assert artifact.artifact_dir == artifact_dir
+        assert artifact.manifest["checksum"] == manifest["checksum"]
+    assert loader_module.TWStockAgentDailyPromptLoader().latest_path.is_absolute()
 
 
 def test_simple_chat_route_blocked_payload(client, monkeypatch):

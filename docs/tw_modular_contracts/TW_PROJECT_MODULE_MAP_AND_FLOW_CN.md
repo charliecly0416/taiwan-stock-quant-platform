@@ -10,12 +10,13 @@
 
 ## 2. 当前核心产品口径
 
-当前产品口径只保留两个重要模型：
+当前产品口径分为 active baseline、研究 challenger 和 legacy artifact：
 
 | 角色 | model_id | 说明 |
 | --- | --- | --- |
-| Base Qlib | `e4_frozen_qlib_2018_2022` | 2018-2022 训练的 frozen qlib 底座 |
-| Orthogonal LTR | `e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025` | 在 Base Qlib top50 内用 2023-2025 正交 LTR 重排 |
+| Active baseline / Model A | `e4_frozen_qlib_2018_2022` | 2018-2022 训练的 frozen qlib 底座，当前唯一 baseline |
+| Research challenger / B19R2R | `modelb_b19r2r_lambdarank_exact50_78f_v2` | 在 Model A 同日 Top50 内用 78 个 PIT-safe 特征重排；不进入默认、模拟账户或订单 |
+| Legacy Orthogonal LTR | `e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025` | 仅保留追溯和兼容路径，不是当前 challenger |
 
 当前默认策略规则：
 
@@ -23,9 +24,10 @@
 top50_exit_one_worst_sell
 ```
 
-当前产品 artifact registry：
+当前 baseline 身份与产品 artifact registry：
 
 ```text
+configs/active_baseline_descriptor.yaml
 configs/tw_product_artifact_registry.yaml
 ```
 
@@ -35,7 +37,8 @@ configs/tw_product_artifact_registry.yaml
 
 | Registry | 作用 | 是否产品入口 |
 | --- | --- | --- |
-| `configs/tw_product_artifact_registry.yaml` | 当前产品模型、策略、核心 artifact 路径、重建源路径 | 是 |
+| `configs/active_baseline_descriptor.yaml` | 当前唯一 baseline、默认策略和受保护指针 | 是，baseline 权威来源 |
+| `configs/tw_product_artifact_registry.yaml` | 产品 artifact 路径、重建源和 legacy 兼容字段 | 是，路径来源 |
 | `configs/tw_modular_registry.yaml` | 模块合同、生产可选模型/策略、research/deprecated 策略分类 | 是 |
 | `configs/tw_replay_window_policy.yaml` | 只读回放允许窗口、模型/策略选择、默认回放配置 | 是 |
 | `configs/strategy_dependencies/*.yaml` | 每个策略允许消费哪些字段和能力 | 是 |
@@ -100,7 +103,7 @@ backend/app/services/tw_stock_current_strategy_context.py
 GET /api/tw-stock/current-strategy-context
 ```
 
-Model A 输出 qlib top150/top50；Model B 只在 Model A top50 内做 LTR 重排。
+Model A 输出 qlib top150/top50。当前 B19R2R 只在 Model A 同日 exact Top50 内重排；旧 `model_b_yz2` 路径属于 legacy Orthogonal LTR 兼容产物，不能据此判断当前 challenger 或 baseline。
 
 边界：
 
@@ -256,11 +259,14 @@ scripts/run_daily_tw_stock_auto_update.py
 
 ```text
 价格/特征 artifact
-  -> frozen qlib score
-  -> LTR rerank top50
-  -> ModelSignalArtifact model_a/model_b
+  -> frozen qlib Model A score
+  -> ModelSignalArtifact
   -> current-strategy-context API
-  -> frontend 策略上下文 / Top10 / Top50 展示
+  -> frontend 当前候选 / Top30 / Top50 展示
+
+Model A same-day exact Top50 + B19 PIT features
+  -> B19R2R research shadow
+  -> readonly comparison / prospective evidence
 ```
 
 ### 5.2 今日模拟决策

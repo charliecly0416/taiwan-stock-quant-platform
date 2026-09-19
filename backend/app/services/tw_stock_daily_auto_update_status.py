@@ -15,6 +15,8 @@ DEFAULT_OPS_ROOT = REPO_ROOT / "data_tw/ops/daily_auto_update"
 OPS_ROOT_ENV = "TW_DAILY_AUTO_UPDATE_OPS_ROOT"
 SIGNAL_ROOT_ENV = "QLIB_TW_OPTION_C_ROOT"
 CRON_TAIL_LINES = 40
+STATUS_JOB_SCAN_LIMIT = 168
+CRON_TAIL_BYTES = 65536
 _ENV_ASSIGNMENT_START_RE = re.compile(r"(?P<key>[A-Za-z_][A-Za-z0-9_.-]*)=")
 _URL_USERINFO_RE = re.compile(
     r"(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*://)(?P<userinfo>[^/\s?#]+)@"
@@ -61,9 +63,30 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
 
+def recent_status_artifact_paths(paths: list[Path]) -> list[Path]:
+    """Select a bounded inspection window using scheduler run ids first."""
+    candidates = []
+    for path in paths:
+        match = re.search(r"_(\d{8}T\d{6}Z)(?:_|$)", path.parent.name)
+        try:
+            run_time = datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc) if match else None
+            sort_time = run_time or datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+        except (OSError, ValueError):
+            continue
+        candidates.append((sort_time, path))
+    return [path for _, path in sorted(candidates, reverse=True)[:STATUS_JOB_SCAN_LIMIT]]
+
+
 def _read_tail(path: Path, lines: int = CRON_TAIL_LINES) -> list[str]:
     try:
-        content = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        with path.open("rb") as stream:
+            stream.seek(0, 2)
+            size = stream.tell()
+            start = max(0, size - CRON_TAIL_BYTES)
+            stream.seek(start)
+            content = stream.read(CRON_TAIL_BYTES).decode("utf-8", errors="replace").splitlines()
+        if start:
+            content = content[1:]
     except FileNotFoundError:
         return []
     except Exception:
@@ -199,6 +222,8 @@ class TWStockDailyAutoUpdateStatusService:
 
     def _last_job(self, warnings: list[str]) -> dict[str, Any]:
         job_paths = sorted(self.ops_root.glob("*/job.json")) if self.ops_root.exists() else []
+        # Declared timestamps below determine the most recent inspected job.
+        job_paths = recent_status_artifact_paths(job_paths)
         candidates: list[tuple[datetime, Path, dict[str, Any]]] = []
         for path in job_paths:
             doc = _safe_json(path, warnings)
@@ -213,7 +238,46 @@ class TWStockDailyAutoUpdateStatusService:
             return {"exists": False, "path": None}
         candidates.sort(key=lambda item: item[0], reverse=True)
         _, path, doc = candidates[0]
-        return self._summarize_job(path, doc)
+        summary = self._summarize_job(path, doc)
+        summary["recent_b19r2r_shadow"] = self._recent_b19r2r_shadow(candidates)
+        return summary
+
+    def _recent_b19r2r_shadow(self, candidates: list) -> dict[str, Any]:
+        result = {
+            "state": "NOT_OBSERVED", "observed": False,
+            "attempted": False, "shadow_ok": False,
+            "mainline_blocking": False, "production_allowed": False,
+            "no_apply": True, "job_id": None, "asof": None,
+            "finished_at": None, "last_ready_asof": None,
+            "scan_limit": STATUS_JOB_SCAN_LIMIT,
+        }
+        for _, path, doc in candidates:
+            full_scope = bool(
+                doc.get("finmind_scope") == "full"
+                or doc.get("full_orthogonal_refresh_mode")
+                or doc.get("finmind_orthogonal_batch_skipped_reason") == "full_segmented_capture_supersedes_batch"
+            )
+            shadow = doc.get("b19r2r_daily_shadow")
+            if not full_scope or not isinstance(shadow, dict) or not shadow.get("enabled"):
+                continue
+            raw_status = str(shadow.get("status") or "")
+            ready = shadow.get("shadow_ok") is True and raw_status in {"READY", "READY_RESEARCH_SHADOW"}
+            asof = str(doc.get("asof") or "")
+            asof = asof if re.fullmatch(r"\d{4}-\d{2}-\d{2}", asof) else None
+            if ready and result["last_ready_asof"] is None:
+                result["last_ready_asof"] = asof
+            if result["observed"]:
+                continue
+            attempted = shadow.get("attempted") is True
+            blocked = attempted or raw_status.startswith("BLOCKED_") or doc.get("status") == "full_orthogonal_refresh_incomplete"
+            result.update({
+                "state": "READY" if ready else ("BLOCKED" if blocked else "NOT_ATTEMPTED"),
+                "observed": True, "attempted": attempted, "shadow_ok": ready,
+                "job_id": path.parent.name,
+                "asof": asof,
+                "finished_at": _iso(_parse_dt(doc.get("finished_at"))),
+            })
+        return result
 
     def _summarize_job(self, path: Path, doc: dict[str, Any]) -> dict[str, Any]:
         refresh_summary = doc.get("refresh_summary") if isinstance(doc.get("refresh_summary"), dict) else {}
@@ -372,6 +436,8 @@ class TWStockDailyAutoUpdateStatusService:
             "qald_accepted_latest_candidate_source_root": qald.get("source_root"),
             "qald_accepted_latest_candidate_latest_signal_updated": bool(qald.get("latest_signal_updated")),
             "qald_accepted_latest_candidate_protected_unchanged": qald.get("protected_unchanged"),
+            "b19r2r_shadow": last_job.get("recent_b19r2r_shadow") or self._recent_b19r2r_shadow([]),
+            "readiness_scope": "status_observation_only",
             "fresh_data_wait": fresh_data_wait,
             "next_retry_hint": self._next_retry_hint(pending_asof=pending_asof, pending_reason=pending_reason, fresh_data_wait=fresh_data_wait, cron=cron),
             "cron_installed_hint": bool(cron.get("cron_installed_hint")),

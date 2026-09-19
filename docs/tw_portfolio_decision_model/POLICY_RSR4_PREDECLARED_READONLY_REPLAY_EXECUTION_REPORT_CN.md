@@ -1,0 +1,157 @@
+---
+created_at: 2026-06-27T16:03:07+00:00
+status: executed_rsr4_predeclared_readonly_replay
+phase: POLICY_RSR4_PREDECLARED_READONLY_REPLAY
+artifact_root: data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr4_predeclared_readonly_replay
+readonly_only: true
+historical_readonly_research_artifact: true
+production_allowed: false
+recommendation: REVIEW_REQUIRED_REPAIR_OR_REJECT_FOR_NON_PASSING_RULES
+---
+
+# RSR4 Predeclared Readonly Replay Execution Report
+
+## 1. Scope
+
+Executed historical readonly replay for the 5 frozen RSR2 rules through the standard chain:
+
+```text
+ModelSignalArtifact + PortfolioState + StrategyRuleConfig -> StrategyRule/OrderIntentArtifact builder -> OrderIntentArtifact -> ReplayExecution -> ReplayResultArtifact
+```
+
+No training/retraining, qlib refresh, LTR adaptation, external pull, RSR2 threshold change, provider publish, accepted latest switch, production/default/frontend/daily/latest change, broker/quick-trade/real order, target position/weight/allocation/quantity instruction, or investment advice was performed.
+
+## 2. Documents Read
+
+```text
+docs/tw_portfolio_decision_model/POLICY_RSR_SCORE_RANK_REGIME_RULE_RESEARCH_MAINLINE_CN.md
+docs/tw_portfolio_decision_model/POLICY_RSR2_PREDECLARED_RULE_CONTRACT_REVIEW_CN.md
+docs/tw_portfolio_decision_model/POLICY_RSR3_ORDER_INTENT_BUILDER_AND_PARITY_SMOKE_WORK_CN.md
+docs/tw_portfolio_decision_model/POLICY_RSR3_ORDER_INTENT_BUILDER_AND_PARITY_SMOKE_EXECUTION_REPORT_CN.md
+docs/tw_portfolio_decision_model/POLICY_RSR3_ORDER_INTENT_BUILDER_AND_PARITY_SMOKE_REVIEW_CN.md
+docs/tw_portfolio_decision_model/POLICY_RSR4_PREDECLARED_READONLY_REPLAY_WORK_CN.md
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr2_predeclared_rule_contract/manifest.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr2_predeclared_rule_contract/predeclared_rule_contracts.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr2_predeclared_rule_contract/required_fields_matrix.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr2_predeclared_rule_contract/pass_fail_gates.md
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr2_predeclared_rule_contract/forbidden_action_audit.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr2_predeclared_rule_contract/rule_dependency_yaml_drafts/README.md
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr2_predeclared_rule_contract/rule_dependency_yaml_drafts/rsr2_score_bucket_regime_gate_v1.yaml
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr2_predeclared_rule_contract/rule_dependency_yaml_drafts/rsr2_rank_momentum_buy_gate_v1.yaml
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr2_predeclared_rule_contract/rule_dependency_yaml_drafts/rsr2_rank_deterioration_sell_gate_v1.yaml
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr2_predeclared_rule_contract/rule_dependency_yaml_drafts/rsr2_market_regime_action_budget_v1.yaml
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr2_predeclared_rule_contract/rule_dependency_yaml_drafts/rsr2_score_rank_regime_interaction_v1.yaml
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/manifest.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_sample_index.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/strategy_decision_audit.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/forbidden_field_audit.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_contract_validation.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/baseline_parity_smoke.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/forbidden_action_audit.csv
+docs/tw_modular_contracts/STRATEGY_RULE_CONTRACT_CN.md
+docs/tw_modular_contracts/ORDER_INTENT_CONTRACT_CN.md
+docs/tw_modular_contracts/REPLAY_RESULT_CONTRACT_CN.md
+docs/tw_modular_contracts/TW_NEW_STRATEGY_ONBOARDING_TEMPLATE_CN.md
+docs/tw_modular_contracts/NEW_STRATEGY_REVIEWER_CHECKLIST_CN.md
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_market_regime_action_budget_v1/forbidden_action_audit.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_market_regime_action_budget_v1/manifest.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_market_regime_action_budget_v1/order_intents.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_market_regime_action_budget_v1/schema.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_market_regime_action_budget_v1/strategy_decision_audit.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_rank_deterioration_sell_gate_v1/forbidden_action_audit.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_rank_deterioration_sell_gate_v1/manifest.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_rank_deterioration_sell_gate_v1/order_intents.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_rank_deterioration_sell_gate_v1/schema.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_rank_deterioration_sell_gate_v1/strategy_decision_audit.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_rank_momentum_buy_gate_v1/forbidden_action_audit.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_rank_momentum_buy_gate_v1/manifest.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_rank_momentum_buy_gate_v1/order_intents.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_rank_momentum_buy_gate_v1/schema.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_rank_momentum_buy_gate_v1/strategy_decision_audit.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_score_bucket_regime_gate_v1/forbidden_action_audit.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_score_bucket_regime_gate_v1/manifest.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_score_bucket_regime_gate_v1/order_intents.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_score_bucket_regime_gate_v1/schema.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_score_bucket_regime_gate_v1/strategy_decision_audit.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_score_rank_regime_interaction_v1/forbidden_action_audit.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_score_rank_regime_interaction_v1/manifest.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_score_rank_regime_interaction_v1/order_intents.csv
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_score_rank_regime_interaction_v1/schema.json
+data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr3_order_intent_builder_and_parity_smoke/order_intent_samples/rsr2_score_rank_regime_interaction_v1/strategy_decision_audit.csv
+```
+
+## 3. Generated Artifacts
+
+- `rsr2_score_bucket_regime_gate_v1`
+  - OrderIntentArtifact: `data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr4_predeclared_readonly_replay/order_intents/rsr2_score_bucket_regime_gate_v1/manifest.json`
+  - ReplayResultArtifact: `data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr4_predeclared_readonly_replay/replay_results/rsr2_score_bucket_regime_gate_v1/manifest.json`
+  - classification: `REJECTED_PRELIMINARY`
+  - recommendation: `REPAIR_OR_REJECT`
+- `rsr2_rank_momentum_buy_gate_v1`
+  - OrderIntentArtifact: `data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr4_predeclared_readonly_replay/order_intents/rsr2_rank_momentum_buy_gate_v1/manifest.json`
+  - ReplayResultArtifact: `data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr4_predeclared_readonly_replay/replay_results/rsr2_rank_momentum_buy_gate_v1/manifest.json`
+  - classification: `REJECTED_PRELIMINARY`
+  - recommendation: `REPAIR_OR_REJECT`
+- `rsr2_rank_deterioration_sell_gate_v1`
+  - OrderIntentArtifact: `data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr4_predeclared_readonly_replay/order_intents/rsr2_rank_deterioration_sell_gate_v1/manifest.json`
+  - ReplayResultArtifact: `data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr4_predeclared_readonly_replay/replay_results/rsr2_rank_deterioration_sell_gate_v1/manifest.json`
+  - classification: `TYPE_A_PRELIMINARY_HISTORICAL_READONLY`
+  - recommendation: `PASS_TO_REVIEW_WITH_BOUNDARIES`
+- `rsr2_market_regime_action_budget_v1`
+  - OrderIntentArtifact: `data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr4_predeclared_readonly_replay/order_intents/rsr2_market_regime_action_budget_v1/manifest.json`
+  - ReplayResultArtifact: `data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr4_predeclared_readonly_replay/replay_results/rsr2_market_regime_action_budget_v1/manifest.json`
+  - classification: `REJECTED_PRELIMINARY`
+  - recommendation: `REPAIR_OR_REJECT`
+- `rsr2_score_rank_regime_interaction_v1`
+  - OrderIntentArtifact: `data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr4_predeclared_readonly_replay/order_intents/rsr2_score_rank_regime_interaction_v1/manifest.json`
+  - ReplayResultArtifact: `data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr4_predeclared_readonly_replay/replay_results/rsr2_score_rank_regime_interaction_v1/manifest.json`
+  - classification: `REJECTED_PRELIMINARY`
+  - recommendation: `REPAIR_OR_REJECT`
+
+Root aggregate audits:
+
+```text
+input_manifest_links.json
+baseline_clone_audit.csv
+fee_tax_turnover_audit.csv
+regime_budget_audit.csv
+missing_price_audit.csv
+pit_leakage_audit.csv
+cash_no_trade_audit.csv
+replay_result_index.csv
+forbidden_action_audit.csv
+forbidden_field_audit.csv
+```
+
+## 4. Preliminary Classifications
+
+| strategy_rule | net_return | max_drawdown | actions | classification | recommendation |
+| --- | ---: | ---: | ---: | --- | --- |
+| `rsr2_score_bucket_regime_gate_v1` | 0.54919662 | -0.18462362 | 676 | `REJECTED_PRELIMINARY` | `REPAIR_OR_REJECT` |
+| `rsr2_rank_momentum_buy_gate_v1` | -0.06796673 | -0.2400165 | 696 | `REJECTED_PRELIMINARY` | `REPAIR_OR_REJECT` |
+| `rsr2_rank_deterioration_sell_gate_v1` | 1.98685891 | -0.37160781 | 1053 | `TYPE_A_PRELIMINARY_HISTORICAL_READONLY` | `PASS_TO_REVIEW_WITH_BOUNDARIES` |
+| `rsr2_market_regime_action_budget_v1` | 0.89624386 | -0.14047453 | 811 | `REJECTED_PRELIMINARY` | `REPAIR_OR_REJECT` |
+| `rsr2_score_rank_regime_interaction_v1` | 0.48104163 | -0.20151035 | 674 | `REJECTED_PRELIMINARY` | `REPAIR_OR_REJECT` |
+
+Classifications are preliminary historical readonly research labels only. They are not production candidates, not default candidates, not orders, not target positions, and not investment advice.
+
+## 5. Validation Commands
+
+```text
+python -m py_compile scripts/build_tw_policy_rsr4_predeclared_readonly_replay.py
+python scripts/build_tw_policy_rsr4_predeclared_readonly_replay.py --json
+python -c "import json, pathlib; root=pathlib.Path('data_tw/experiments/policy_rsr_score_rank_regime_rule_research/rsr4_predeclared_readonly_replay'); print(json.loads((root/'manifest.json').read_text())['recommendation'])"
+```
+
+## 6. Recommendation
+
+`REVIEW_REQUIRED_REPAIR_OR_REJECT_FOR_NON_PASSING_RULES`.
+
+RSR4 produced the required artifacts, but any rule classified as `NO_TYPE_A_B_C_PRELIMINARY` or `REJECTED_PRELIMINARY` should not proceed as a candidate without reviewer decision. No result is production-ready.
+
+## 7. Boundary Risks
+
+- Replay is qlib-only historical readonly research over the requested 2023-2025 window.
+- Results are single-window RSR4 evidence; RSR5 robustness is still required for any surviving research candidate.
+- Replay quantities are execution outputs from ReplayExecution, not OrderIntent instructions.
+- No provider/latest/default/frontend/daily path was modified.

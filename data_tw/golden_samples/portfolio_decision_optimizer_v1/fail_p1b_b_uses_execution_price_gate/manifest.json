@@ -1,0 +1,7 @@
+{
+  "sample_name": "fail_p1b_b_uses_execution_price_gate",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

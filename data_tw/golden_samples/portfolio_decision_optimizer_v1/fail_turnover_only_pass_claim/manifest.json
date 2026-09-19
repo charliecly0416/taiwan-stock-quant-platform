@@ -1,0 +1,7 @@
+{
+  "sample_name": "fail_turnover_only_pass_claim",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

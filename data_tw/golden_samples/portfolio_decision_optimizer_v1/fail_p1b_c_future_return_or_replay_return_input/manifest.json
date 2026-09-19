@@ -1,0 +1,7 @@
+{
+  "sample_name": "fail_p1b_c_future_return_or_replay_return_input",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
-from app.services.tw_stock_daily_auto_update_status import TWStockDailyAutoUpdateStatusService
+import pytest
+
+from app.services.tw_stock_daily_auto_update_status import TWStockDailyAutoUpdateStatusService, recent_status_artifact_paths, STATUS_JOB_SCAN_LIMIT
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -20,6 +23,21 @@ def _make_service(tmp_path: Path) -> TWStockDailyAutoUpdateStatusService:
     return TWStockDailyAutoUpdateStatusService(signal_root=signal_root, ops_root=ops_root)
 
 
+def test_bounded_history_uses_scheduler_run_time_despite_archive_touch(tmp_path):
+    paths = []
+    for index in range(STATUS_JOB_SCAN_LIMIT + 1):
+        path = tmp_path / f"daily_tw_stock_auto_update_20260101_20260101T000000Z_{index}" / "job.json"
+        _write_json(path, {})
+        os.utime(path, (2_000_000_000, 2_000_000_000))
+        paths.append(path)
+    latest = tmp_path / "daily_tw_stock_auto_update_20260918_20260918T123001Z" / "job.json"
+    _write_json(latest, {})
+    os.utime(latest, (1, 1))
+    selected = recent_status_artifact_paths([*paths, latest])
+    assert len(selected) == STATUS_JOB_SCAN_LIMIT
+    assert selected[0] == latest
+
+
 def test_status_without_jobs_returns_readonly_empty_state(tmp_path):
     service = _make_service(tmp_path)
 
@@ -33,6 +51,55 @@ def test_status_without_jobs_returns_readonly_empty_state(tmp_path):
     assert payload["trading"]["orders_enabled"] is False
     assert payload["trading"]["connects_to_broker"] is False
     assert payload["trading"]["research_signal_not_order"] is True
+    assert payload["b19r2r_shadow"]["state"] == "NOT_OBSERVED"
+    assert payload["readiness_scope"] == "status_observation_only"
+
+
+@pytest.mark.parametrize("ready", [True, False])
+def test_daily_noop_does_not_hide_prior_full_shadow(tmp_path, ready):
+    service = _make_service(tmp_path)
+    _write_json(service.ops_root / "full/job.json", {
+        "job_id": "full", "asof": "2026-09-17", "finmind_scope": "full",
+        "finished_at": "2026-09-17T15:00:00Z",
+        "b19r2r_daily_shadow": {
+            "enabled": True, "attempted": True, "shadow_ok": ready,
+            "status": "READY_RESEARCH_SHADOW" if ready else "BLOCKED_MARGIN",
+            "runner": {"command": "API_KEY=should-not-leak"},
+            "warning": "/private/path TOKEN=should-not-leak",
+        },
+    })
+    _write_json(service.ops_root / "daily/job.json", {
+        "job_id": "daily", "asof": "2026-09-18", "finmind_scope": "daily",
+        "status": "already_up_to_date", "finished_at": "2026-09-18T01:00:00Z",
+        "b19r2r_daily_shadow": {"enabled": False, "attempted": False},
+    })
+    payload = service.status()
+    assert payload["last_job_id"] == "daily"
+    shadow = payload["b19r2r_shadow"]
+    assert shadow["job_id"] == "full"
+    assert shadow["state"] == ("READY" if ready else "BLOCKED")
+    assert shadow["shadow_ok"] is ready
+    assert shadow["mainline_blocking"] is False
+    assert shadow["production_allowed"] is False
+    assert "should-not-leak" not in json.dumps(shadow)
+    assert "private/path" not in json.dumps(shadow)
+
+
+def test_current_blocked_shadow_keeps_prior_ready_day_visible(tmp_path):
+    service = _make_service(tmp_path)
+    for day, ready in [("2026-09-16", True), ("2026-09-17", False)]:
+        _write_json(service.ops_root / day / "job.json", {
+            "asof": day, "full_orthogonal_refresh_mode": True,
+            "finished_at": f"{day}T15:00:00Z",
+            "b19r2r_daily_shadow": {
+                "enabled": True, "attempted": True, "shadow_ok": ready,
+                "status": "READY_RESEARCH_SHADOW" if ready else "BLOCKED_MARGIN",
+            },
+        })
+    shadow = service.status()["b19r2r_shadow"]
+    assert shadow["state"] == "BLOCKED"
+    assert shadow["asof"] == "2026-09-17"
+    assert shadow["last_ready_asof"] == "2026-09-16"
 
 
 def test_status_reads_successful_latest_and_last_job(tmp_path):

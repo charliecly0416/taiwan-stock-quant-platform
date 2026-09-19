@@ -176,6 +176,7 @@ POST /api/users/change-password - Change own password
 ### Other Endpoints
 ```text
 GET  /api/health
+GET  /api/ready
 GET  /api/indicator/kline
 GET  /api/global-market/adanos-sentiment?tickers=AAPL,TSLA
 POST /api/fast-analysis/analyze    - Fast AI analysis (main entry)

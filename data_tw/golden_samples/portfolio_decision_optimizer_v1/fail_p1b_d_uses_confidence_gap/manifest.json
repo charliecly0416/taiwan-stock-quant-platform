@@ -1,0 +1,7 @@
+{
+  "sample_name": "fail_p1b_d_uses_confidence_gap",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

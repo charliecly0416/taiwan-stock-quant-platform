@@ -314,7 +314,7 @@ def start_ai_calibration_worker() -> None:
     """
     Run offline calibration once on service startup (best-effort).
     """
-    enabled = os.getenv("ENABLE_OFFLINE_AI_CALIBRATION", "true").lower() == "true"
+    enabled = os.getenv("ENABLE_OFFLINE_AI_CALIBRATION", "false").lower() == "true"
     if not enabled:
         logger.info("AI calibration worker disabled (ENABLE_OFFLINE_AI_CALIBRATION=false).")
         return
@@ -338,4 +338,3 @@ def start_ai_calibration_worker() -> None:
             logger.info("[AI Calibration] No calibration update applied (not enough data).")
     except Exception as e:
         logger.error(f"start_ai_calibration_worker failed: {e}", exc_info=True)
-

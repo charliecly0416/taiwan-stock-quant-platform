@@ -6,6 +6,8 @@ from datetime import date, datetime, timezone, timedelta
 from flask import Flask
 
 from app.routes import tw_stock as tw_stock_route
+from app.routes.tw_stock_context_routes import tw_stock_context_bp
+from app.routes.tw_stock_ops_routes import tw_stock_ops_bp
 from app.services.tw_stock_trend import TWStockTrendService
 
 
@@ -41,8 +43,10 @@ def _client(monkeypatch, data):
         "app.utils.auth.verify_token",
         lambda token: {"sub": "test-user", "user_id": 1, "role": "user", "token_version": 1},
     )
-    tw_stock_route.trend_service = TWStockTrendService(FakeKlineService(data))
+    monkeypatch.setattr(tw_stock_route, "trend_service", TWStockTrendService(FakeKlineService(data)))
     app.register_blueprint(tw_stock_route.tw_stock_bp, url_prefix="/api/tw-stock")
+    app.register_blueprint(tw_stock_context_bp, url_prefix="/api/tw-stock")
+    app.register_blueprint(tw_stock_ops_bp, url_prefix="/api/tw-stock")
     return app.test_client()
 
 

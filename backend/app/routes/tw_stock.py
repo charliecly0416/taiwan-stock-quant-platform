@@ -67,7 +67,6 @@ tw_stock_sim_account_service = TWStockSimAccountService()
 tw_stock_paper_portfolio_service = TWStockPaperPortfolioService()
 
 
-@tw_stock_bp.route("/phase-yz/productization-status", methods=["GET"])
 def get_phase_yz_productization_status():
     """Return clean YZ E4 productization state without side effects."""
     signal_asof = (request.args.get("signal_asof") or request.args.get("signalAsOf") or "").strip()
@@ -75,7 +74,6 @@ def get_phase_yz_productization_status():
     return jsonify({"code": 1, "msg": "success", "data": payload})
 
 
-@tw_stock_bp.route("/current-strategy-context", methods=["GET"])
 def get_current_strategy_context():
     """Return one read-only current-strategy context for all frontend modules."""
     signal_asof = (request.args.get("signal_asof") or request.args.get("signalAsOf") or "").strip()
@@ -87,7 +85,6 @@ def get_current_strategy_context():
         return jsonify({"code": 0, "msg": exc.message, "data": {"ok": False, "status": exc.status}}), status
 
 
-@tw_stock_bp.route("/readonly-shadow-exposure", methods=["GET"])
 def get_readonly_shadow_exposure():
     """Return MTRP9 readonly shadow exposure from MTRP8 artifacts without writes."""
     strategy_rule = (request.args.get("strategy_rule") or "top50_hold_rank_buffer_100").strip()
@@ -152,13 +149,11 @@ def _tradingagents_analysis_response(*, run_id: str | None = None):
         }), status
 
 
-@tw_stock_bp.route("/tradingagents-readonly-analysis/latest", methods=["GET"])
 def get_tradingagents_readonly_analysis_latest():
     """Return latest validated sanitized TradingAgents readonly analysis artifact."""
     return _tradingagents_analysis_response()
 
 
-@tw_stock_bp.route("/tradingagents-readonly-analysis/<run_id>", methods=["GET"])
 def get_tradingagents_readonly_analysis_run(run_id: str):
     """Return one validated sanitized TradingAgents readonly analysis artifact."""
     return _tradingagents_analysis_response(run_id=run_id)
@@ -248,7 +243,7 @@ def _require_option_c_ops_permission():
 
 
 
-@tw_stock_bp.route("/sim/accounts", methods=["GET"])
+# Compatibility handlers retained for the extracted ``tw_stock_paper`` blueprint.
 @login_required
 def list_tw_stock_sim_accounts():
     """List current user's TWStock simulation accounts."""
@@ -256,7 +251,6 @@ def list_tw_stock_sim_accounts():
     return _sim_response(payload)
 
 
-@tw_stock_bp.route("/sim/accounts", methods=["POST"])
 @login_required
 def create_tw_stock_sim_account():
     """Create a TWStock simulation account; no real securities account is touched."""
@@ -269,7 +263,6 @@ def create_tw_stock_sim_account():
     return _sim_response(payload)
 
 
-@tw_stock_bp.route("/sim/accounts/<account_uid>", methods=["GET"])
 @login_required
 def get_tw_stock_sim_account(account_uid: str):
     """Return one TWStock simulation account with cash, value and return."""
@@ -277,7 +270,6 @@ def get_tw_stock_sim_account(account_uid: str):
     return _sim_response(payload)
 
 
-@tw_stock_bp.route("/sim/accounts/<account_uid>/positions", methods=["GET"])
 @login_required
 def get_tw_stock_sim_positions(account_uid: str):
     """Return open simulation-only TWStock positions."""
@@ -285,7 +277,6 @@ def get_tw_stock_sim_positions(account_uid: str):
     return _sim_response(payload)
 
 
-@tw_stock_bp.route("/sim/accounts/<account_uid>/trades", methods=["GET"])
 @login_required
 def get_tw_stock_sim_trades(account_uid: str):
     """Return simulation-only TWStock fills."""
@@ -297,7 +288,6 @@ def get_tw_stock_sim_trades(account_uid: str):
     return _sim_response(payload)
 
 
-@tw_stock_bp.route("/sim/orders/draft", methods=["POST"])
 @login_required
 def draft_tw_stock_sim_order():
     """Create a manual simulation draft using latest archived close as reference."""
@@ -314,7 +304,6 @@ def draft_tw_stock_sim_order():
     return _sim_response(payload)
 
 
-@tw_stock_bp.route("/sim/orders/<sim_order_uid>/confirm", methods=["POST"])
 @login_required
 def confirm_tw_stock_sim_order(sim_order_uid: str):
     """Confirm a manual simulation draft and write a simulation fill."""
@@ -322,7 +311,6 @@ def confirm_tw_stock_sim_order(sim_order_uid: str):
     return _sim_response(payload)
 
 
-@tw_stock_bp.route("/sim/orders/<sim_order_uid>/cancel", methods=["POST"])
 @login_required
 def cancel_tw_stock_sim_order(sim_order_uid: str):
     """Cancel a manual simulation draft."""
@@ -331,7 +319,6 @@ def cancel_tw_stock_sim_order(sim_order_uid: str):
 
 
 
-@tw_stock_bp.route("/paper-portfolio/state", methods=["GET"])
 @login_required
 def get_tw_stock_paper_portfolio_state():
     """Return current simulation account state for paper portfolio apply."""
@@ -340,7 +327,6 @@ def get_tw_stock_paper_portfolio_state():
     return _sim_response(payload)
 
 
-@tw_stock_bp.route("/paper-portfolio/apply-runs", methods=["GET"])
 @login_required
 def get_tw_stock_paper_portfolio_apply_runs():
     """List paper portfolio apply runs for the current user."""
@@ -353,7 +339,6 @@ def get_tw_stock_paper_portfolio_apply_runs():
     return _sim_response(payload)
 
 
-@tw_stock_bp.route("/paper-portfolio/latest-decision", methods=["GET"])
 @login_required
 def get_tw_stock_paper_portfolio_latest_decision():
     """Read the latest server-side paper decision artifact for the current user."""
@@ -362,7 +347,6 @@ def get_tw_stock_paper_portfolio_latest_decision():
     return _sim_response(payload)
 
 
-@tw_stock_bp.route("/paper-portfolio/apply-decision", methods=["POST"])
 @login_required
 def apply_tw_stock_paper_portfolio_decision():
     """Apply a readonly PaperOrderIntentArtifact to a simulation-only account."""
@@ -370,7 +354,6 @@ def apply_tw_stock_paper_portfolio_decision():
     return _sim_response(payload)
 
 
-@tw_stock_bp.route("/paper-portfolio/reset", methods=["POST"])
 @login_required
 def reset_tw_stock_paper_portfolio():
     """Reset a simulation-only paper portfolio after explicit user confirmation."""
@@ -378,7 +361,6 @@ def reset_tw_stock_paper_portfolio():
     return _sim_response(payload)
 
 
-@tw_stock_bp.route("/trend", methods=["GET"])
 def get_trend():
     """Return an explainable read-only trend report for one TWStock symbol."""
     symbol = (request.args.get("symbol") or "").strip()
@@ -393,7 +375,6 @@ def get_trend():
         return jsonify({"code": 0, "msg": f"Failed to analyze TWStock trend: {exc}", "data": None}), 500
 
 
-@tw_stock_bp.route("/trends", methods=["GET"])
 def get_trends():
     """Return read-only trend reports for a comma-separated TWStock watchlist."""
     symbols = [part.strip() for part in (request.args.get("symbols") or "").split(",") if part.strip()]
@@ -424,7 +405,6 @@ def get_trends():
         return jsonify({"code": 0, "msg": f"Failed to analyze TWStock trends: {exc}", "data": None}), 500
 
 
-@tw_stock_bp.route("/quant/signals/latest", methods=["GET"])
 def get_latest_qlib_option_c_signals():
     """Return latest qlib Option C TWStock research-only ranking signals."""
     bucket = (request.args.get("bucket") or "top30").strip().lower()
@@ -455,7 +435,6 @@ def get_latest_qlib_option_c_signals():
         }), 500
 
 
-@tw_stock_bp.route("/quant/signals/rank-changes", methods=["GET"])
 def get_qlib_option_c_rank_changes():
     """Return read-only latest-vs-previous qlib Option C rank changes."""
     bucket = (request.args.get("bucket") or "top30").strip().lower()
@@ -483,7 +462,6 @@ def get_qlib_option_c_rank_changes():
         }), 500
 
 
-@tw_stock_bp.route("/quant/signals/health", methods=["GET"])
 def get_qlib_option_c_signal_health():
     """Return read-only qlib Option C artifact freshness and availability."""
     try:
@@ -499,7 +477,6 @@ def get_qlib_option_c_signal_health():
         }), 500
 
 
-@tw_stock_bp.route("/quant/signals/runs", methods=["GET"])
 def get_qlib_option_c_signal_runs():
     """Return read-only qlib Option C historical run metadata."""
     try:
@@ -527,7 +504,6 @@ def get_qlib_option_c_signal_runs():
         }), 500
 
 
-@tw_stock_bp.route("/quant/signals/runs/<run_id>", methods=["GET"])
 def get_qlib_option_c_signal_run_detail(run_id: str):
     """Return one read-only qlib Option C historical run detail."""
     bucket = (request.args.get("bucket") or "top30").strip().lower()
@@ -570,7 +546,6 @@ def _parse_cross_max_items(bucket: str) -> int:
         return default
 
 
-@tw_stock_bp.route("/cross-analysis/latest", methods=["GET"])
 def get_tw_stock_cross_analysis_latest():
     """Return read-only cross analysis of qlib rankings and raw TWStock trends."""
     bucket = (request.args.get("bucket") or "top30").strip().lower()
@@ -597,7 +572,6 @@ def get_tw_stock_cross_analysis_latest():
         }), 500
 
 
-@tw_stock_bp.route("/rank-tech-cross/latest", methods=["GET"])
 def get_tw_stock_rank_tech_cross_latest():
     """Return read-only qlib ranking x QuantDinger trend classification."""
     bucket = (request.args.get("bucket") or "top30").strip().lower()
@@ -640,7 +614,8 @@ def get_tw_stock_rank_tech_cross_latest():
         }), 500
 
 
-@tw_stock_bp.route("/rank-tech-cross/observation-replay", methods=["GET"])
+# Compatibility handlers retained for the extracted ``tw_stock_replay``
+# blueprint. Registration lives in ``tw_stock_replay_routes.py``.
 def get_tw_stock_observation_replay():
     """Return observation-only point-in-time research queue comparison."""
     bucket = (request.args.get("bucket") or "top30").strip().lower()
@@ -680,7 +655,6 @@ def get_tw_stock_observation_replay():
         }), 500
 
 
-@tw_stock_bp.route("/rank-tech-cross/portfolio-replay", methods=["POST"])
 def run_tw_stock_portfolio_replay():
     """Return in-memory portfolio rule historical simulation; never persists."""
     try:
@@ -711,7 +685,6 @@ def run_tw_stock_portfolio_replay():
         }), 500
 
 
-@tw_stock_bp.route("/ltr-readonly-explanation", methods=["GET"])
 def get_tw_stock_ltr_readonly_explanation():
     """Return Phase4B product view for the frozen LTR readonly explanation payload."""
     try:
@@ -733,7 +706,6 @@ def get_tw_stock_ltr_readonly_explanation():
         }), 500
 
 
-@tw_stock_bp.route("/ltr-optional-sim-strategies", methods=["GET"])
 def get_tw_stock_ltr_optional_sim_strategies():
     """Return Phase V4 readonly optional LTR simulation strategy product view."""
     try:
@@ -755,7 +727,6 @@ def get_tw_stock_ltr_optional_sim_strategies():
         }), 500
 
 
-@tw_stock_bp.route("/cross-analysis/symbol/<symbol>", methods=["GET"])
 def get_tw_stock_cross_analysis_symbol(symbol: str):
     """Return read-only cross analysis detail for one TWStock symbol."""
     include_raw = _parse_bool_arg("includeRawTrend", "include_raw_trend", default=True)
@@ -780,7 +751,8 @@ def get_tw_stock_cross_analysis_symbol(symbol: str):
         }), 500
 
 
-@tw_stock_bp.route("/agent/context", methods=["GET"])
+# Compatibility handler retained for the extracted ``tw_stock_agent``
+# blueprint. Registration lives in ``tw_stock_agent_routes.py``.
 def get_tw_stock_agent_context():
     """Return read-only context available to the TWStock research Agent."""
     try:
@@ -796,7 +768,6 @@ def get_tw_stock_agent_context():
         return jsonify({"code": 0, "msg": message, "data": {"ok": False, "status": "read_error", "message": message, "trading": research_only_trading_flags()}}), 500
 
 
-@tw_stock_bp.route("/agent/preview", methods=["POST"])
 def preview_tw_stock_agent_answer():
     """Return deterministic research-only answer preview without calling OpenAI."""
     data = _request_json()
@@ -817,7 +788,6 @@ def preview_tw_stock_agent_answer():
         return jsonify({"code": 0, "msg": message, "data": {"ok": False, "status": "read_error", "message": message, "trading": research_only_trading_flags()}}), 500
 
 
-@tw_stock_bp.route("/agent/chat", methods=["POST"])
 def chat_tw_stock_agent_answer():
     """Return structured TWStock research Agent answer with guarded OpenAI fallback."""
     data = _request_json()
@@ -838,18 +808,26 @@ def chat_tw_stock_agent_answer():
         return jsonify({"code": 0, "msg": message, "data": {"ok": False, "status": "read_error", "message": message, "trading": research_only_trading_flags()}}), 500
 
 
-@tw_stock_bp.route("/agent/simple-chat", methods=["POST"])
 def simple_chat_tw_stock_agent_answer():
     """Return TWStock research Agent answer from validated DailyAgentPromptArtifact."""
     data = _request_json()
     artifact_dir = data.get("artifactDir") or data.get("artifact_dir") or None
-    if artifact_dir and str(os.environ.get("FLASK_ENV") or "").lower() in {"prod", "production"}:
+    if not current_app.config.get("TESTING"):
         artifact_dir = None
+    raw_max_items = data.get("maxItems", data.get("max_items", 10))
+    try:
+        if isinstance(raw_max_items, bool) or not isinstance(raw_max_items, (int, str)):
+            raise ValueError("maxItems must be an integer")
+        max_items = int(raw_max_items)
+        if not 1 <= max_items <= 50:
+            raise ValueError("maxItems must be between 1 and 50")
+    except (TypeError, ValueError):
+        return jsonify({"code": 0, "msg": "maxItems must be an integer between 1 and 50", "data": {"ok": False, "status": "invalid_request"}}), 400
     try:
         payload = tw_stock_agent_simple_chat_service.chat(
             question=data.get("question") or "",
             symbol=data.get("symbol") or "",
-            max_items=data.get("maxItems") or data.get("max_items") or 10,
+            max_items=max_items,
             artifact_dir=artifact_dir,
         )
         return jsonify({
@@ -863,7 +841,6 @@ def simple_chat_tw_stock_agent_answer():
         return jsonify({"code": 0, "msg": message, "data": {"ok": False, "status": "read_error", "message": message, "trading": research_only_trading_flags()}}), 500
 
 
-@tw_stock_bp.route("/cross-analysis/history/import-latest", methods=["POST"])
 @login_required
 def import_tw_stock_cross_analysis_history_latest():
     """Import latest accepted qlib signal run into research history tables."""
@@ -883,7 +860,6 @@ def import_tw_stock_cross_analysis_history_latest():
         return jsonify({"code": 0, "msg": message, "data": {"ok": False, "status": "import_error", "message": message, "trading": research_only_trading_flags()}}), 500
 
 
-@tw_stock_bp.route("/cross-analysis/history/runs", methods=["GET"])
 def get_tw_stock_cross_analysis_history_runs():
     """Return imported qlib signal research runs."""
     try:
@@ -894,7 +870,6 @@ def get_tw_stock_cross_analysis_history_runs():
         return jsonify({"code": 0, "msg": f"Failed to read TWStock qlib signal runs: {exc}", "data": None}), 500
 
 
-@tw_stock_bp.route("/cross-analysis/history/signals", methods=["GET"])
 def get_tw_stock_cross_analysis_history_signals():
     """Return imported qlib signal research rows."""
     try:
@@ -910,7 +885,6 @@ def get_tw_stock_cross_analysis_history_signals():
         return jsonify({"code": 0, "msg": f"Failed to read TWStock qlib signal rows: {exc}", "data": None}), 500
 
 
-@tw_stock_bp.route("/cross-analysis/history/alerts", methods=["GET"])
 def get_tw_stock_cross_analysis_history_alerts():
     """Return research-only qlib signal history alerts."""
     try:
@@ -926,7 +900,6 @@ def get_tw_stock_cross_analysis_history_alerts():
         return jsonify({"code": 0, "msg": f"Failed to read TWStock qlib signal alerts: {exc}", "data": None}), 500
 
 
-@tw_stock_bp.route("/cross-analysis/reviews", methods=["GET"])
 @login_required
 def get_tw_stock_cross_analysis_reviews():
     """Return current user's research-only cross-analysis review states."""
@@ -944,7 +917,6 @@ def get_tw_stock_cross_analysis_reviews():
         return jsonify({"code": 0, "msg": f"Failed to read TWStock cross-analysis reviews: {exc}", "data": None}), 500
 
 
-@tw_stock_bp.route("/cross-analysis/reviews", methods=["PUT"])
 @login_required
 def save_tw_stock_cross_analysis_review():
     """Save current user's manual research review status and note only."""
@@ -966,7 +938,6 @@ def save_tw_stock_cross_analysis_review():
         return jsonify({"code": 0, "msg": f"Failed to save TWStock cross-analysis review: {exc}", "data": None}), 500
 
 
-@tw_stock_bp.route("/quant/ops/option-c/dry-run", methods=["POST"])
 @login_required
 def trigger_qlib_option_c_ops_dry_run():
     """Run the fixed qlib Option C provider dry-run wrapper."""
@@ -984,7 +955,6 @@ def trigger_qlib_option_c_ops_dry_run():
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else payload.get("message", status), "data": payload}), http_status
 
 
-@tw_stock_bp.route("/quant/ops/option-c/jobs/<job_id>", methods=["GET"])
 def get_qlib_option_c_ops_job(job_id: str):
     """Return one Option C dry-run ops job status and log tails."""
     payload = option_c_ops_runner.get_job(job_id)
@@ -994,7 +964,6 @@ def get_qlib_option_c_ops_job(job_id: str):
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else payload.get("message", payload.get("status")), "data": payload}), status
 
 
-@tw_stock_bp.route("/quant/ops/option-c/jobs/<job_id>/logs", methods=["GET"])
 @login_required
 def get_qlib_option_c_ops_job_log_tail(job_id: str):
     """Return stdout/stderr tail for one Option C dry-run ops job."""
@@ -1009,28 +978,24 @@ def get_qlib_option_c_ops_job_log_tail(job_id: str):
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else payload.get("message", payload.get("status")), "data": payload}), status
 
 
-@tw_stock_bp.route("/quant/ops/option-c/latest", methods=["GET"])
 def get_qlib_option_c_ops_latest():
     """Return latest Option C dry-run ops job without triggering commands."""
     payload = option_c_ops_runner.latest()
     return jsonify({"code": 1, "msg": "success", "data": payload})
 
 
-@tw_stock_bp.route("/quant/ops/daily-auto-update/status", methods=["GET"])
 def get_daily_auto_update_status():
     """Return read-only daily FinMind/Yahoo/qlib auto-update status."""
     payload = daily_auto_update_status_service.status()
     return jsonify({"code": 1, "msg": "success", "data": payload})
 
 
-@tw_stock_bp.route("/quant/ops/readonly-status", methods=["GET"])
 def get_readonly_ops_status():
     """Return DAOV1 readonly ops status from local evidence only."""
     payload = readonly_ops_status_service.status()
     return jsonify({"code": 1, "msg": "success", "data": payload})
 
 
-@tw_stock_bp.route("/quant/ops/option-c/scheduler", methods=["GET"])
 def get_qlib_option_c_scheduler_status():
     """Return disabled-by-default Option C dry-run scheduler status."""
     payload = option_c_dry_run_scheduler.status()
@@ -1038,7 +1003,6 @@ def get_qlib_option_c_scheduler_status():
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else "scheduler misconfigured", "data": payload}), status
 
 
-@tw_stock_bp.route("/quant/ops/option-c/scheduler/tick", methods=["POST"])
 @login_required
 def tick_qlib_option_c_scheduler():
     """Manually smoke the disabled Option C scheduler through dry-run only."""
@@ -1056,7 +1020,6 @@ def tick_qlib_option_c_scheduler():
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else payload.get("message", status), "data": payload}), http_status
 
 
-@tw_stock_bp.route("/quant/ops/option-c/accepted-latest-scheduler", methods=["GET"])
 def get_qlib_option_c_accepted_latest_scheduler_status():
     """Return disabled-by-default Option C accepted latest scheduler status."""
     payload = option_c_accepted_latest_scheduler.status()
@@ -1064,7 +1027,6 @@ def get_qlib_option_c_accepted_latest_scheduler_status():
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else "accepted latest scheduler misconfigured", "data": payload}), status
 
 
-@tw_stock_bp.route("/quant/ops/option-c/accepted-latest-scheduler/tick", methods=["POST"])
 @login_required
 def tick_qlib_option_c_accepted_latest_scheduler():
     """Manually tick the disabled-by-default accepted latest scheduler skeleton."""
@@ -1082,7 +1044,6 @@ def tick_qlib_option_c_accepted_latest_scheduler():
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else payload.get("message", status), "data": payload}), http_status
 
 
-@tw_stock_bp.route("/quant/ops/option-c/eod-pipeline", methods=["GET"])
 def get_qlib_option_c_eod_pipeline_status():
     """Return disabled-by-default Option C EOD pipeline status."""
     payload = option_c_eod_pipeline.status()
@@ -1090,7 +1051,6 @@ def get_qlib_option_c_eod_pipeline_status():
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else "EOD pipeline misconfigured", "data": payload}), status
 
 
-@tw_stock_bp.route("/quant/ops/option-c/eod-pipeline/tick", methods=["POST"])
 @login_required
 def tick_qlib_option_c_eod_pipeline():
     """Manually smoke the disabled-by-default Option C EOD pipeline."""
@@ -1108,7 +1068,6 @@ def tick_qlib_option_c_eod_pipeline():
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else payload.get("message", status), "data": payload}), http_status
 
 
-@tw_stock_bp.route("/quant/ops/option-c/eod-automation", methods=["GET"])
 def get_qlib_option_c_eod_automation_status():
     """Return disabled-by-default Option C EOD automation scheduler status."""
     payload = option_c_eod_automation_scheduler.status(now=request.args.get("now"))
@@ -1116,7 +1075,6 @@ def get_qlib_option_c_eod_automation_status():
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else "EOD automation misconfigured", "data": payload}), status
 
 
-@tw_stock_bp.route("/quant/ops/option-c/eod-automation/tick", methods=["POST"])
 @login_required
 def tick_qlib_option_c_eod_automation():
     """Manually smoke the disabled-by-default Option C EOD automation scheduler."""
@@ -1134,7 +1092,6 @@ def tick_qlib_option_c_eod_automation():
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else payload.get("message", status), "data": payload}), http_status
 
 
-@tw_stock_bp.route("/quant/ops/option-c/normal-publish", methods=["POST"])
 @login_required
 def normal_publish_qlib_option_c_latest():
     """Review-gated Option C normal accepted latest publish endpoint."""
@@ -1255,7 +1212,6 @@ def _alert_from_row(row: dict) -> dict:
     }
 
 
-@tw_stock_bp.route("/monitor/config", methods=["GET"])
 def get_monitor_config():
     """Return saved TWStock monitor config, or a default config if none exists."""
     user_id = _monitor_user_id()
@@ -1284,7 +1240,6 @@ def get_monitor_config():
         })
 
 
-@tw_stock_bp.route("/monitor/config", methods=["POST", "PUT"])
 @login_required
 def save_monitor_config():
     """Persist TWStock monitor config. This controls alerts only, never orders."""
@@ -1339,7 +1294,6 @@ def save_monitor_config():
         return jsonify({"code": 0, "msg": f"Failed to save monitor config: {exc}", "data": None}), 500
 
 
-@tw_stock_bp.route("/monitor/alerts", methods=["GET"])
 def get_monitor_alerts():
     """Return TWStock monitor alert history for manual review."""
     user_id = _monitor_user_id()
@@ -1384,7 +1338,6 @@ def get_monitor_alerts():
         return jsonify({"code": 0, "msg": f"Failed to get monitor alerts: {exc}", "data": None}), 500
 
 
-@tw_stock_bp.route("/monitor/alerts", methods=["POST"])
 @login_required
 def create_monitor_alert():
     """Persist one TWStock monitor alert. This is not a trade decision."""
@@ -1426,7 +1379,6 @@ def create_monitor_alert():
         return jsonify({"code": 0, "msg": f"Failed to create monitor alert: {exc}", "data": None}), 500
 
 
-@tw_stock_bp.route("/monitor/alerts/<int:alert_id>", methods=["PUT"])
 @login_required
 def update_monitor_alert(alert_id: int):
     """Mark an alert as reviewed and optionally attach the user's manual decision note."""
@@ -1677,7 +1629,6 @@ def _trend_history_from_row(row: dict) -> dict:
     }
 
 
-@tw_stock_bp.route("/monitor/history", methods=["GET"])
 def get_monitor_history():
     """Return stored TWStock trend score history for charting and manual review."""
     user_id = _monitor_user_id()
@@ -1739,7 +1690,6 @@ def _scan_monitor_config(config: dict, *, force: bool = False) -> dict:
     )
 
 
-@tw_stock_bp.route("/monitor/scan", methods=["POST"])
 @login_required
 def scan_monitor():
     """Run a backend TWStock monitor scan and persist alerts. No orders are created."""
@@ -1781,7 +1731,6 @@ def run_tw_stock_monitor_scan_all(*, force: bool = False, trigger_source: str = 
     )
 
 
-@tw_stock_bp.route("/monitor/scan-all", methods=["POST"])
 @login_required
 def scan_all_monitors():
     """Scan enabled TWStock monitor configs. Intended for cron/manual trigger, not trading."""
@@ -1795,7 +1744,6 @@ def scan_all_monitors():
         return jsonify({"code": 0, "msg": f"Failed to scan monitors: {exc}", "data": None}), 500
 
 
-@tw_stock_bp.route("/monitor/scan-logs", methods=["GET"])
 def get_monitor_scan_logs():
     """Return recent TWStock monitor scan logs for deployment visibility."""
     try:
@@ -2362,7 +2310,6 @@ TW_STOCK_MONITOR_HTML = """
 """
 
 
-@tw_stock_bp.route("/monitor", methods=["GET"])
 def monitor_page():
     """Return a local read-only TWStock trend monitoring page."""
     return render_template_string(TW_STOCK_MONITOR_HTML)

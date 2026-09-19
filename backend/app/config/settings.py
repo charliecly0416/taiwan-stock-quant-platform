@@ -3,6 +3,17 @@
 """
 import os
 
+DEFAULT_SECRET_KEY = 'quantdinger-secret-key-change-me'
+
+
+def validate_secret_key():
+    """Require an explicit signing key before any HTTP startup or worker hook."""
+    secret = os.getenv('SECRET_KEY', '')
+    if not secret.strip() or secret.strip() in {DEFAULT_SECRET_KEY, 'change-me', 'your-secret-key-change-me'}:
+        raise RuntimeError('Set a persistent SECRET_KEY before starting the backend. Generate one with: python -c "import secrets; print(secrets.token_hex(32))"')
+    return secret
+
+
 class MetaConfig(type):
     # ==================== 服务配置 ====================
     # 服务启动参数通常由环境变量或命令行参数决定，不建议从数据库读取
@@ -30,7 +41,7 @@ class MetaConfig(type):
     # ==================== 认证配置 ====================
     @property
     def SECRET_KEY(cls):
-        return os.getenv('SECRET_KEY', 'quantdinger-secret-key-change-me')
+        return validate_secret_key()
 
     @property
     def ADMIN_USER(cls):

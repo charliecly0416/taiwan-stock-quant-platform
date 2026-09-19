@@ -1,0 +1,4241 @@
+{
+  "version": 1,
+  "last_updated": "2026-06-20T19:05:00Z",
+  "sources": {
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/AGENT_READONLY_CONTEXT_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1693,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:0c66c02b3d096dbda48106b1318f97d0b3ab3bc67bd5381af78c0c1731389531",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/ANALYSIS_ARTIFACT_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1530,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:bae51a031c752a9adbc4f17833fad282da8d55a2ce6eb433d916aee0770e5400",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/AUTO_UPDATE_ORCHESTRATOR_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1451,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:f4c64db54da8250b252cbc89c10e980f388942e371b2a9348b348085cf94d408",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/data-freshness-and-latest-pointers.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/DAILY_ORCHESTRATOR_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1693,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:14a32933dbe9c574ee78d53d0b225979ac0be04a347666858a13efa0dacafbb7",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/data-freshness-and-latest-pointers.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/DATA_INGESTION_ARTIFACT_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1608,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:beaadc8a5ed52d82f4795b1d55e1712389b51bf61e217a187041f0bb89ca447c",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/DATA_SOURCE_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1351,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:718b64aa1a6e3afed31646b75c48857550fd885e25ea615d938f94ed86d417bf",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/data-freshness-and-latest-pointers.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/DEFAULT_CANDIDATE_DECISION_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1595,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:7a0cf910797de6c1c68c090506afaf488eefd6e927d10c75f8b90d6b492d6c9f",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/EXTENSIBLE_CONTRACT_CAPABILITY_DESIGN_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 4965,
+      "modified_at": "2026-06-16T09:38:00Z",
+      "content_hash": "sha256:957cc84f07126c134d4df7438e141cca84b0f2be2ce5159400b51abb36473f1a",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/FEATURE_ARTIFACT_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1741,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:246e70ac634520e263ee24d54ae6dc0e53742f3d90d9439126acc56812b51bb7",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/FRONTEND_AGENT_PANEL_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1610,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:934725f6f4804144ae660ff08031a5f327a998f4e0334f5ab949e366fd192cd3",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/frontend-strategy-workbench.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/FRONTEND_READONLY_DISPLAY_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1466,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:fd073ba230adb7230c54d05ac03698d378a887d27fef94b9009306052dea6c93",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/frontend-strategy-workbench.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/FULL_RANK_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 3113,
+      "modified_at": "2026-06-16T11:47:26Z",
+      "content_hash": "sha256:3fa94b3984808489272234c3b916e8ec9203ae745e5314ca713777ee78747c1e",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md",
+        "skills/new-model-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/MODEL_SIGNAL_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 5858,
+      "modified_at": "2026-06-16T08:39:59Z",
+      "content_hash": "sha256:67eaf9e2254769aa556169f47b826ddcd7a68684daec351e2cd136e715c74f85",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md",
+        "skills/new-model-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/MODEL_SIGNAL_EXTENSION_SCHEMA_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 3845,
+      "modified_at": "2026-06-16T09:38:00Z",
+      "content_hash": "sha256:8660748a96c20a5153be546562b7a0a9f12823f83778bfb3ff4edcb0bd5e2df1",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "skills/new-model-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/MODULAR_FOUNDATION_FINAL_ACCEPTANCE_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 6192,
+      "modified_at": "2026-06-17T12:58:59Z",
+      "content_hash": "sha256:aad1092fb0b1ad4fee83073b0d3be85603b577c85bb4808bf6956e81959cd177",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/NEW_MODEL_AND_STRATEGY_DEVELOPER_GUIDE_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 4936,
+      "modified_at": "2026-06-17T12:58:59Z",
+      "content_hash": "sha256:229b42bf5962b85bb7fcc34bdd0f954012055dc660d9b1aba7687bf382015f93",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/NEW_MODEL_REVIEWER_CHECKLIST_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 2233,
+      "modified_at": "2026-06-17T12:58:59Z",
+      "content_hash": "sha256:7afad082ffd41f17af72dbfbe40f6352b8724f09264e2ccc0a92c2aece7df93c",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/NEW_STRATEGY_REVIEWER_CHECKLIST_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 2500,
+      "modified_at": "2026-06-17T12:58:59Z",
+      "content_hash": "sha256:b006e7aa7e96ccc39796869e2b8b2f8e6f291c054f0bfb33a193609b0d37ee3a",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/ORDER_INTENT_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 3913,
+      "modified_at": "2026-06-16T08:39:59Z",
+      "content_hash": "sha256:c62a6aca3458aef54f7df11b4c142d06316c1c848e8e0116bdb0fe22d986af88",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/PHASED8_FINAL_ACCEPTANCE_REVIEW_SUGGESTION_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 3890,
+      "modified_at": "2026-06-17T09:13:21Z",
+      "content_hash": "sha256:a9b3e8dc433214829d4458ca979e50973aeb282cc8a0f2a857aa6fcbcf1ff8df",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/PHASEM3R_REVIEW_SUPPLEMENT_PHASEM4_FRONTEND_ACCEPTANCE_SUGGESTION_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 4144,
+      "modified_at": "2026-06-17T11:44:24Z",
+      "content_hash": "sha256:ceacdc66d5abfa1ba12ceace1713aae4e01daa0b63ce22adec20b0a22185d55a",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/PRICE_STORE_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1503,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:1746249f771db5125a921b9eca87806e76b64cc69606c2536c75c2ea4c1c39e0",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/data-freshness-and-latest-pointers.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/READONLY_REPLAY_WINDOW_PRODUCTIZATION_GUIDE_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 2187,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:18939af82338ef0a55852adf62dfe7e21d7127ce288e12aee8ba3884fee4a44f",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/READONLY_STRATEGY_SNAPSHOT_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 3583,
+      "modified_at": "2026-06-16T14:33:36Z",
+      "content_hash": "sha256:89f2deb85031a123192f937f1760289d39aad5fe14bb4f8a64f52952471f0961",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/REPLAY_RESULT_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 5998,
+      "modified_at": "2026-06-16T08:48:38Z",
+      "content_hash": "sha256:efc0c990c32b091e64e5e8d7cb749d14c94fde81e5deac810d9c35bb20b7ca6f",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/RUN_REGISTRY_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1427,
+      "modified_at": "2026-06-17T10:22:16Z",
+      "content_hash": "sha256:0c26a81b2fc4108f9cf2ad6702f762f4918505688b9786ce55db40c85f6ddc86",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/STRATEGY_DEPENDENCY_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 3667,
+      "modified_at": "2026-06-16T09:38:00Z",
+      "content_hash": "sha256:6f4d9511d51d20c4bf200e101c21a23896e0a3528fbeabab39c9ec28154184b1",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/STRATEGY_RULE_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 4219,
+      "modified_at": "2026-06-16T08:39:59Z",
+      "content_hash": "sha256:109e605725f5f2ed31e4a2ab3fcdce5f2ba54af9aeca3544295e8b90eb183e0d",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/modular-artifact-chain.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/TW_AGENT_DAILY_PROMPT_ARTIFACT_CONTRACT_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 5559,
+      "modified_at": "2026-06-19T14:50:41Z",
+      "content_hash": "sha256:de2faae78fb739349d45e5c3b5f467a47177b3f4b9143eb174dbadf6a0753236",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/TW_AGENT_DAILY_PROMPT_OPENAI_REBUILD_DESIGN_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 17075,
+      "modified_at": "2026-06-19T07:16:03Z",
+      "content_hash": "sha256:3d1c9eb0213a8b08d75886baecd898712536dd9ecd1eb3594cdfee1878e4eb96",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/TW_AGENT_DAILY_PROMPT_OPENAI_REBUILD_EXECUTION_AND_REVIEW_PLAN_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 20134,
+      "modified_at": "2026-06-19T07:16:03Z",
+      "content_hash": "sha256:29add20c506bc13a207cf3d12739a09c52351ffe5ee1dec394a3128835afdf5b",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/TW_CURRENT_PROJECT_DOC_ENTRY_AND_ARCHIVE_POLICY_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 3986,
+      "modified_at": "2026-06-19T05:55:47Z",
+      "content_hash": "sha256:a7804007e29f68f540c1cfd57e930574dfc7350004fb183ecd2cbd76b3707093",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/TW_CURRENT_STRATEGY_CONTEXT_API_FIELD_DICTIONARY_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 11935,
+      "modified_at": "2026-06-18T16:36:50Z",
+      "content_hash": "sha256:f030f6f281cd51df86b03c29c45fd4c6b76ffe7b10ddbe3d83e3668220a3a936",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/frontend-strategy-workbench.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/TW_DAILY_AUTO_UPDATE_RUNBOOK_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 13523,
+      "modified_at": "2026-06-19T16:04:49Z",
+      "content_hash": "sha256:a2779936e8fa58ff231b4458b8a8e9235cc875f1d7c18463847c63a242dca557",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/TW_DEVELOPER_TEST_AND_EXPERIMENT_PLAYBOOK_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 7224,
+      "modified_at": "2026-06-18T16:03:56Z",
+      "content_hash": "sha256:f752aae2fe57616acb92b4e5476c496cc17b69e28f99ddd3f327650c5249ad89",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/TW_MODULAR_PIPELINE_FUTURE_DEVELOPMENT_GUIDE_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 27491,
+      "modified_at": "2026-06-18T16:05:17Z",
+      "content_hash": "sha256:d4e881a848576d93dfc45ea12e273ee17b28fa11d97256ec777f9ea2976de335",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/TW_NEW_STRATEGY_ONBOARDING_TEMPLATE_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 11257,
+      "modified_at": "2026-06-18T16:36:50Z",
+      "content_hash": "sha256:59d3f29da15daf9163f30d2487f18671a4a6dc1a428201c4081db3e20cd949f2",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/TW_PROJECT_DEVELOPMENT_CONSTITUTION_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 11240,
+      "modified_at": "2026-06-19T05:55:47Z",
+      "content_hash": "sha256:468214612f6f366eba0ea98a7273b5cfea184cae91263978f8ca4a9220e70f06",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 9789,
+      "modified_at": "2026-06-18T16:03:56Z",
+      "content_hash": "sha256:6e49352570929a8cd8d0ccf0a2acc577fafad466b15782ed014867f182027d1f",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/data_source_registry.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 669,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:806396ed1559d9583e1c1768ddafcf46e6e5f17058be3f28159faf54e39f5072",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/feature_registry.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 801,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:31f24a208a97b80f0173ccad17867c568564d34d2d6e7f47800c73f99dc5a0c7",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/model_onboarding_templates/model_signal_m2_template.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 397,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:7d0ec9ebfc441672b1616ea25472fd1f7aacce10baaf88dabf082e7b2c0e20ee",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/price_store_registry.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 764,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:bf129f36b621147959951d4096f4678f31128e3883397614d7ab6e8eaeb9d408",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/strategy_dependencies/dummy_new_strategy_dependency_smoke.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1344,
+      "modified_at": "2026-06-17T12:43:58Z",
+      "content_hash": "sha256:11458d42ce44babd3a9038aa371e3c68d905eededea59490100201769bc3f2d6",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/strategy_dependencies/m2_strategy_dependency_template.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 475,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:e707aee3f903a7f1f245385b48064a65084b766bdd079324890b7081e4978051",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/strategy_dependencies/one_sell_one_buy_buggy_e8r.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 697,
+      "modified_at": "2026-06-16T09:45:32Z",
+      "content_hash": "sha256:bc3e949812722792dbdf8b7834a60111e9d46e498cc873fdd2839daf5f1ba011",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/strategy_dependencies/one_sell_one_buy_correct.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 610,
+      "modified_at": "2026-06-16T09:45:32Z",
+      "content_hash": "sha256:9b47049d6e4cab07e2a42b3cd3691f8a2eca78a3aa5ee95fe76a6a7bf52e5f85",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/strategy_dependencies/original.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 496,
+      "modified_at": "2026-06-16T09:45:32Z",
+      "content_hash": "sha256:80e4052bf8c9a817ae2bbb64af8656f4eb17e24aa41a19c0d6c67a1258de7a19",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/strategy_dependencies/sector_extension_analysis_smoke.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1296,
+      "modified_at": "2026-06-16T11:11:36Z",
+      "content_hash": "sha256:368101ce9c93c4fcb76fe46e2debe12e507e50e7dc1713aa460cecebb59192c3",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/strategy_dependencies/top50_exit_all.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 502,
+      "modified_at": "2026-06-16T09:45:32Z",
+      "content_hash": "sha256:35956d2e096558c056f607eca51a985d63fb92b8ef84bae29458bccd655a7f31",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/strategy_dependencies/top50_exit_one_worst_sell.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 611,
+      "modified_at": "2026-06-16T09:45:32Z",
+      "content_hash": "sha256:3520277fd3b3b4df4bff631d89d1aecf9cbbc2956bc5dffaac6247c09b72e1e6",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/tw_modular_registry.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 15188,
+      "modified_at": "2026-06-18T08:11:18Z",
+      "content_hash": "sha256:08fc01568343fac736a965e2d030e6a288b2065cb5283a90ce7938642cf58b3f",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/tw_modular_replay_matrix.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 2669,
+      "modified_at": "2026-06-18T08:11:18Z",
+      "content_hash": "sha256:92bb40db08f8bfcc03880739236ed8e4563ee8b021c7cbee1fff6d429c968fdd",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/tw_product_artifact_registry.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 2181,
+      "modified_at": "2026-06-18T15:51:23Z",
+      "content_hash": "sha256:4590da7b428f6431ef376d11c9e2d51041514759fd057f3e9cd79336dca5b58d",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/configs/tw_replay_window_policy.yaml": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 2426,
+      "modified_at": "2026-06-18T08:11:18Z",
+      "content_hash": "sha256:3f951c52a12d7928769fbf5ecaf04c0634b8e6899b74c5b1da3d174ec11cad17",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md",
+        "concepts/product-artifact-registry.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-agent-daily-prompt-maintenance/SKILL.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 5275,
+      "modified_at": "2026-06-19T20:05:42Z",
+      "content_hash": "sha256:034d9864a11bbfe07216a24487a990f00355e11431043448cdb94d24611947e9",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-data-freshness-diagnosis/SKILL.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 7193,
+      "modified_at": "2026-06-19T20:15:26Z",
+      "content_hash": "sha256:9b6838778fe2983aab8b810dd88ab1f4549bfac55afbb95a42ed46f006d50802",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/data-freshness-diagnosis-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-frontend-workbench-ux-review/SKILL.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 5421,
+      "modified_at": "2026-06-19T20:05:42Z",
+      "content_hash": "sha256:c2680055f05c0a7be8000182fb67163f7bc847be6f2cb73e4a59b014dfdffa1c",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/frontend-ux-review-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-modular-integration-regression/SKILL.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 5041,
+      "modified_at": "2026-06-19T20:05:42Z",
+      "content_hash": "sha256:13a9d024aa3377c08235d10459b5fe5c9b0b66da0d9da666142bf91370cbda5b",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/modular-integration-regression-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-new-model-onboarding/SKILL.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 5007,
+      "modified_at": "2026-06-19T20:05:42Z",
+      "content_hash": "sha256:dfd2b21601b32ffcb043409ce87723b26741b19c29afded3644852a93544585e",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "skills/new-model-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-new-strategy-onboarding/SKILL.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 4909,
+      "modified_at": "2026-06-19T20:05:42Z",
+      "content_hash": "sha256:e8df9e3dc51a8473550a5a3cd71e493357f7af1a7c79ecff3808b7bd094b6d75",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-readonly-e2e-acceptance/SKILL.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 6728,
+      "modified_at": "2026-06-19T20:15:26Z",
+      "content_hash": "sha256:409224bfd24db098fc6fe8756ac73ddbfe38a14cba7cddba66a106efde5e6a7d",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-research-context-analyst/SKILL.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 6549,
+      "modified_at": "2026-06-19T20:15:26Z",
+      "content_hash": "sha256:9ca2ea3590070021fb2bba3a79cb714f2dbdbe6a627c7465df48c1f9e87c0958",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-safety-boundary-review/SKILL.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 6415,
+      "modified_at": "2026-06-19T20:15:26Z",
+      "content_hash": "sha256:0ef0771f39b4d0391819098f5ccd61f0c1b8fa59a5dfa271e285c73a717c8bf0",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/safety-boundary-review-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-data-freshness-diagnosis/references/data-source-boundary.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 2636,
+      "modified_at": "2026-06-19T19:55:24Z",
+      "content_hash": "sha256:b0698d17a75453662f2af9541f493cc1a7f451fdf3568c7674e9c5920714bab7",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/data-freshness-diagnosis-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-data-freshness-diagnosis/references/freshness-status-fields.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 3438,
+      "modified_at": "2026-06-19T19:55:24Z",
+      "content_hash": "sha256:47f9aadb3040022feb0e13c9494c63b9d9dfc1b91612e8604878215ff6e3188b",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/data-freshness-diagnosis-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-data-freshness-diagnosis/scripts/fetch_tw_stock_readonly_status.mjs": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 8269,
+      "modified_at": "2026-06-04T09:12:49Z",
+      "content_hash": "sha256:87920d546470fe86ea535c892faeb537a308cd43420d601e4f6445cdb34dd2cb",
+      "source_type": "script",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/data-freshness-diagnosis-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-readonly-e2e-acceptance/references/acceptance-report-template.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 2228,
+      "modified_at": "2026-06-19T19:53:12Z",
+      "content_hash": "sha256:a29020d87413240b237b3dc3a93b2b56884116d73fe06e3901cccdb3b5e99ad6",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-readonly-e2e-acceptance/references/readonly-boundary.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1479,
+      "modified_at": "2026-06-19T19:53:12Z",
+      "content_hash": "sha256:a1937fcaf55a604f22455a92f076fda4ba1e399d4dc90338947ded6c2f7c7ba1",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-readonly-e2e-acceptance/scripts/summarize_e2e_artifacts.mjs": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1193,
+      "modified_at": "2026-06-04T09:01:20Z",
+      "content_hash": "sha256:8f62dbb7447b144dca7614b7900531ec7fd5033a4f1cd2bb492ec8d85f0cada3",
+      "source_type": "script",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-research-context-analyst/references/qlib-cross-analysis-semantics.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 3047,
+      "modified_at": "2026-06-19T19:54:15Z",
+      "content_hash": "sha256:e35c79767f3e7b5dc93f66aba87ef5b259bcb7490597e51467500fbe6a1a1627",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-research-context-analyst/references/research-report-template.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1935,
+      "modified_at": "2026-06-19T19:54:15Z",
+      "content_hash": "sha256:1e8d3bfd7ad0e5485cb82721d634e8e0675f93103dc62bbf57af6481065818a6",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-research-context-analyst/scripts/summarize_research_context.mjs": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 7374,
+      "modified_at": "2026-06-04T09:24:31Z",
+      "content_hash": "sha256:df5c092c2c42a541a86b3f8cd48b5dfdadd42e1373615cce0d07fb7542f970d8",
+      "source_type": "script",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "concepts/current-default-model-and-strategy.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-safety-boundary-review/references/forbidden-actions.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 2573,
+      "modified_at": "2026-06-19T19:52:15Z",
+      "content_hash": "sha256:e1a877b7943fb6c3226f4bb40db154ef914ba938699773148aad3366bbe16938",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/safety-boundary-review-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-safety-boundary-review/references/network-audit-rules.md": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1506,
+      "modified_at": "2026-06-19T19:52:15Z",
+      "content_hash": "sha256:1d0b9c479459d9a5ca07f17f8715abd203823e5c36edce99ea6e07c4f51d922e",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/safety-boundary-review-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/.agents/skills/tw-stock-safety-boundary-review/scripts/audit_tw_stock_diff.mjs": {
+      "ingested_at": "2026-06-20T12:00:00Z",
+      "size_bytes": 1150,
+      "modified_at": "2026-06-04T09:03:11Z",
+      "content_hash": "sha256:5f4bd73a4dd37ea0dca78c926dbef952ecf9f2a8ac32e353410c4bc0fbd208ed",
+      "source_type": "script",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "skills/safety-boundary-review-workflow.md"
+      ],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/templates/EXECUTION_REPORT_TEMPLATE_CN.md": {
+      "ingested_at": "2026-06-20T13:00:00Z",
+      "size_bytes": 989,
+      "modified_at": "2026-06-20T05:58:37Z",
+      "content_hash": "sha256:da3f36ebc4845466b3ce77c01bffb3f42601ef0daa5f2a3bcc4416ed907b9cf1",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "skills/new-model-onboarding-workflow.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/templates/NEW_AGENT_READONLY_CONTEXT_WORK_TEMPLATE_CN.md": {
+      "ingested_at": "2026-06-20T13:00:00Z",
+      "size_bytes": 1176,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:45ee33f2f1b07b3a40b78ba247cd4a90aebdbde13b1f8154b94613a29009bed8",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/templates/NEW_DATA_SOURCE_WORK_TEMPLATE_CN.md": {
+      "ingested_at": "2026-06-20T13:00:00Z",
+      "size_bytes": 872,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:5b40039993cc9c56b31f0389e0daa9c782780eaf93f05b7d875bfd964d19de8e",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "concepts/modular-artifact-chain.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/templates/NEW_FEATURE_WORK_TEMPLATE_CN.md": {
+      "ingested_at": "2026-06-20T13:00:00Z",
+      "size_bytes": 809,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:2b8d33b4a8521a9e194388279b8bb0791be603a1359c70535e95ea49251f0f93",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "concepts/modular-artifact-chain.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/templates/NEW_FRONTEND_READONLY_DISPLAY_WORK_TEMPLATE_CN.md": {
+      "ingested_at": "2026-06-20T13:00:00Z",
+      "size_bytes": 958,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:1c442cf82432bcc1080d829b67c98cb638dc2525f569709e5a9e8f59b6317bab",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "concepts/frontend-strategy-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/templates/NEW_MODEL_WORK_TEMPLATE_CN.md": {
+      "ingested_at": "2026-06-20T13:00:00Z",
+      "size_bytes": 883,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:563e22de771391d20c0d67f013dd409e4de14cf69d5fb36f6f1f53cbe1b7cb82",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "skills/new-model-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/templates/NEW_REPLAY_WINDOW_WORK_TEMPLATE_CN.md": {
+      "ingested_at": "2026-06-20T13:00:00Z",
+      "size_bytes": 884,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:f686674d5cb1c21c4eaeb749289287644b158ca82b377a229f7fd3cf8d4796eb",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "concepts/modular-artifact-chain.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/templates/NEW_STRATEGY_WORK_TEMPLATE_CN.md": {
+      "ingested_at": "2026-06-20T13:00:00Z",
+      "size_bytes": 920,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:b470e2062c3d265a877ade96bf93ea3500727dc981b4f8e07c43587a72d3448f",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_contracts/templates/REVIEW_REPORT_TEMPLATE_CN.md": {
+      "ingested_at": "2026-06-20T13:00:00Z",
+      "size_bytes": 794,
+      "modified_at": "2026-06-17T10:52:21Z",
+      "content_hash": "sha256:1181aad1032a570855a23956e4c64c1c80e364792fa39584e8a47ea09166a3f5",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "skills/new-model-onboarding-workflow.md",
+        "skills/new-strategy-onboarding-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/FULL_INGEST_PHASEW1_CORE_CONTRACTS_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 10153,
+      "modified_at": "2026-06-20T10:41:04Z",
+      "content_hash": "sha256:676c7563fc7a97f5e66c134f9f2ac8d2faa14c5bbaa5dea7d43cf3b7abe6dc00",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW3_CODE_MAP_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE0_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 14970,
+      "modified_at": "2026-06-19T07:13:16Z",
+      "content_hash": "sha256:5bb95cafe7a686bd53e951dbbfb3688a6936454e6480ab462ccb7b9fa49b179b",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE0_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 8621,
+      "modified_at": "2026-06-19T07:23:18Z",
+      "content_hash": "sha256:ab36768e75958fd5c3f2d50a8fc891f4c69d0c665275804ba893fc3afa25f173",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE0_TO_PHASE6_FINAL_SUMMARY_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 12683,
+      "modified_at": "2026-06-19T16:55:58Z",
+      "content_hash": "sha256:dcd40b335a9391b8ee6d8983b8b9b6837967054fe3c62c0cabc369b098f9b5b7",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "references/superseded-routes-agent-and-tools.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE1_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 11676,
+      "modified_at": "2026-06-19T07:48:38Z",
+      "content_hash": "sha256:ce8b1d5645e47165d935704a923eb516596fa9cb516d1df3e5276fba143d8456",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE1_FIX_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6288,
+      "modified_at": "2026-06-19T14:52:09Z",
+      "content_hash": "sha256:f280ff770467695b32990bc7dfbf0b0ecea245064b3ec6283c9b1b887444e211",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE1_FIX_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5547,
+      "modified_at": "2026-06-19T14:56:13Z",
+      "content_hash": "sha256:5eb1f30afbf404258418dfce3cd43e3f7895c31740ac544892fed13138ceeaa4",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE1_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 9450,
+      "modified_at": "2026-06-19T07:58:03Z",
+      "content_hash": "sha256:fee5999ad1011498b1494154fc9c9a834846039b4854a7f5a4696424465b7639",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE1_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 9287,
+      "modified_at": "2026-06-19T07:23:18Z",
+      "content_hash": "sha256:b1183041cc2da4391255611cf41e817ef1c70c6375914f718d44de26a11ed203",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE2_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 10415,
+      "modified_at": "2026-06-19T15:07:28Z",
+      "content_hash": "sha256:3e85e249b7527ec8cbfbaba7a50c1e11d85f230a944dfe7fe2e2f664b033d38e",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE2_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6075,
+      "modified_at": "2026-06-19T15:13:22Z",
+      "content_hash": "sha256:f58c565358775259c4a6185ec143ea154bb9c95b0504812cb58b12e1cf599676",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE2_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 8606,
+      "modified_at": "2026-06-19T14:56:13Z",
+      "content_hash": "sha256:3285968e674e5478b94fd7978bc3e585fb5bd1be73a80b70ac33ce263b61bb59",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE3_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 8822,
+      "modified_at": "2026-06-19T15:23:58Z",
+      "content_hash": "sha256:715391f419fba5ee084434e5850d23878592fc4da6743ae6d333682dcfac85b4",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE3_FIX_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 4801,
+      "modified_at": "2026-06-19T15:33:44Z",
+      "content_hash": "sha256:b9c4c45faca4ab2d88f47e9509c889ea8ca3ffa5221344d3ba83e9d6026f5c0f",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE3_FIX_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 4784,
+      "modified_at": "2026-06-19T15:38:04Z",
+      "content_hash": "sha256:6b1fff1e528de77a519e9b68a1a89d44035ed3430eed5588a4148f2a1605e36a",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE3_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 7723,
+      "modified_at": "2026-06-19T15:28:57Z",
+      "content_hash": "sha256:401b589b7c11a4e902976b4edb11a7f47f2e9d215b4e1400aa238e130208efe1",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE3_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 8513,
+      "modified_at": "2026-06-19T15:13:22Z",
+      "content_hash": "sha256:ef8a1b7d52115f25400293f2c9de0c5991df6019b620b18c43a22a01e52aa135",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE4_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 7157,
+      "modified_at": "2026-06-19T15:54:17Z",
+      "content_hash": "sha256:bccc2d5d573daea3bc068f7fc8703234b13efabb7add9f2ef3338626a0f9cd2a",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE4_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 4684,
+      "modified_at": "2026-06-19T15:58:47Z",
+      "content_hash": "sha256:d5a02039eceac9e3cdff86da6a886940df8401c2a9b873392355cfa9dda95416",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE4_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6814,
+      "modified_at": "2026-06-19T15:38:04Z",
+      "content_hash": "sha256:2209a1efaab35f48d1480eb36e138e6e14b27b3c5b484d6c703563f9adb638ff",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE5_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 7993,
+      "modified_at": "2026-06-19T16:07:30Z",
+      "content_hash": "sha256:56c444cc8b1b6ee9c67a6791167ec08080c954797af9dfaa91417106fbe525a5",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE5_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5133,
+      "modified_at": "2026-06-19T16:11:27Z",
+      "content_hash": "sha256:4fdf46b57af0feed9689ab6e4f651669099ba882d900a9ced9c8880eec2ff0a8",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE5_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5508,
+      "modified_at": "2026-06-19T15:58:47Z",
+      "content_hash": "sha256:f7b6868fd100cee83e6565395bff98ddbec4ddf90bc65fa0ad01badafd644f80",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE6_FINAL_ACCEPTANCE_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 10892,
+      "modified_at": "2026-06-19T16:21:53Z",
+      "content_hash": "sha256:40cf369406e8ffb254f42404c561173d19a90bc64042d4243c285888a79bfccd",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE6_FINAL_ACCEPTANCE_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 8241,
+      "modified_at": "2026-06-19T16:53:45Z",
+      "content_hash": "sha256:d9f3270e9eded684713a0cb4701d9cf99a1caef23c533c5ee12010e90e733a23",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/superseded-routes-agent-and-tools.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/PHASE6_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5439,
+      "modified_at": "2026-06-19T16:11:27Z",
+      "content_hash": "sha256:a8c0dd4ee3415c1c3ae97dbd7e37003f7f5ec887aa0fdb7c5ef16a6b847b00cc",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/POST_ACCEPTANCE_TODO_VALIDATOR_ENGLISH_ORDER_FORBIDDEN_TERMS_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5062,
+      "modified_at": "2026-06-19T17:10:42Z",
+      "content_hash": "sha256:ae87d8083e3c81b2d781f96826ac8f9bbdd67391160d42acfb5009b9b3cb55d7",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/POST_ACCEPTANCE_TODO_VALIDATOR_ENGLISH_ORDER_FORBIDDEN_TERMS_EXECUTOR_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 7434,
+      "modified_at": "2026-06-19T17:07:00Z",
+      "content_hash": "sha256:8437fcf22f0ef4fc0cc8aeec6336516e78060c5cf8ada407b9efe4330ec66cc8",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/POST_ACCEPTANCE_TODO_VALIDATOR_ENGLISH_ORDER_FORBIDDEN_TERMS_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5614,
+      "modified_at": "2026-06-19T17:20:54Z",
+      "content_hash": "sha256:02c61e959b19ca37be335fad5cd0822de5b453a760d23be19ff6c2962a8ac92b",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_agent_daily_prompt_rebuild/POST_ACCEPTANCE_TODO_VALIDATOR_ENGLISH_ORDER_FORBIDDEN_TERMS_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5647,
+      "modified_at": "2026-06-19T17:03:16Z",
+      "content_hash": "sha256:fa5f407d6ef0b7801769c88b1f5f0ee1776356cca89f076aab88ddfd80a711f8",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/agent-daily-prompt-rebuild-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/MODULAR_DAILY_UPDATE_FINAL_ACCEPTANCE_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 996,
+      "modified_at": "2026-06-17T15:13:15Z",
+      "content_hash": "sha256:d903633b04850b4602b6e259da2bc9f5dd7d5d7f48cd9e6c2c6114cea7363f58",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/MODULAR_DAILY_UPDATE_PRODUCTIZATION_MAINLINE_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 14110,
+      "modified_at": "2026-06-17T13:22:12Z",
+      "content_hash": "sha256:1202e8c90709bb8c3b469af43c2cb0766624ed14acc0c0b5d7595e3c77ef524c",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/MODULAR_DAILY_UPDATE_REVIEWER_CHECKLIST_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 660,
+      "modified_at": "2026-06-17T15:13:15Z",
+      "content_hash": "sha256:c7e92d942f43573506c3d46eb03e1b476ad9d47c0f026a6da9f44b8114179f50",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/MODULAR_DAILY_UPDATE_RUNBOOK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 860,
+      "modified_at": "2026-06-17T15:13:15Z",
+      "content_hash": "sha256:3c2256e84343d529043449f4cfa42bd0f98c712b1c3492c756e74ae024b194a1",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEU3_REVIEW_AND_FINAL_CLOSURE_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 8820,
+      "modified_at": "2026-06-17T15:21:55Z",
+      "content_hash": "sha256:e60cc052208207202032c93261139a564569169c8d5438241b3ab0902b364572",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2B_CANDIDATES_AND_REPLAY_FIX_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 2443,
+      "modified_at": "2026-06-19T18:35:13Z",
+      "content_hash": "sha256:97579cf74051c10f51dec15dd8290273da2ef464152f67a5791b9253304f2da7",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2B_CANDIDATES_AND_REPLAY_FIX_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 4099,
+      "modified_at": "2026-06-19T18:37:35Z",
+      "content_hash": "sha256:4060b933e4ba62edee7e226c3e6c21d6567aec59a80bd4cc139072d7eb022571",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2B_CANDIDATES_AND_REPLAY_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6849,
+      "modified_at": "2026-06-19T18:30:14Z",
+      "content_hash": "sha256:6f599f68387a6ff3baf30281107b01a9ab63a1e2eb2d97b1d1874d8e0d4a84dd",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2B_CANDIDATES_AND_REPLAY_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 10395,
+      "modified_at": "2026-06-19T18:11:25Z",
+      "content_hash": "sha256:29acec8895c87780abae2f8fd84e3118a98961d97709dcac0c5338d5f9be0586",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2C_PAPER_PORTFOLIO_AGENT_FUSION_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 7452,
+      "modified_at": "2026-06-19T19:05:51Z",
+      "content_hash": "sha256:3d3225878c169b5c7e1ebe4e5c1e7f43f7ceb12a66d032665443b38f0f7645e1",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2C_PAPER_PORTFOLIO_AGENT_FUSION_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6724,
+      "modified_at": "2026-06-19T18:53:25Z",
+      "content_hash": "sha256:eafdb87a3bb323f432fe95e623a05aad4718a67145097961b362bac9fa00b2cf",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2C_PAPER_PORTFOLIO_AGENT_FUSION_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 10447,
+      "modified_at": "2026-06-19T18:39:50Z",
+      "content_hash": "sha256:f4d00ed44be96e22751eb4edf1ea6474df04fcb922fb943287ba2188d10228ea",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2D_RESPONSIVE_PLAYWRIGHT_ACCEPTANCE_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 7735,
+      "modified_at": "2026-06-19T19:06:54Z",
+      "content_hash": "sha256:b19769c702bb3c03ae99b53f0365bfd9eba0fac0e67029a6594576162e957e7f",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2D_RESPONSIVE_PLAYWRIGHT_ACCEPTANCE_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6858,
+      "modified_at": "2026-06-19T19:12:03Z",
+      "content_hash": "sha256:6abd4bcbe3e3a5799befbdeace47a91d816c78390a461b5224251d1a62a96e03",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2D_RESPONSIVE_PLAYWRIGHT_ACCEPTANCE_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 9117,
+      "modified_at": "2026-06-19T18:54:23Z",
+      "content_hash": "sha256:a2ff1fc7a53d491c4602cc631e164eef7c7ff6eb1fa3877119633b14e066acb8",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2_STRATEGY_WORKBENCH_AGENT_UX_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 12484,
+      "modified_at": "2026-06-19T19:06:54Z",
+      "content_hash": "sha256:8ab7c7feb41f9841481e50ecc0ced4133c6343563510ad32201f4ee84dd621d5",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2_STRATEGY_WORKBENCH_AGENT_UX_FINAL_ROUTE_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 4461,
+      "modified_at": "2026-06-19T19:19:06Z",
+      "content_hash": "sha256:d8f499ba0374985e070c78d8dabb1255930aebdc55307211f13ba8b300235d92",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/superseded-routes-agent-and-tools.md",
+        "references/superseded-routes-monitor-provider-and-trading.md",
+        "concepts/frontend-strategy-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2_STRATEGY_WORKBENCH_AGENT_UX_FINAL_SUMMARY_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 13721,
+      "modified_at": "2026-06-19T19:14:45Z",
+      "content_hash": "sha256:865e40fc0c70cf1c94bb0c7db546187c7be619b8b376dae6520d43b359717e22",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2_STRATEGY_WORKBENCH_AGENT_UX_OPTIMIZATION_PLAN_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 20376,
+      "modified_at": "2026-06-19T18:08:01Z",
+      "content_hash": "sha256:effaf8bdab6ee2d478df983551408eeef631258762836798b131faca5dedfd5e",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI2_STRATEGY_WORKBENCH_AGENT_UX_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5093,
+      "modified_at": "2026-06-19T18:05:09Z",
+      "content_hash": "sha256:d09030a3b04ece35d831c0f4a1c9f37a2f055e2ca11790c72633355c80f80a63",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEUI_STRATEGY_WORKBENCH_FRONTEND_UX_REPAIR_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 14277,
+      "modified_at": "2026-06-19T07:56:17Z",
+      "content_hash": "sha256:4d03d5477b1f75c7e04146d5f3688e4b6a25b7a65f347924bc52d036588ad2bb",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/ui2-frontend-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEV_ROUTE_SUMMARY_FOR_COORDINATION_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 3746,
+      "modified_at": "2026-06-17T19:40:19Z",
+      "content_hash": "sha256:7bd75cdd75ef7b9fd480fb01ea31710708c134c4391f0bce435dca09bd0cca68",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEW0_REVIEW_AND_CLOSURE_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 4874,
+      "modified_at": "2026-06-17T20:20:01Z",
+      "content_hash": "sha256:36e50b088ad552350e9cea3cc0bbe4372d6a1c65b0aa15ee092688e136fcbab5",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEX_PAPER_PORTFOLIO_STRATEGY_AND_SIMULATION_APP_FINAL_SUMMARY_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 11059,
+      "modified_at": "2026-06-18T07:59:24Z",
+      "content_hash": "sha256:2a614b509a3517335e66080992423b81ea2cee31a957c5deaabc6ac603b74a16",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEYZ4_FINAL_CLOSURE_SUMMARY_FOR_COORDINATION_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 2578,
+      "modified_at": "2026-06-18T11:43:23Z",
+      "content_hash": "sha256:d9c68ebddb7be373d90bc1e822dae29e5e0483ff5ce74937f41181901be8f12c",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEYZ_FINAL_SUMMARY_REVIEW_AND_REPAIR_SUGGESTION_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 12884,
+      "modified_at": "2026-06-18T11:12:13Z",
+      "content_hash": "sha256:8be31609cd199bdd2bb19f4924a17c569bff35ca7006a760149ab5edea626dac",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEYZ_FOLLOWUP_EXECUTION_PRICE_CONTRACT_SUGGESTION_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 7931,
+      "modified_at": "2026-06-18T08:33:05Z",
+      "content_hash": "sha256:9b663ac94f163e481bcb24e2da21af8a698f998a85e6aec7c886342aa6352809",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/PHASEYZ_STRICT_E4_PRODUCTIZATION_FINAL_SUMMARY_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 12900,
+      "modified_at": "2026-06-18T11:04:01Z",
+      "content_hash": "sha256:79a6539d775fcd81d4cd0ff0e06a6952d6c24f167b1e21f60770261c350e68e8",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/superseded-routes-model-and-strategy.md",
+        "references/superseded-routes-monitor-provider-and-trading.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/REAL_PROVIDER_DAILY_UPDATE_REVIEWER_CHECKLIST_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 1366,
+      "modified_at": "2026-06-17T16:39:03Z",
+      "content_hash": "sha256:5131763b1b5bcf09a6238e9b80ac8baaacb3bca1396e2fa0b8a9ba790127b359",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_modular_daily_update_productization/REAL_PROVIDER_DAILY_UPDATE_RUNBOOK_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 1679,
+      "modified_at": "2026-06-17T16:39:03Z",
+      "content_hash": "sha256:c6e042343d32eb59917209a72b0d819bc63b014f16bc78f7f0cca5321160b535",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/superseded-routes-monitor-provider-and-trading.md",
+        "synthesis/project-risk-map.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER0_VERSION_FREEZE_INVENTORY_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 13813,
+      "modified_at": "2026-06-20T05:28:47Z",
+      "content_hash": "sha256:3fe72f10889757d98a1d528b8d253e6c1490a6251619ff27f1fff1b1f54218a2",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER0_VERSION_FREEZE_INVENTORY_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6658,
+      "modified_at": "2026-06-20T05:37:22Z",
+      "content_hash": "sha256:210ed6afddab22ced2e6dfba1d1028064fb437534a99817e33a559172a5453a0",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER1R2_REMAINING_REGRESSION_REPAIR_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 7997,
+      "modified_at": "2026-06-20T06:25:09Z",
+      "content_hash": "sha256:39ccf32bfac3846b2216190c4567c3aaa43d0928f0a5b028e459dacc7c5b9d92",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER1R2_REMAINING_REGRESSION_REPAIR_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5192,
+      "modified_at": "2026-06-20T06:29:08Z",
+      "content_hash": "sha256:fc7c3bc81e14dd30971c1ff43cff55e7b6ac1a6324d90385636a86d6704b367b",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER1R2_REMAINING_REGRESSION_REPAIR_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6902,
+      "modified_at": "2026-06-20T06:14:00Z",
+      "content_hash": "sha256:343e62acb4594e399181ffb309a08b806524e0e6447dd4a9200b604e9628c46d",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER1_READONLY_INTEGRATION_REGRESSION_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 12244,
+      "modified_at": "2026-06-20T05:46:09Z",
+      "content_hash": "sha256:1d8f0ce48fdc42be5c0510f7ce06be9438ac00d9723f736181d756239f273639",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER1_READONLY_INTEGRATION_REGRESSION_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 7439,
+      "modified_at": "2026-06-20T05:50:25Z",
+      "content_hash": "sha256:35c98139daac4fd6d1c7a5a4195db521223ee70c1d6cd6ea53f139f822cb622f",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER1_READONLY_INTEGRATION_REGRESSION_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5800,
+      "modified_at": "2026-06-20T05:37:22Z",
+      "content_hash": "sha256:4772bebe1d8dad9336adb917d9ca99ddcc737b92a6ed2a14407204d60466f647",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER1_REPAIR_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 9297,
+      "modified_at": "2026-06-20T06:04:30Z",
+      "content_hash": "sha256:e54b21633c111fa0bcf84c8868c78dbe907084fc2193447216d84fc525f4b4f0",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER1_REPAIR_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6843,
+      "modified_at": "2026-06-20T06:14:00Z",
+      "content_hash": "sha256:be2f062a4db13fbe4e97cf197421cbf7b83d50175b0b512765c4b77e9a223848",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER1_REPAIR_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5569,
+      "modified_at": "2026-06-20T05:50:25Z",
+      "content_hash": "sha256:628b99b3868fa5723f303d4dd63640e3d0caef748212a5c22d7e1f0d5f341add",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER2_SKILL_RUNTIME_ENTRY_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 9252,
+      "modified_at": "2026-06-20T06:32:16Z",
+      "content_hash": "sha256:026e8a5bbc0b8ab3890cd58d75b4b581f44ec9f567b27c3f333ecfe0fb6f4948",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER2_SKILL_RUNTIME_ENTRY_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6294,
+      "modified_at": "2026-06-20T06:39:35Z",
+      "content_hash": "sha256:3a558499ed80544c77be512ba4c0a61a38ee866747b72d22462b74308a49570a",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER2_SKILL_RUNTIME_ENTRY_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 4785,
+      "modified_at": "2026-06-20T06:29:08Z",
+      "content_hash": "sha256:4c8804e7bebf23db6d07c2e2508345c6a86dd3b215c0ff9fac42b3d2f30250bf",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER3_ARTIFACT_CHAIN_ENTRY_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 13696,
+      "modified_at": "2026-06-20T06:45:26Z",
+      "content_hash": "sha256:737a5923a4f4d73415593e3a35dd4a66c73a25047864b2864fcc40a0fc0ff2bb",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER3_ARTIFACT_CHAIN_ENTRY_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6522,
+      "modified_at": "2026-06-20T06:48:36Z",
+      "content_hash": "sha256:e8336175f89d11be94cf4c2044a9124452279f38053c47d82eda66826d4f253c",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PHASER3_ARTIFACT_CHAIN_ENTRY_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 7042,
+      "modified_at": "2026-06-20T06:39:35Z",
+      "content_hash": "sha256:b412cd8b3a8c5a4c31a9c56e0036589d288241662867a6ac21dd4fcbabb075ee",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PRE_RND_READINESS_COORDINATOR_HANDOFF_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 9359,
+      "modified_at": "2026-06-20T07:00:32Z",
+      "content_hash": "sha256:aeeb310f99a536e5849f9a3f270b323b8ac8515ebde03452bfad81d3129a3e40",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PRE_RND_READINESS_EXECUTION_AND_REVIEW_PLAN_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 10267,
+      "modified_at": "2026-06-20T04:56:59Z",
+      "content_hash": "sha256:767e701fdc51bcf24db8c903d26d0da1c5d42c8238ca98b8c909becbdd4840ec",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PRE_RND_READINESS_FINAL_ACCEPTANCE_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5796,
+      "modified_at": "2026-06-20T06:56:02Z",
+      "content_hash": "sha256:4291435a135a0c0ed2e2f6e7830095edec453931838b643a201f78f280b398d9",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PRE_RND_READINESS_FINAL_SUMMARY_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 14152,
+      "modified_at": "2026-06-20T06:52:33Z",
+      "content_hash": "sha256:03ed433f89e2a6510f343e8c16bf18898152918a9693ea6cd9193ae2c573ead9",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/PRE_RND_READINESS_FINAL_SUMMARY_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6666,
+      "modified_at": "2026-06-20T06:48:36Z",
+      "content_hash": "sha256:ec597110c7affe2dec2e65e23d70151b0a46eb12641dc5e209d193d019596c90",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/TW_DAILY_UPDATE_DATA_FLOW_EXPLAINED_FOR_BEGINNERS_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 26113,
+      "modified_at": "2026-06-20T06:54:17Z",
+      "content_hash": "sha256:f69e8b71e4f22379b5195988c366423bf27db6950ab31c2989653e4b117f8202",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_new_model_strategy_pre_rnd/TW_DAILY_UPDATE_DATA_FLOW_REAL_SAMPLE_20260618_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 32985,
+      "modified_at": "2026-06-20T06:54:17Z",
+      "content_hash": "sha256:b809c9693cb0ece4218a1b04a8ff5054ec58183c9cb592880dfefa564053cd6f",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "concepts/readonly-safety-boundary.md",
+        "references/pre-rnd-readiness-final-handoff.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/pre-rnd-readiness-governance.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES0_INVENTORY_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 14811,
+      "modified_at": "2026-06-19T19:29:34Z",
+      "content_hash": "sha256:4beb174c48490bd64d5fb201c88e041258b6414738ba8d632fcd13de6f62f2d3",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES0_INVENTORY_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6366,
+      "modified_at": "2026-06-19T19:31:35Z",
+      "content_hash": "sha256:67cf3119abcb31d690a5b7e9ba2107f8f0aca116924183ed646fff2b742f82b7",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES1R_PROJECT_SKILLS_MIGRATION_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 10309,
+      "modified_at": "2026-06-19T19:45:08Z",
+      "content_hash": "sha256:14c543f4dbce8077568c1552542c5cf120cccf7ae405616cd1b198fe04106b39",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES1R_PROJECT_SKILLS_MIGRATION_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5254,
+      "modified_at": "2026-06-19T19:48:19Z",
+      "content_hash": "sha256:d4f85aec053f58bd30518e148723979caf97f85a0ae0271ed62716570322d413",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES1R_PROJECT_SKILLS_MIGRATION_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 8470,
+      "modified_at": "2026-06-19T19:40:40Z",
+      "content_hash": "sha256:eb5fdff0a7ea5b0a8605072dff358c97960ef31d2b3e424682b794aa49f3271e",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES1_EXISTING_SKILLS_UPDATE_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 12546,
+      "modified_at": "2026-06-19T19:57:00Z",
+      "content_hash": "sha256:de5bf74f2e15f52a57261d2b40d5fdd50f15375f1890fa991823e516b2b21f5b",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES1_EXISTING_SKILLS_UPDATE_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6879,
+      "modified_at": "2026-06-19T19:59:30Z",
+      "content_hash": "sha256:9c200be3faa357eb99e9abf365b4766d8c5ca4ef003f8ddaddcb2de2a383c09d",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES1_EXISTING_SKILLS_UPDATE_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 11707,
+      "modified_at": "2026-06-19T19:32:57Z",
+      "content_hash": "sha256:f6d5657314b696e7cc8b72419d08211c62ca7e0821629c8f1755a633423d949f",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES1_EXISTING_SKILLS_UPDATE_WORK_V2_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 9875,
+      "modified_at": "2026-06-19T19:49:23Z",
+      "content_hash": "sha256:dcd144bf587099f054ba167982b61e2320b7e584b1a239462b7646ba9c3575be",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES2_NEW_SKILLS_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 13559,
+      "modified_at": "2026-06-19T20:07:28Z",
+      "content_hash": "sha256:efffa0d4687028ec69eef2c58de55d578a0b0cb66a539fa9aa4ced41616283c0",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES2_NEW_SKILLS_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6798,
+      "modified_at": "2026-06-19T20:10:24Z",
+      "content_hash": "sha256:e7689b5b982f2cfb4e21f47d3376203d8af2145462ae8e3880375fe290275484",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES2_NEW_SKILLS_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 11974,
+      "modified_at": "2026-06-19T20:00:49Z",
+      "content_hash": "sha256:8c9b38963af81023be74944946de383678ce92c221f61377e499a4d76da82c26",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES3_SKILLS_TRIGGER_AND_BOUNDARY_VALIDATION_EXECUTION_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 15366,
+      "modified_at": "2026-06-19T20:16:38Z",
+      "content_hash": "sha256:94fade2507050ad8d6b3e963d44521d916ac2dce45995325758f5b586a580342",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES3_SKILLS_TRIGGER_AND_BOUNDARY_VALIDATION_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5398,
+      "modified_at": "2026-06-19T20:19:21Z",
+      "content_hash": "sha256:5df0ee2ddfd783d436e44a976db19b80a5117011db1099b3f6018d2d825746f6",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES3_SKILLS_TRIGGER_AND_BOUNDARY_VALIDATION_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 9279,
+      "modified_at": "2026-06-19T20:10:24Z",
+      "content_hash": "sha256:a39795f9149f762af7ff105ca2c87f55dfcbfa7fc565b6b158a18b44e6d050cd",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES4_FINAL_ACCEPTANCE_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 4880,
+      "modified_at": "2026-06-19T20:24:41Z",
+      "content_hash": "sha256:265eb3c12b47bb1124f82243ddfbfe38bf57b037f484639028dce69009af3b96",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES4_FINAL_SUMMARY_AND_ACCEPTANCE_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 6748,
+      "modified_at": "2026-06-19T20:19:21Z",
+      "content_hash": "sha256:1c00f319d193accdfbb2ae801655fa801b7c557b588a14ebf14b722d71f2357d",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/PHASES4_FINAL_SUMMARY_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 13047,
+      "modified_at": "2026-06-19T20:21:45Z",
+      "content_hash": "sha256:917115329b7807bec8b0af0d733f7d8c0e6046d41b788289af2e616378936e7b",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/TW_SKILLS_MAINTENANCE_BRANCH_WORK_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 21437,
+      "modified_at": "2026-06-19T18:32:00Z",
+      "content_hash": "sha256:e75cb4d38b7dc63ce525a650c1a27f4f1695a3ee9bd2bc6bdbd3f4ad06022c3b",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/TW_SKILLS_MAINTENANCE_S_ROUTE_FINAL_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 4193,
+      "modified_at": "2026-06-19T20:26:43Z",
+      "content_hash": "sha256:0c223fed2c0ebd4b219a8f9a35994042e67d1ad33d5bbcba2e66141fcad2e118",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_skills_maintenance/TW_SKILLS_MAINTENANCE_S_ROUTE_FINAL_SUMMARY_CN.md": {
+      "ingested_at": "2026-06-20T14:00:00Z",
+      "size_bytes": 5442,
+      "modified_at": "2026-06-19T20:24:41Z",
+      "content_hash": "sha256:0ab1e09ae6d179e108869d1b157895a271f8be985a1f850158a0d9f20fbbacd9",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/project-risk-map.md"
+      ],
+      "pages_updated": [
+        "skills/data-freshness-diagnosis-workflow.md",
+        "skills/frontend-ux-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 5715,
+      "modified_at": "2026-06-20T11:02:06Z",
+      "content_hash": "sha256:7aa7719ff62ce599fca6816639c89485db74e4d43bbc21ddd474a3210c5fa6bb",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW3_CODE_MAP_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/FULL_INGEST_PHASEW2_PRODUCT_ROUTES_FOLLOWUP_WORK_CN.md": {
+      "ingested_at": "2026-06-20T15:00:00Z",
+      "size_bytes": 2977,
+      "modified_at": "2026-06-20T11:02:06Z",
+      "content_hash": "sha256:4271c21412be6215ab7be20cfb808de4ab7c77da99f4400b3b98a8538d211535",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_FOLLOWUP_CN.md"
+      ],
+      "pages_updated": [
+        "references/agent-daily-prompt-rebuild-final.md",
+        "references/ui2-frontend-final.md",
+        "references/skills-maintenance-final.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "synthesis/project-risk-map.md",
+        "hot.md",
+        "log.md",
+        ".manifest.json"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/FULL_INGEST_PHASEW2_PRODUCT_ROUTES_FOLLOWUP_CN.md": {
+      "ingested_at": "2026-06-20T15:00:00Z",
+      "size_bytes": 1697,
+      "modified_at": "2026-06-20T11:05:09Z",
+      "content_hash": "sha256:e34d28ccd44af6c3b2b5eb263f0f91b01f6e72d180147d3344743340ec90b749",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW2_PRODUCT_ROUTES_FOLLOWUP_CN.md"
+      ],
+      "pages_updated": []
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/FULL_INGEST_PHASEW3_CODE_MAP_WORK_CN.md": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 10476,
+      "modified_at": "2026-06-20T11:07:42Z",
+      "content_hash": "sha256:3e90bb52d71648376ebbdc153da2b24b4b234cfb2d99f94bea0887506b2c1439",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "references/code-map-backend-readonly-routes.md",
+        "references/code-map-frontend-workbench.md",
+        "references/code-map-scripts-and-tests.md",
+        "FULL_INGEST_PHASEW3_CODE_MAP_REPORT_CN.md"
+      ],
+      "pages_updated": [
+        "concepts/agent-daily-prompt-route.md",
+        "concepts/frontend-strategy-workbench.md",
+        "concepts/daily-update-data-flow.md",
+        "concepts/data-freshness-and-latest-pointers.md",
+        "concepts/modular-artifact-chain.md",
+        "concepts/product-artifact-registry.md",
+        "concepts/readonly-safety-boundary.md",
+        "skills/readonly-e2e-acceptance-workflow.md",
+        "skills/safety-boundary-review-workflow.md",
+        "skills/modular-integration-regression-workflow.md",
+        "skills/data-freshness-diagnosis-workflow.md",
+        "synthesis/project-risk-map.md",
+        "synthesis/current-mainline-vs-superseded-routes.md",
+        "index.md",
+        "hot.md",
+        "log.md",
+        ".manifest.json"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/PROJECT_WIKI_FULL_INGEST_EXECUTION_AND_REVIEW_PLAN_CN.md": {
+      "ingested_at": "2026-06-20T18:00:00Z",
+      "size_bytes": 14755,
+      "modified_at": "2026-06-20T07:33:32Z",
+      "content_hash": "sha256:e78e586f1f52a72698e19dd18b1aa5b2a69e1fc5dddf61c92e20eb27521877ce",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW5_FINAL_SUMMARY_CN.md",
+        "index.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/FULL_INGEST_PHASEW1_CORE_CONTRACTS_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 15710,
+      "modified_at": "2026-06-20T10:37:24Z",
+      "content_hash": "sha256:0604f539d96286b7d2fa1e534cc7fc5314295316e83f5886f9a2c633c85effc3",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW3_CODE_MAP_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/FULL_INGEST_PHASEW2_PRODUCT_ROUTES_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 24115,
+      "modified_at": "2026-06-20T10:57:12Z",
+      "content_hash": "sha256:780b45bbd7fa0837db9f49246361b8306fbb012a126acf986a6505929e5f3e8d",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW3_CODE_MAP_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/FULL_INGEST_PHASEW2_PRODUCT_ROUTES_FOLLOWUP_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 3453,
+      "modified_at": "2026-06-20T11:07:42Z",
+      "content_hash": "sha256:78c0791d316f09bce7c0af4d8a4167bdeb6bc67d0c97c3805dad16dffb34ebad",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW3_CODE_MAP_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/routes/tw_stock.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 99157,
+      "modified_at": "2026-06-19T15:49:58Z",
+      "content_hash": "sha256:c437d11f92b4a0571083aa5e3656f37a024e1750c1a3a79b9b2eba9549affd16",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/routes/readonly_replay_window.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 1288,
+      "modified_at": "2026-06-18T08:12:36Z",
+      "content_hash": "sha256:b50f3e9c758019f95299ddbf6624f670f2c87ab6b0d1a72eeac4ae598e43b654",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/routes/readonly_replay_window_index.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 834,
+      "modified_at": "2026-06-17T08:27:21Z",
+      "content_hash": "sha256:0f69cce80cd3c8ebe6e124452aa66a3ef9b56184b049548b874f33397f65c7ef",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/routes/readonly_strategy_snapshot.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 1473,
+      "modified_at": "2026-06-16T14:49:58Z",
+      "content_hash": "sha256:39e89aa4783b27560059b89d80517bf9a71af533d6c40e5ce235601b8e6c8332",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/routes/quick_trade.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 77157,
+      "modified_at": "2026-05-23T03:30:26Z",
+      "content_hash": "sha256:3121ca4ad752010830e6a974f8869fb5de98d2c0d830b4fe205ce91faaa12315",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/routes/credentials.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 12422,
+      "modified_at": "2026-05-23T03:30:26Z",
+      "content_hash": "sha256:583773d5da1c9bbf4186f2c8081476ebbd3b45a508857ac2e06aa71b295ab0f2",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/tw_stock_agent_daily_prompt.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 5560,
+      "modified_at": "2026-06-19T15:21:19Z",
+      "content_hash": "sha256:a5541da8da407a424b838fb2123a23f14815c875ccab61a67e1d6ca28e315796",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/tw_stock_agent_simple_chat.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 17133,
+      "modified_at": "2026-06-19T16:16:26Z",
+      "content_hash": "sha256:d08e9f6a1e961dc4fbb6bbf29ef4675d125ab0a6719c5cbbec7d87abd844414e",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/tw_stock_agent_guardrails.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 7011,
+      "modified_at": "2026-06-02T14:25:42Z",
+      "content_hash": "sha256:ac6aeb55a048ce03ce3c085f876b5dc67a168b1851e984098706016dafb85180",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/tw_stock_agent_openai.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 5847,
+      "modified_at": "2026-06-02T14:06:49Z",
+      "content_hash": "sha256:6c86061995851c3a601f760001be180913c67aa348401aab50321971c376b322",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/tw_stock_artifact_registry.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 1443,
+      "modified_at": "2026-06-18T15:51:23Z",
+      "content_hash": "sha256:1676dbe16dc41071eda20cceee2dd757ecc0b2070ce341baa0b4dc1eeb479478",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/tw_stock_current_strategy_context.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 13741,
+      "modified_at": "2026-06-18T15:52:37Z",
+      "content_hash": "sha256:3de17f1bdbcad2f48b056208a5f2af94f8a29cc3e4c87b96f8758e1c1731c1d8",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/tw_stock_daily_auto_update_status.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 12467,
+      "modified_at": "2026-06-03T17:57:18Z",
+      "content_hash": "sha256:8f7314c9fd019d11f99920ba93af4aeb5ebd3bc83bdf370abdb10f9af4af9f43",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/readonly_replay_window.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 15874,
+      "modified_at": "2026-06-18T11:24:03Z",
+      "content_hash": "sha256:b617e7ade706c3ccf76a08d717d1c7921a08f58c43348f54388fbc6406af0ea2",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/readonly_replay_window_index.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 8297,
+      "modified_at": "2026-06-18T10:15:51Z",
+      "content_hash": "sha256:9950f3449712b7322977e1848415211dbdd892f5f8b7c5178b396636592cd0ea",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/readonly_strategy_snapshot.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 6689,
+      "modified_at": "2026-06-16T14:49:58Z",
+      "content_hash": "sha256:0fe88317d21335f6322c370356305c28a3b56ac2a44426412998212ffb77f0d5",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/tw_stock_paper_portfolio.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 50414,
+      "modified_at": "2026-06-18T15:56:32Z",
+      "content_hash": "sha256:eb00616768ce24e82f6e3b842492b8c1ea0ccaeb1edd0d1ba947449ffd96bdc2",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/tw_stock_sim_account.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 33982,
+      "modified_at": "2026-06-06T06:22:31Z",
+      "content_hash": "sha256:98cd4e658aca58d50eca9e824a9e0fa3199ded4fcccb53f02fa6d7a453a14b9d",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/exchange_execution.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 6891,
+      "modified_at": "2026-05-23T03:30:26Z",
+      "content_hash": "sha256:23eb7f7a22b41081d9f381795b6e3ce1c5c8a9b6fbde19d4120256710a6452c4",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/app/services/trading_executor.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 202196,
+      "modified_at": "2026-05-23T03:30:26Z",
+      "content_hash": "sha256:66ca31d450f8507ba77f964ac88c6b9de70bcf5bcd7d5289c5ac868aca14dcbe",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/src/api/tw-stock.js": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 13482,
+      "modified_at": "2026-06-19T15:42:03Z",
+      "content_hash": "sha256:989744d446fe0236523a3fb1596c5d66ae871b29ad04c30f7fe9cdd6b89754d3",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/src/views/tw-stock-monitor/index.vue": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 257998,
+      "modified_at": "2026-06-19T19:03:43Z",
+      "content_hash": "sha256:532bb6594cb8620d2cb6be291e88291b02b9c2435c548e845244fe865f21287e",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/src/views/tw-stock-monitor/components/PaperPortfolioPanel.vue": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 24514,
+      "modified_at": "2026-06-19T19:03:43Z",
+      "content_hash": "sha256:659931a2ee06286bc93b83bf1b45ef70ce20f3f1c9fd0803e488e2edb8ccc2b2",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/src/views/tw-stock-monitor/components/ReadonlyReplayWindowPanel.vue": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 9002,
+      "modified_at": "2026-06-20T05:58:37Z",
+      "content_hash": "sha256:748030697ef2d4309bf5efe1186754ef78a3ce6b769bb3e660bec65f76f702cd",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/src/views/tw-stock-monitor/components/ReadonlyStrategySnapshotPanel.vue": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 12112,
+      "modified_at": "2026-06-20T05:58:37Z",
+      "content_hash": "sha256:4f8d9e600a3f1240d2dee89a1c213e81e989b9c73a26cce32af9462ec443b454",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/src/views/tw-stock-monitor/components/ReplayAuditDetail.vue": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 1416,
+      "modified_at": "2026-06-17T11:54:14Z",
+      "content_hash": "sha256:82a64961a7424e0d2d905412bd7e0fcccaa5b8cda3c4073f198b840a00eba5dc",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/build_tw_agent_daily_prompt_artifact.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 16649,
+      "modified_at": "2026-06-19T15:05:23Z",
+      "content_hash": "sha256:d1089e208aca05c53d3bc5250d5cf02136442455944334ec6b609e0b4e5fc900",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/validate_tw_agent_daily_prompt_artifact.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 15201,
+      "modified_at": "2026-06-19T17:08:45Z",
+      "content_hash": "sha256:cea78eb70dc02d6271804cc001a9fd7eea85ac08c56ac2afcb9e7c98c7acaaa5",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/validate_tw_modular_artifact_contract.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 21417,
+      "modified_at": "2026-06-20T06:22:33Z",
+      "content_hash": "sha256:ffe9e6891f4c55d8e2f8589b57c13fd0d842b2b5e37d216b5ee4096d768497a3",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/run_tw_modular_contract_regression.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 34812,
+      "modified_at": "2026-06-20T06:22:33Z",
+      "content_hash": "sha256:d48d1f2917e739f51d200b9a5a7cee3d363d5548347db5e35222d2dff3e0dc14",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/run_daily_tw_stock_auto_update.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 30903,
+      "modified_at": "2026-06-19T16:03:19Z",
+      "content_hash": "sha256:a7bed374c675e279d8c1b8a431678ea99d47c604d1615e8cb3cdacd7294ba588",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/publish_tw_modular_readonly_snapshot.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 15744,
+      "modified_at": "2026-06-16T14:34:58Z",
+      "content_hash": "sha256:383c0ce4843457cee400dd0da2d9f5b546ce139051096f3317a8a15ccb53ba7d",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/validate_tw_daily_orchestrator_m3.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 20975,
+      "modified_at": "2026-06-17T11:35:19Z",
+      "content_hash": "sha256:a416359194943e951f4e5a2f6427be8dc8303ad64ca251338b5eadf5c5ee0df3",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/validate_tw_frontend_readonly_m4.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 20092,
+      "modified_at": "2026-06-17T12:30:07Z",
+      "content_hash": "sha256:f2444224cfe8cd46d126c72be46a180f016b44c009663804fc1ce6cbd00c2437",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/validate_tw_modular_registry_m2.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 11785,
+      "modified_at": "2026-06-17T11:04:55Z",
+      "content_hash": "sha256:f5e08f6c0731950270bd9cd535b510a43fae0e353999d088da99cddbcbdd84fc",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/validate_tw_modular_readonly_snapshot.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 9036,
+      "modified_at": "2026-06-18T16:49:40Z",
+      "content_hash": "sha256:1c2e3e9c825fac475bd172b610f3b64e048a77a342daaa5f16e56e567a15ca46",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/validate_tw_readonly_replay_window_artifact.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 5455,
+      "modified_at": "2026-06-17T07:59:38Z",
+      "content_hash": "sha256:eaefabfad58e119700c34b66046c15ead3d466d2bf4c54de7db031b564553580",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/validate_tw_readonly_replay_window_index.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 3807,
+      "modified_at": "2026-06-17T08:32:42Z",
+      "content_hash": "sha256:12fc1722faf7a1760ca011390612aeccf9c39dfe33be2067895612be52d15851",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/validate_tw_readonly_replay_window_query.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 6252,
+      "modified_at": "2026-06-17T08:55:12Z",
+      "content_hash": "sha256:2fe2a7b5d71f0c02aa40a577f6da2dd441cba1212670d1706c941599b08cfd45",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/fetch_tw_provider_external_data.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 19804,
+      "modified_at": "2026-06-17T18:05:38Z",
+      "content_hash": "sha256:2873f2ae64fdeb285425ffb0668397159875bccf2e06a4b736d77426c9f8d0ff",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/pull_tw_provider_staging_data.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 28548,
+      "modified_at": "2026-06-17T18:50:50Z",
+      "content_hash": "sha256:e1f151e380bdb83ddd16bf65bea62c41d5d8f1236ff5a47efd7a0f8353c203af",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/validate_tw_provider_staging_data.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 9451,
+      "modified_at": "2026-06-17T17:59:58Z",
+      "content_hash": "sha256:d57f8dc962df1c0f3c49f564cfba8072d8691d40c0b8ce9ba8832971566d497f",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/tests/test_tw_stock_agent_simple_chat.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 13530,
+      "modified_at": "2026-06-19T16:16:47Z",
+      "content_hash": "sha256:66386c200b54f71bfae744acaf8f846220351ee746c0c196ffe1f882cda5526a",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/tests/test_tw_stock_agent_daily_prompt_builder.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 2527,
+      "modified_at": "2026-06-19T15:02:21Z",
+      "content_hash": "sha256:60acabc71e817263ffa93679d0a0797153454e58f288d1d43f80133440c02fe5",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/tests/test_tw_stock_agent_daily_prompt_orchestration.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 6607,
+      "modified_at": "2026-06-19T16:04:12Z",
+      "content_hash": "sha256:d79ae7c8d4a82c8ce2a7eb0020b0ac6ea7510f59b45c291d329f2a5233279348",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/tests/test_tw_stock_agent_daily_prompt_validator.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 6009,
+      "modified_at": "2026-06-19T17:09:27Z",
+      "content_hash": "sha256:111c9cd03f2362d7f6485dc9b91de6b1d19bf4e7d2cbfa23b24e5e3f5e9580a2",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/tests/test_tw_stock_readonly_replay_window_api.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 8876,
+      "modified_at": "2026-06-18T11:29:42Z",
+      "content_hash": "sha256:b2a7b80bc13c80bcdc453d68d222df132327ea62fc5b640be74cbc107c4e938b",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/backend/tests/test_tw_stock_readonly_strategy_snapshot_api.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 3291,
+      "modified_at": "2026-06-18T15:39:37Z",
+      "content_hash": "sha256:467f1b17ca61fb78dfdc5c0df230d7a60f6a7819b0606fd2bc45281a4fd7ed2e",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-backend-readonly-routes.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/tests/e2e/tw-stock-agent-simple-chat-network.mjs": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 9718,
+      "modified_at": "2026-06-19T16:50:20Z",
+      "content_hash": "sha256:6e571287c2ca4c78daacf868484f7cd42137c582890250a295c619a729ed5fe8",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/tests/unit/tw-stock-agent-simple-chat-check.mjs": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 2201,
+      "modified_at": "2026-06-20T05:58:37Z",
+      "content_hash": "sha256:7fe23965333d90a0bdeeda0dd37d21a03828bc3c69e221b91030b8749ba4cc2a",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/tests/e2e/tw-stock-readonly-replay-window-readonly.mjs": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 12543,
+      "modified_at": "2026-06-17T12:29:20Z",
+      "content_hash": "sha256:528607ded45889d0a2c450d02cf2ab273e022f42c648c0922ae547325515fd82",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/tests/e2e/tw-stock-readonly-strategy-snapshot-readonly.mjs": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 16118,
+      "modified_at": "2026-06-17T12:33:15Z",
+      "content_hash": "sha256:e381e81401d9b0ae0c2b97fc7b3dde4b94a3bd7763a6761d3bc9db9947116329",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/tests/e2e/tw-stock-strategy-workbench-ux-readonly.mjs": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 22367,
+      "modified_at": "2026-06-19T19:04:44Z",
+      "content_hash": "sha256:eb88d88ef6f2dc8f445e7db819799f37eedf80951d25837c07f6b8f498790c54",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/tests/unit/tw-stock-readonly-replay-window-check.mjs": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 4765,
+      "modified_at": "2026-06-17T12:30:43Z",
+      "content_hash": "sha256:0ce87fc6fd187b665e4886cb7ef116f1a761ecf8b583cadb9d46f508cc275857",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/frontend/tests/unit/tw-stock-readonly-strategy-snapshot-check.mjs": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 4282,
+      "modified_at": "2026-06-17T12:30:43Z",
+      "content_hash": "sha256:3a3f905036d4c87ae987162a7c580d4c4c31f18495b5d37d844424205a520415",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-frontend-workbench.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/tests/unit/test_tw_modular_m_contract_validators.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 3012,
+      "modified_at": "2026-06-17T11:06:37Z",
+      "content_hash": "sha256:3a11c721dd4f16e846c135573d60a3e0409de121da982906c784c0e7e10e22a2",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/tests/unit/test_tw_modular_m2_registry_validator.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 4264,
+      "modified_at": "2026-06-17T11:06:37Z",
+      "content_hash": "sha256:cbf2035376bbb9384450bc488d062b8b8e49da9ca12a90821bb54241350d2e5d",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/tests/unit/test_tw_modular_m3_daily_orchestrator.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 5671,
+      "modified_at": "2026-06-17T11:32:03Z",
+      "content_hash": "sha256:999005e4b6fcb5a353ad58483af1f2d4b50e86019424373bff9d60c54d84db9b",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/tests/unit/test_validate_tw_modular_artifact_contract.py": {
+      "ingested_at": "2026-06-20T16:00:00Z",
+      "size_bytes": 10289,
+      "modified_at": "2026-06-16T16:21:01Z",
+      "content_hash": "sha256:8581b15d6565ccd9ee48a893a445ec8a82bf0e0855d3812c2e7f0b38286ed1db",
+      "source_type": "code",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/code-map-scripts-and-tests.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/FULL_INGEST_PHASEW4_HISTORY_LESSONS_WORK_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 10350,
+      "modified_at": "2026-06-20T11:31:40Z",
+      "content_hash": "sha256:85686a2b593e60d3cdb06e1c951a15e567a41160bd05b33de101f383a724b9c1",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW4_HISTORY_LESSONS_REPORT_CN.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_decision_model/PHASE2C_FINAL_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 7947,
+      "modified_at": "2026-06-10T16:08:44Z",
+      "content_hash": "sha256:277a88ced4487a77867b7e2948363b82bb26d63dce5519c181dbaba3a3df285a",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "references/superseded-routes-model-and-strategy.md"
+      ],
+      "pages_updated": [
+        "synthesis/historical-lessons.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_ltr_rerank_regime_turnover/LTR_MAINLINE_FINAL_CLOSURE_ARCHIVE_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 7287,
+      "modified_at": "2026-06-14T06:11:12Z",
+      "content_hash": "sha256:e9561281bd797235507200b4a7418d3a6ed89125a923e8f0b9648419ffb970cf",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "references/superseded-routes-model-and-strategy.md"
+      ],
+      "pages_updated": [
+        "synthesis/historical-lessons.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_ltr_rerank_regime_turnover/LTR_MAINLINE_FINAL_CLOSURE_ARCHIVE_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 3584,
+      "modified_at": "2026-06-14T06:14:37Z",
+      "content_hash": "sha256:60aa6c0c880dfb7037f6b17ffd1f0e9e40f00a7ffb991fc39167cfc892f9f8e0",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/superseded-routes-model-and-strategy.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_ltr_strategy_validation/PHASEV4_FINAL_REVIEW_AND_CLOSURE_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 5160,
+      "modified_at": "2026-06-14T10:49:28Z",
+      "content_hash": "sha256:9f9b14ea8b290155d6472beb6ccb9039a16924eca1b5a406469b0320319e52bc",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/superseded-routes-model-and-strategy.md",
+        "synthesis/historical-lessons.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_ltr_baseline_conservative_tuning/PHASEB2A_REVIEW_AND_FINAL_CLOSURE_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 5950,
+      "modified_at": "2026-06-14T12:31:41Z",
+      "content_hash": "sha256:84a5e6e9f10ddf496bdc3953cb0e8655aa7c7f727218444c573088eb5a8df5a4",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/superseded-routes-model-and-strategy.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_orthogonal_fresh_qlib_controlled/PHASEQ4_ORTHOGONAL_FRESH_QLIB_DECISION_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 3505,
+      "modified_at": "2026-06-15T16:58:39Z",
+      "content_hash": "sha256:258a80604373dfff87e4c4a396308370763cca2ae1d8e5d2b1e0bd9b7155dbd8",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/superseded-routes-model-and-strategy.md",
+        "synthesis/historical-lessons.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_ltr_orthogonal_features_controlled/ORTHOGONAL_LTR_CONTROLLED_MAINLINE_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 12671,
+      "modified_at": "2026-06-15T09:23:15Z",
+      "content_hash": "sha256:f8aee902796f5ce1430ea0c3bd4d50135bbed35e599fb503fd2c688b49f8d81a",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "synthesis/historical-lessons.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/tw_decision_model_orthogonal/PHASE2D_ORTHOGONAL_RULE_CLOSURE_REPORT_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 4397,
+      "modified_at": "2026-06-11T11:14:37Z",
+      "content_hash": "sha256:7403d50b4e1c50435f18ba7018917371f0c6ab2b9f7ddfd72efd7c1ce5bc2227",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "synthesis/historical-lessons.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/archive/phase_history/tw_modular_daily_update_productization/PHASEYZ_STRICT_E4_PRODUCTIZATION_CLEANUP_WORK_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 27332,
+      "modified_at": "2026-06-18T08:06:56Z",
+      "content_hash": "sha256:92ea3aa5eac0638b20faada6fda1a48060dd745c31a4881ec2b5d494412c4983",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "references/superseded-routes-model-and-strategy.md",
+        "concepts/current-default-model-and-strategy.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/archive/phase_history/README_CN.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 100110,
+      "modified_at": "2026-06-19T04:55:05Z",
+      "content_hash": "sha256:ef1333632248f438784e2caaa135813503a14a34725de6c99221e015d3cdc489",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "synthesis/historical-lessons.md",
+        "references/superseded-routes-monitor-provider-and-trading.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/scripts/archive/historical_research/README.md": {
+      "ingested_at": "2026-06-20T17:00:00Z",
+      "size_bytes": 5169,
+      "modified_at": "2026-06-18T15:37:14Z",
+      "content_hash": "sha256:2afa58ee2177a5b6ab9399f1d836c67437c1c4bdf77f9fa96a570e7f261b5337",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "synthesis/historical-lessons.md",
+        "references/superseded-routes-monitor-provider-and-trading.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/FULL_INGEST_PHASEW5_FINAL_SUMMARY_WORK_CN.md": {
+      "ingested_at": "2026-06-20T18:00:00Z",
+      "size_bytes": 8246,
+      "modified_at": "2026-06-20T11:53:42Z",
+      "content_hash": "sha256:bc83610b350c6a1d6fa6f5c49f8e4bbb25dbb318f3c4ca4cbc9389bc22ba93c4",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [
+        "FULL_INGEST_PHASEW5_FINAL_SUMMARY_CN.md"
+      ],
+      "pages_updated": [
+        "index.md",
+        "hot.md",
+        "log.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/FULL_INGEST_PHASEW4_HISTORY_LESSONS_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T18:00:00Z",
+      "size_bytes": 6976,
+      "modified_at": "2026-06-20T11:53:42Z",
+      "content_hash": "sha256:0070282679fdbc3e3d115d13934048e83e660b4876c9dc21e67f220c8f64f715",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW5_FINAL_SUMMARY_CN.md",
+        "index.md"
+      ]
+    },
+    "/home/chuliyang/taiwan-stock-quant-platform/docs/project_wiki/FULL_INGEST_PHASEW3_CODE_MAP_REVIEW_CN.md": {
+      "ingested_at": "2026-06-20T18:00:00Z",
+      "size_bytes": 6490,
+      "modified_at": "2026-06-20T11:31:40Z",
+      "content_hash": "sha256:861311b2a7899a0b657c2e31f1cdd02303ba2f00bada488b0dd3fb4886b34cd7",
+      "source_type": "document",
+      "project": "taiwan-stock-quant-platform",
+      "pages_created": [],
+      "pages_updated": [
+        "FULL_INGEST_PHASEW5_FINAL_SUMMARY_CN.md",
+        "index.md"
+      ]
+    }
+  },
+  "projects": {
+    "taiwan-stock-quant-platform": {
+      "source_path": "/home/chuliyang/taiwan-stock-quant-platform",
+      "vault_path": "projects/taiwan-stock-quant-platform",
+      "last_ingested": "2026-06-20T18:00:00Z",
+      "conversations_ingested": 0,
+      "conversations_total": 0,
+      "memory_files_ingested": 0
+    }
+  },
+  "stats": {
+    "total_sources_ingested": 272,
+    "total_pages": 60,
+    "total_projects": 1,
+    "last_full_rebuild": null
+  },
+  "notes": [
+    "Phase W1 core contracts ingest is constrained to docs/tw_modular_contracts, configs, and .agents/skills/tw-stock-*.",
+    "Only docs/project_wiki/** was modified.",
+    "W1 did not run services, data refresh, provider publish, accepted latest switch, monitor write, training, OpenAI smoke, or broker/order actions.",
+    "Current docs/tw_modular_contracts filesystem enumeration contains 39 markdown files.",
+    "Phase W1 follow-up explicitly classified 9 docs/tw_modular_contracts/templates markdown files.",
+    "The 48-file contract surface is now represented as 39 top-level contract markdown files plus 9 template markdown files.",
+    "Phase W2 product routes ingest compiled final Agent, UI2 frontend, daily update, pre-RND, and skills maintenance routes.",
+    "W2 repaired duplicate W1 follow-up index entry.",
+    "Phase W2 follow-up added body Sources sections to W2 reference/synthesis pages.",
+    "Phase W3 code map statically mapped backend routes/services, frontend workbench, scripts and tests into wiki pages.",
+    "W3 did not run services, tests, training, data refresh, provider publish, accepted latest switch, monitor writes, broker/order actions, OpenAI smoke or artifact generation.",
+    "W3 classifies quick_trade, credentials, live_trading, exchange_execution and trading_executor as forbidden boundary sources only.",
+    "Phase W4 distilled historical and superseded routes without changing W1/W2/W3 current mainline facts.",
+    "W4 classifies historical returns, old smoke results, fixtures, screenshots and dynamic payloads as non-production evidence.",
+    "W4 did not run services, tests, training, data refresh, provider publish, accepted latest switch, monitor writes, broker/order actions, OpenAI smoke or artifact generation.",
+    "Phase W5 completed final health audit and delivery summary for docs/project_wiki.",
+    "W5 repaired phase index coverage and project overview frontmatter sources.",
+    "W5 did not run services, tests, training, data refresh, provider publish, accepted latest switch, monitor writes, broker/order actions, OpenAI smoke or artifact generation.",
+    "W5R direct maintenance added frontmatter to indexed phase documents and normalized hot.md frontmatter."
+  ]
+}

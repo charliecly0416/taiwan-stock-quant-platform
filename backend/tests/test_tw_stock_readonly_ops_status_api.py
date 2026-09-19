@@ -20,6 +20,31 @@ def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+@pytest.mark.parametrize("ready", [True, False])
+def test_workbench_readonly_status_preserves_full_shadow_after_daily_noop(tmp_path, ready):
+    service = _make_service(tmp_path)
+    _write_json(service.ops_root / "daily_tw_stock_auto_update_20260917_20260917T144501Z/job.json", {
+        "asof": "2026-09-17", "finmind_scope": "full", "finished_at": "2026-09-17T15:00:00Z",
+        "b19r2r_daily_shadow": {
+            "enabled": True, "attempted": True, "shadow_ok": ready,
+            "status": "READY_RESEARCH_SHADOW" if ready else "BLOCKED_MARGIN",
+            "warning": "API_TOKEN=secret_should_not_leak",
+        },
+    })
+    _write_json(service.ops_root / "daily_tw_stock_auto_update_20260918_20260918T003001Z/job.json", {
+        "asof": "2026-09-18", "finmind_scope": "daily", "status": "already_up_to_date",
+        "finished_at": "2026-09-18T01:00:00Z",
+        "b19r2r_daily_shadow": {"enabled": False, "attempted": False},
+    })
+    payload = service.status()
+    shadow = payload["b19r2r_shadow"]
+    assert shadow["state"] == ("READY" if ready else "BLOCKED")
+    assert shadow["asof"] == "2026-09-17"
+    assert shadow["mainline_blocking"] is False
+    assert "secret_should_not_leak" not in json.dumps(shadow)
+    assert payload["readiness_scope"] == "status_observation_only"
+
+
 def _make_service(tmp_path: Path) -> TWStockReadonlyOpsStatusService:
     ops_root = tmp_path / "data_tw/ops/daily_auto_update"
     qlib_latest = tmp_path / "qlib_pipeline/data_tw/experiments/option_c_daily_signal/latest_signal.json"
@@ -576,15 +601,19 @@ def test_readonly_ops_status_api_returns_standard_wrapper(client, monkeypatch, t
 
 
 def test_readonly_ops_status_static_safety_contract():
-    service_source = Path("backend/app/services/tw_stock_readonly_ops_status.py").read_text(encoding="utf-8")
-    route_source = Path("backend/app/routes/tw_stock.py").read_text(encoding="utf-8")
-    route_slice = route_source.split('@tw_stock_bp.route("/quant/ops/readonly-status"', 1)[1].split(
-        '@tw_stock_bp.route("/quant/ops/option-c/scheduler"', 1
-    )[0]
+    import inspect
+    from flask import Flask
+    from app.routes.tw_stock import get_readonly_ops_status
+    from app.routes.tw_stock_ops_routes import tw_stock_ops_bp
 
-    assert 'methods=["GET"]' in route_slice
+    service_source = Path("backend/app/services/tw_stock_readonly_ops_status.py").read_text(encoding="utf-8")
+    route_slice = inspect.getsource(get_readonly_ops_status)
+    app = Flask(__name__)
+    app.register_blueprint(tw_stock_ops_bp, url_prefix="/api/tw-stock")
+    rule = next(rule for rule in app.url_map.iter_rules() if rule.rule == "/api/tw-stock/quant/ops/readonly-status")
+
+    assert rule.methods == {"GET", "HEAD", "OPTIONS"}
     assert "readonly_ops_status_service.status()" in route_slice
-    assert "TWStockReadonlyOpsStatusService" in route_source
     forbidden_tokens = [
         "run_daily_tw_stock_auto_update",
         "refresh_provider",

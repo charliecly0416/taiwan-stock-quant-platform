@@ -1,0 +1,206 @@
+{
+  "p1b_d_fixture": true,
+  "mechanism": "min_holding_days_with_exception",
+  "expected_builder_matches_fixture": false,
+  "min_holding_expected_block": false,
+  "exception_expected_keep": false,
+  "mature_holding_expected_keep": false,
+  "signal_date": "2026-06-19",
+  "model_name": "fixture_model",
+  "signal_artifact": "golden_fixture",
+  "model_signal_fields": [
+    "date",
+    "instrument",
+    "model_name",
+    "model_family",
+    "candidate_rank",
+    "buy_score",
+    "raw_score",
+    "score_rank",
+    "full_qlib_rank",
+    "signal_asof",
+    "available_at",
+    "source_artifact",
+    "future_return_5d"
+  ],
+  "strategy_input_fields": [
+    "replay_return",
+    "net_return"
+  ],
+  "model_signal_rows": [
+    {
+      "date": "2026-06-19",
+      "instrument": "TW0001",
+      "model_name": "fixture_model",
+      "model_family": "fixture",
+      "candidate_rank": 1,
+      "buy_score": 0.9,
+      "raw_score": 0.9,
+      "score_rank": 1,
+      "full_qlib_rank": 1,
+      "signal_asof": "2026-06-19",
+      "available_at": "2026-06-19",
+      "source_artifact": "golden_fixture"
+    },
+    {
+      "date": "2026-06-19",
+      "instrument": "TW0050",
+      "model_name": "fixture_model",
+      "model_family": "fixture",
+      "candidate_rank": 51,
+      "buy_score": 0.2,
+      "raw_score": 0.2,
+      "score_rank": 51,
+      "full_qlib_rank": 60,
+      "signal_asof": "2026-06-19",
+      "available_at": "2026-06-19",
+      "source_artifact": "golden_fixture"
+    }
+  ],
+  "portfolio_state_fields": [
+    "asof_date",
+    "instrument",
+    "quantity",
+    "cost_basis",
+    "current_holding_flag",
+    "holding_days",
+    "cash",
+    "realized_pnl",
+    "unrealized_pnl"
+  ],
+  "portfolio_state_rows": [
+    {
+      "asof_date": "2026-06-19",
+      "instrument": "TW0050",
+      "quantity": 1,
+      "cost_basis": 10,
+      "current_holding_flag": true,
+      "holding_days": 2,
+      "cash": 100000
+    }
+  ],
+  "execution_readiness": {
+    "next_open_ready": true,
+    "execution_price_status": "ready"
+  },
+  "execution_config": {
+    "execution_price_mode": "next_open",
+    "fee_rate": 0.001425,
+    "tax_rate": 0.003,
+    "min_lot_policy": "simulation_lot_size"
+  },
+  "strategy_config": {
+    "target_holding_count": 1,
+    "all_gates_enabled": false,
+    "min_holding_days_with_exception": {
+      "min_holding_days": 5,
+      "deep_exit_full_qlib_rank_threshold": 80
+    }
+  },
+  "order_intent_fields": [
+    "signal_date",
+    "instrument",
+    "intent_action",
+    "intent_reason",
+    "strategy_rule",
+    "candidate_rank",
+    "buy_rank",
+    "full_qlib_rank",
+    "max_buy_count",
+    "max_sell_count",
+    "model_name",
+    "signal_artifact"
+  ],
+  "baseline_order_intents": [
+    {
+      "signal_date": "2026-06-19",
+      "instrument": "TW0050",
+      "intent_action": "sell",
+      "intent_reason": "top50_exit_one_worst_sell_sell",
+      "primary_reason_code": "top50_exit_one_worst_sell_sell",
+      "strategy_rule": "portfolio_decision_optimizer_v1",
+      "candidate_rank": 51,
+      "buy_rank": 51,
+      "full_qlib_rank": 60,
+      "max_buy_count": 1,
+      "max_sell_count": 1,
+      "model_name": "fixture_model",
+      "signal_artifact": "golden_fixture",
+      "readonly_only": true,
+      "simulation_only": true,
+      "not_order": true,
+      "not_target_position": true,
+      "not_investment_advice": true
+    },
+    {
+      "signal_date": "2026-06-19",
+      "instrument": "TW0001",
+      "intent_action": "buy",
+      "intent_reason": "top50_exit_one_worst_sell_buy",
+      "primary_reason_code": "top50_exit_one_worst_sell_buy",
+      "strategy_rule": "portfolio_decision_optimizer_v1",
+      "candidate_rank": 1,
+      "buy_rank": 1,
+      "full_qlib_rank": 1,
+      "max_buy_count": 1,
+      "max_sell_count": 1,
+      "model_name": "fixture_model",
+      "signal_artifact": "golden_fixture",
+      "readonly_only": true,
+      "simulation_only": true,
+      "not_order": true,
+      "not_target_position": true,
+      "not_investment_advice": true
+    }
+  ],
+  "candidate_order_intents": [
+    {
+      "signal_date": "2026-06-19",
+      "instrument": "TW0050",
+      "intent_action": "sell",
+      "intent_reason": "top50_exit_one_worst_sell_sell",
+      "primary_reason_code": "top50_exit_one_worst_sell_sell",
+      "strategy_rule": "portfolio_decision_optimizer_v1",
+      "candidate_rank": 51,
+      "buy_rank": 51,
+      "full_qlib_rank": 60,
+      "max_buy_count": 1,
+      "max_sell_count": 1,
+      "model_name": "fixture_model",
+      "signal_artifact": "golden_fixture",
+      "readonly_only": true,
+      "simulation_only": true,
+      "not_order": true,
+      "not_target_position": true,
+      "not_investment_advice": true
+    },
+    {
+      "signal_date": "2026-06-19",
+      "instrument": "TW0001",
+      "intent_action": "buy",
+      "intent_reason": "top50_exit_one_worst_sell_buy",
+      "primary_reason_code": "top50_exit_one_worst_sell_buy",
+      "strategy_rule": "portfolio_decision_optimizer_v1",
+      "candidate_rank": 1,
+      "buy_rank": 1,
+      "full_qlib_rank": 1,
+      "max_buy_count": 1,
+      "max_sell_count": 1,
+      "model_name": "fixture_model",
+      "signal_artifact": "golden_fixture",
+      "readonly_only": true,
+      "simulation_only": true,
+      "not_order": true,
+      "not_target_position": true,
+      "not_investment_advice": true
+    }
+  ],
+  "expected_order_intent": {
+    "intent_action": "buy",
+    "primary_reason_code": "top50_exit_one_worst_sell_buy"
+  },
+  "pass_claim": {
+    "claims_phase_pass": false,
+    "turnover_reduction_only": false
+  }
+}

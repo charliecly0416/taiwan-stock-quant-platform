@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
 
+ROOT = Path(__file__).resolve().parents[1]
 BASE_MODEL_ID = "e4_frozen_qlib_2018_2022"
 TREATMENT_MODEL_ID = "e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025"
 STRATEGY_RULE = "top50_exit_one_worst_sell"
@@ -277,7 +278,7 @@ def validate_source_artifacts(
         source_path = Path(path_value)
         if source_path.is_absolute():
             return source_path.exists()
-        return source_path.exists() or (artifact_dir / source_path).exists()
+        return (ROOT / source_path).exists() or (artifact_dir / source_path).exists()
 
     for name, spec in source_artifacts.items():
         field = f"manifest.source_artifacts.{name}"

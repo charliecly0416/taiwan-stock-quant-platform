@@ -1,0 +1,8 @@
+{
+  "sample_name": "pass_p1b_g_non_trade_rows_keep_baseline",
+  "fixture": "fixture.json",
+  "expected": "expected.json",
+  "expected_validator_result": {
+    "ok": true
+  }
+}

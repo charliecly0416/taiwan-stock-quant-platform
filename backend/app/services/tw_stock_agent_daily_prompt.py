@@ -9,7 +9,13 @@ from typing import Any, Dict, Optional
 from scripts.validate_tw_agent_daily_prompt_artifact import validate_artifact
 
 
-DEFAULT_LATEST_PATH = "data_tw/artifacts/agent_daily_prompt/latest.json"
+ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_LATEST_PATH = ROOT / "data_tw/artifacts/agent_daily_prompt/latest.json"
+
+
+def _repo_path(value: str | Path) -> Path:
+    path = Path(value).expanduser()
+    return path if path.is_absolute() else ROOT / path
 
 
 class TWStockAgentDailyPromptError(RuntimeError):
@@ -30,11 +36,11 @@ class TWStockAgentDailyPromptLoader:
     """Load and validate a DailyAgentPromptArtifact from latest pointer or explicit dir."""
 
     def __init__(self, *, latest_path: str | Path = DEFAULT_LATEST_PATH) -> None:
-        self.latest_path = Path(latest_path)
+        self.latest_path = _repo_path(latest_path)
 
     def load(self, *, artifact_dir: Optional[str | Path] = None) -> TWStockAgentDailyPromptArtifact:
         latest_payload = None if artifact_dir else self._read_latest()
-        resolved_dir = Path(artifact_dir) if artifact_dir else Path(str(latest_payload.get("artifact_dir")))
+        resolved_dir = _repo_path(artifact_dir) if artifact_dir else _repo_path(str(latest_payload.get("artifact_dir")))
         if not resolved_dir.exists():
             raise TWStockAgentDailyPromptError(f"artifact_dir_missing:{resolved_dir}")
         validation = validate_artifact(resolved_dir)
@@ -83,7 +89,7 @@ class TWStockAgentDailyPromptLoader:
     def _check_latest_pointer(latest: Dict[str, Any], *, resolved_dir: Path, manifest: Dict[str, Any]) -> None:
         manifest_path = resolved_dir / "manifest.json"
         latest_manifest = latest.get("manifest")
-        if latest_manifest and Path(str(latest_manifest)) != manifest_path:
+        if latest_manifest and _repo_path(str(latest_manifest)).resolve() != manifest_path.resolve():
             raise TWStockAgentDailyPromptError("latest_manifest_path_mismatch")
         if latest.get("checksum") and latest.get("checksum") != manifest.get("checksum"):
             raise TWStockAgentDailyPromptError("latest_checksum_mismatch")

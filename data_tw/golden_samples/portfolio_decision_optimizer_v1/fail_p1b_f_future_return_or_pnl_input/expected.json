@@ -1,0 +1,44 @@
+{
+  "candidate_order_intents": [
+    {
+      "signal_date": "2026-06-19",
+      "instrument": "TW0050",
+      "intent_action": "skip",
+      "intent_reason": "blocked_risk_off_raised_threshold",
+      "primary_reason_code": "blocked_risk_off_raised_threshold",
+      "strategy_rule": "portfolio_decision_optimizer_v1",
+      "candidate_rank": 51,
+      "buy_rank": 51,
+      "full_qlib_rank": 52,
+      "max_buy_count": 1,
+      "max_sell_count": 1,
+      "model_name": "fixture_model",
+      "signal_artifact": "golden_fixture",
+      "readonly_only": true,
+      "simulation_only": true,
+      "not_order": true,
+      "not_target_position": true,
+      "not_investment_advice": true
+    },
+    {
+      "signal_date": "2026-06-19",
+      "instrument": "TW0049",
+      "intent_action": "skip",
+      "intent_reason": "blocked_risk_off_raised_threshold",
+      "primary_reason_code": "blocked_risk_off_raised_threshold",
+      "strategy_rule": "portfolio_decision_optimizer_v1",
+      "candidate_rank": 49,
+      "buy_rank": 1,
+      "full_qlib_rank": 49,
+      "max_buy_count": 1,
+      "max_sell_count": 1,
+      "model_name": "fixture_model",
+      "signal_artifact": "golden_fixture",
+      "readonly_only": true,
+      "simulation_only": true,
+      "not_order": true,
+      "not_target_position": true,
+      "not_investment_advice": true
+    }
+  ]
+}

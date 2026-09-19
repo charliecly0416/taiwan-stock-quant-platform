@@ -230,6 +230,8 @@ def test_apply_happy_path_writes_paper_only_tables_and_audit():
     assert len(result["paper_executions"]) == 2
     assert len(db.orders) == 2 and len(db.trades) == 2
     assert len(db.apply_runs) == 1 and len(db.audit) == 1
+    assert json.loads(db.apply_runs[0]["request_json"])["paper_only"] is True
+    assert result["paper_only"] is True
     assert db.accounts["tw_sim_1"]["paper_account_epoch"] == 1
     forbidden = " ".join(db.sql).lower()
     for item in ["quick-trade", "quick_trade", "broker", "provider_publish", "monitor/scan"]:
@@ -282,7 +284,7 @@ def test_reset_archives_previous_state_increments_epoch_and_duplicate_replays():
     reset_payload = {"paper_account_id": "tw_sim_1", "current_epoch": 1, "idempotency_key": "reset-1", "input_checksum": "reset-checksum", "confirmed_by_user": True, "confirm_text": "确认重置模拟账户"}
     result = service.reset(user_id=7, payload=reset_payload)
     replay = service.reset(user_id=7, payload=reset_payload)
-    assert result["ok"] is True and result["new_epoch"] == 2
+    assert result["ok"] is True and result["new_epoch"] == 2 and result["paper_only"] is True
     assert result["archive_snapshot"]["positions"]
     assert db.accounts["tw_sim_1"]["paper_account_epoch"] == 2
     assert db.positions == {}
@@ -452,14 +454,14 @@ def test_latest_decision_reads_manifest_preview_and_requires_user_account(tmp_pa
     assert service.latest_decision(user_id=8)["status"] == "no_clean_decision"
 
 
-def test_validate_intent_accepts_clean_model_a_and_b_rejects_old_and_bad_strategy():
+def test_validate_intent_accepts_model_a_and_rejects_shadow_or_legacy_models_and_bad_strategy():
     db = X2Db(); seed_account(db)
     service = make_service(db)
-    for model in [CLEAN_MODEL_A, CLEAN_MODEL_B]:
-        payload = intent(model_id=model)
-        assert service._validate_intent(payload, paper_account_id="tw_sim_1", decision_id="decision-1", input_checksum="checksum-1") is None
-    old = intent(model_id=OLD_MODEL)
-    assert service._validate_intent(old, paper_account_id="tw_sim_1", decision_id="decision-1", input_checksum="checksum-1")["status"] == "invalid_artifact"
+    accepted = intent(model_id=CLEAN_MODEL_A)
+    assert service._validate_intent(accepted, paper_account_id="tw_sim_1", decision_id="decision-1", input_checksum="checksum-1") is None
+    for model in [CLEAN_MODEL_B, OLD_MODEL]:
+        rejected = intent(model_id=model)
+        assert service._validate_intent(rejected, paper_account_id="tw_sim_1", decision_id="decision-1", input_checksum="checksum-1")["status"] == "invalid_artifact"
     research = intent(strategy_rule="one_sell_one_buy_buggy_e8r")
     assert service._validate_intent(research, paper_account_id="tw_sim_1", decision_id="decision-1", input_checksum="checksum-1")["status"] == "invalid_artifact"
     deprecated = intent(strategy_rule="original")

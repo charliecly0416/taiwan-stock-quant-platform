@@ -3,13 +3,13 @@ from __future__ import annotations
 
 from flask import Flask
 
-from app.routes.tw_stock import tw_stock_bp
+from app.routes.tw_stock_context_routes import tw_stock_context_bp
 from app.services.readonly_shadow_exposure import FORBIDDEN_RESPONSE_FIELDS
 
 
 def _client():
     app = Flask(__name__)
-    app.register_blueprint(tw_stock_bp, url_prefix="/api/tw-stock")
+    app.register_blueprint(tw_stock_context_bp, url_prefix="/api/tw-stock")
     return app.test_client()
 
 

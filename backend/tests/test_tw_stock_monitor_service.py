@@ -146,8 +146,12 @@ def test_monitor_scan_route_degrades_to_ephemeral_when_database_unavailable(clie
 
     monkeypatch.setattr(tw_stock_routes, "get_db_connection", broken_db)
     monkeypatch.setattr(tw_stock_routes.trend_service, "analyze_symbol", fake_analyze_symbol)
+    monkeypatch.setattr("app.utils.auth.verify_token", lambda token: {
+        "sub": "test-user", "user_id": 1, "role": "user", "token_version": 1,
+    })
 
-    resp = client.post("/api/tw-stock/monitor/scan", json={"name": "default", "force": True})
+    assert client.post("/api/tw-stock/monitor/scan", json={"force": True}).status_code == 401
+    resp = client.post("/api/tw-stock/monitor/scan", headers={"Authorization": "Bearer test-token"}, json={"name": "default", "force": True})
     payload = resp.get_json()
 
     assert resp.status_code == 200

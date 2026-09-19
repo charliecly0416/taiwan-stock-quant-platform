@@ -1,0 +1,60 @@
+{
+  "model_signal_fields": [
+    "date",
+    "instrument",
+    "model_name",
+    "model_family",
+    "candidate_rank",
+    "buy_score",
+    "raw_score",
+    "score_rank",
+    "full_qlib_rank",
+    "signal_asof",
+    "available_at",
+    "source_artifact"
+  ],
+  "portfolio_state_fields": [
+    "asof_date",
+    "instrument",
+    "quantity",
+    "cost_basis",
+    "current_holding_flag",
+    "holding_days",
+    "cash"
+  ],
+  "execution_readiness": {
+    "next_open_ready": true,
+    "execution_price_status": "ready"
+  },
+  "execution_config": {
+    "execution_price_mode": "next_open",
+    "fee_rate": 0.001425,
+    "tax_rate": 0.003,
+    "min_lot_policy": "simulation_lot_size"
+  },
+  "strategy_config": {
+    "all_gates_enabled": true
+  },
+  "order_intent_fields": [
+    "signal_date",
+    "instrument",
+    "intent_action",
+    "intent_reason",
+    "strategy_rule",
+    "candidate_rank",
+    "buy_rank",
+    "full_qlib_rank",
+    "max_buy_count",
+    "max_sell_count",
+    "model_name",
+    "signal_artifact"
+  ],
+  "expected_order_intent": {
+    "intent_action": "buy",
+    "primary_reason_code": "simulated_buy_small"
+  },
+  "pass_claim": {
+    "claims_phase_pass": false,
+    "turnover_reduction_only": false
+  }
+}

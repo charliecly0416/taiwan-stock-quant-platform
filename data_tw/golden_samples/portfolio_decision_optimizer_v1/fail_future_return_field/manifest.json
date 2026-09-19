@@ -1,0 +1,7 @@
+{
+  "sample_name": "fail_future_return_field",
+  "fixture": "fixture.json",
+  "expected_validator_result": {
+    "ok": false
+  }
+}

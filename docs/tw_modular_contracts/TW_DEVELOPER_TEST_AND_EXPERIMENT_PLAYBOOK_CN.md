@@ -22,18 +22,19 @@
 
 ## 2. 当前产品默认值从哪里来
 
-当前产品默认模型、默认策略和核心路径来自：
+当前 baseline/default 身份来自 `configs/active_baseline_descriptor.yaml`；模块准入来自 `configs/tw_modular_registry.yaml`；产品路径来自：
 
 ```text
 configs/tw_product_artifact_registry.yaml
 ```
 
-不要在新代码里硬编码以下内容：
+不要在新代码里硬编码以下内容；其中旧 Orthogonal LTR 仅用于兼容与追溯：
 
 ```text
 e4_frozen_qlib_2018_2022
 e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025
 e4_frozen_qlib_2023_2025_ltr
+modelb_b19r2r_lambdarank_exact50_78f_v2
 top50_exit_one_worst_sell
 data_tw/artifacts/phase_yz/yz1_strict_e4_model_signals
 ```
