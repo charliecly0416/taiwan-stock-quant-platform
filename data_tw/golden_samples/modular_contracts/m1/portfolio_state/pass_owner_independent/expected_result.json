@@ -1,0 +1,7 @@
+{
+  "contract": "portfolio_state",
+  "schema_version": "m1.0.0",
+  "expected_ok": true,
+  "expected_status": "passed",
+  "expected_error_codes": []
+}

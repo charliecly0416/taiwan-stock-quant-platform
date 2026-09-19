@@ -66,6 +66,7 @@ def test_contract_list_includes_all_m0_contracts() -> None:
         "frontend_agent_panel",
         "default_candidate_decision",
         "model_signal",
+        "portfolio_state",
         "strategy_rule",
         "readonly_replay_window",
     }

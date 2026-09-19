@@ -1,0 +1,16 @@
+{
+  "schema_version": "m1.0.0",
+  "columns": [
+    {"name": "asof_date", "type": "date"},
+    {"name": "instrument", "type": "string"},
+    {"name": "quantity", "type": "integer"},
+    {"name": "cost_basis", "type": "number"},
+    {"name": "current_holding_flag", "type": "boolean"}
+  ],
+  "pending_columns": [
+    {"name": "instrument", "type": "string"},
+    {"name": "action", "type": "enum:buy|sell"},
+    {"name": "source_signal_date", "type": "date"},
+    {"name": "source_intent_id", "type": "string"}
+  ]
+}

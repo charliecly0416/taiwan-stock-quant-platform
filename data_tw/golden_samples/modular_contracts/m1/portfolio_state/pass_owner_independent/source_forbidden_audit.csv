@@ -1,0 +1,2 @@
+audit_name,artifact,field_name,field_category,present,used_for_ranking,status,details
+forbidden_fields,source_position_snapshots.csv,,forbidden,false,false,pass,no forbidden fields

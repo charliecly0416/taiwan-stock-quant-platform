@@ -1,0 +1,20 @@
+{
+  "artifact_type": "portfolio_state_replay_source_checksum",
+  "schema_version": "portfolio_state_replay_source_v1",
+  "run_id": "source_empty_001",
+  "files": [
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_summary.csv", "sha256": "c2c77afdc88e0d0ba29a635ea6b22f5bcc6f0099cb5b3db06eb0c57ccc9b9dff", "bytes": 403},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_daily_nav.csv", "sha256": "8808e8e99e5cb141636169e8edf176e41230fb559724fdb1be52c65a8c89b208", "bytes": 120},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_actions.csv", "sha256": "5277b44d3ca13e45ffecdddd647dd9dbd84511db0ba2c6e847f8ebc1b9cde0fd", "bytes": 204},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_position_snapshots.csv", "sha256": "319252e8eaf10c7aeb4672a9c4d79337712c44ef69766a8177b91eb9db6cc58d", "bytes": 100},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_coverage_audit.csv", "sha256": "8cee475d558cc54f7cf89fc19951b47cd0ba37663322943a8c078629ea236c5c", "bytes": 284},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_integrity_audit.csv", "sha256": "3df525193f2383de56b0cf7a92ea453cf179bac4f7ba25c8d13af0729dba5046", "bytes": 111},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_forbidden_audit.csv", "sha256": "590d26f32ffa55677854d3974d4c28d1a32fe7b5dc8edf32e7b71afe14a5422a", "bytes": 181},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_execution_audit.csv", "sha256": "dc52aae14e768fd6060acfcd23043cc3e29770f5b1d462a68f0571488469ff55", "bytes": 93},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_forbidden_action_audit.json", "sha256": "bd4a492dd5d2e0332439144afff8e48d0bb0c9d5840338220788643436c8ff12", "bytes": 288},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_decision_source_audit.csv", "sha256": "d66df10f617f8a9348b7ec091c575ab59b9cfa43ac086d65ac2f1cdaf09998e7", "bytes": 69},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_forbidden_scope_audit.csv", "sha256": "5c8604a0ceb108434a6e8090410e0efa9ea52317821e938d26048230428fe78b", "bytes": 64},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_action_lineage_audit.csv", "sha256": "62da5a5f9acc3f7c45f8bde5c470e377b207a81d070e496f98ee9c68fd1d90b3", "bytes": 78},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_identity_audit.json", "sha256": "0a81182fe27e76265012cd85674118632787318bc36aa9c282b30f386da1fc2a", "bytes": 853}
+  ]
+}

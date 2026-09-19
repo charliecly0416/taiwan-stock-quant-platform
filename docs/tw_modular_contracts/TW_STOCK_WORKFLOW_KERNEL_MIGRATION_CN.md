@@ -109,11 +109,17 @@ ModelSignal rows + explicit PortfolioState rows + frozen StrategyRuleConfig
 当前 runtime migration 继续 HOLD，原因如下：
 
 - daily Model A signal 当前只有 150 行，尚无权威 full-market held-rank source；跨日持仓可能不在这 150 行内，不能用缺失值替代 rank。
-- 尚无标准、不可变并带 lineage/checksum 的 canonical `PortfolioStateArtifact`，也未决定 daily intent 对应全局研究模拟组合还是 per-user paper portfolio。
+- `PortfolioStateArtifact` 合同地基已通过独立复审，但尚无被选定并持续生成的 canonical portfolio；也未决定 daily intent 对应全局研究模拟组合还是 per-user paper portfolio。
 - 旧 replay 的买入循环读取跨日 pending execution state，并按 next-open price、cash 和 quantity 跳过候选；这些执行关注点必须先从策略选择中拆出。
 - candidate-only `ReadonlyStrategySnapshot` 明确不是 PortfolioState 或 OrderIntent 输入。
 
-WF-5B 或后续阶段必须先定义 PortfolioStateArtifact、覆盖所有当前持仓的同日 FullRank source、pending intent/execution 状态交接，以及缺价时“跳过该 intent”还是“尝试下一候选”的正式语义。完成这些合同和 parity 证据前，不得让 WF-5A 替换 WF-2A、daily、paper portfolio 或产品链路。
+WF-5B 已定义 PortfolioStateArtifact 合同并通过独立复审；后续阶段仍必须选择 canonical producer、覆盖所有当前持仓的同日 FullRank source、完成 pending intent/execution 状态交接，并冻结缺价时“跳过该 intent”还是“尝试下一候选”的正式语义。完成这些实现和 parity 证据前，不得让 WF-5A 替换 WF-2A、daily、paper portfolio 或产品链路。
+
+## WF-5B PortfolioStateArtifact 合同地基
+
+WF-5B 在统一 modular validator 和 registry 中新增通用 `PortfolioStateArtifact` 合同、正负 golden 与 template capability。首版只允许 `owner_independent_replay_simulation`，强制绑定不可变 identity、时区明确的 `available_at/decision_cutoff`、通过正式 validator 的 ReplayResult source、两层 checksum closure、与 `asof` snapshot 逐项一致的唯一持仓、hard max-holding policy，以及在到期执行之后、策略决策之前截取的完整 pending-intents 投影。
+
+空组合必须由零行 CSV、`verified_no_positions` evidence 和非空 source proof 共同证明，不能用 quantity=0 占位。per-user paper portfolio 仍需后续隐私投影合同；WF-5B 没有选择或生成正式 portfolio，没有接入 daily/workflow/replay runtime，也没有写 latest。合同和 template 通过不等于 runtime admission。
 
 ## 合同
 
@@ -147,7 +153,7 @@ PYTHONPATH=. python3 scripts/run_tw_stock_workflow.py \
 3. **Daily shadow orchestration（WF-3 已完成、源码默认关闭）**：固定 replay observation 已作为非阻断 sidecar 接入统一 finalizer；是否加入 installed cron 和连续自然调度观察仍需独立运维决定。
 4. **Model A input/signal shadow（WF-4A 已完成、源码默认关闭）**：只观察本次 finalizer 成功物化的 Model A 输入与信号，不执行模型；是否加入 installed cron 和连续自然调度观察仍需独立运维决定。
 5. **Readonly snapshot shadow（WF-4B 已完成、源码默认关闭）**：只观察当前 DAPR18 成功或严格同日幂等绑定的 candidate-only 产品 snapshot，不发布 snapshot、不生成策略或 replay；是否加入 installed cron 仍需独立运维决定。
-6. **Strategy migration（WF-5A pure kernel 已完成，runtime HOLD）**：先补 canonical PortfolioState 与 held-rank 完整可见性，拆分 legacy pending/price/cash/quantity 耦合，再建立 canonical daily `OrderIntentArtifact` producer，并在有限 decision parity 之外补完整迁移证据。不得把 WF-4B candidate-only snapshot 当作完整策略证据。data/feature 后续迁移也必须保留现有合同、validator 和回退入口；Model B 始终是非阻断 optional branch。
+6. **Strategy migration（WF-5A pure kernel 与 WF-5B PortfolioState 合同地基已完成；runtime HOLD）**：仍需选择并生成 canonical portfolio、建立 held-rank 完整可见性，拆分 legacy pending/price/cash/quantity 耦合，再建立 canonical daily `OrderIntentArtifact` producer，并在有限 decision parity 之外补完整迁移证据。不得把 WF-4B candidate-only snapshot 当作完整策略证据。data/feature 后续迁移也必须保留现有合同、validator 和回退入口；Model B 始终是非阻断 optional branch。
 7. **切换与清理**：只有完整模块回归、M3 validator、readonly deployment acceptance 和连续自然调度证据均通过后，才另行提出切换决定。旧执行路径的删除需要独立影响闭包、备份和恢复验证。
 
 任何迁移都不得通过 workflow 私下读取实验文件；依赖必须来自 registry 允许的标准 artifact。生产默认、provider/accepted latest 和 cron 变更需要单独授权，本文件不构成授权。

@@ -1,0 +1,12 @@
+{
+  "schema_version": "m1.0.0",
+  "files": [
+    {"path": "portfolio_state.csv", "sha256": "524f1992ceaa92ae47c3e7506e3c3d16c97bba0059d72238474de3aa0de58442", "bytes": 128},
+    {"path": "pending_intents.csv", "sha256": "f966d68d37e5321f842ccef58cbfe8c54046d887ae9d39874ca5506075712691", "bytes": 54},
+    {"path": "schema.json", "sha256": "3031667bd72a6d12956cb384a05f918b538f8e7510dd98b27358e582895ec558", "bytes": 515},
+    {"path": "source_lineage.json", "sha256": "34090eecf08bbcd364f5ed7b2542079bf80970c9ac281dfc2c40451c5b6f532e", "bytes": 526},
+    {"path": "source_manifest.json", "sha256": "e5983141a14620a9ef98c1e66087a7ffceb0709686a7479c75789599d248d468", "bytes": 3341},
+    {"path": "forbidden_action_audit.json", "sha256": "01d51d53849abf7a11d8da681c0e9ed37c26cc8c0a081bc6c1fbc2d4ebb1df55", "bytes": 475},
+    {"path": "forbidden_field_audit.json", "sha256": "a6fcc74e1275b1f4d2b6b3a957f1c7695236e61bc9fd2ba110bd0a8afdb9bf88", "bytes": 267}
+  ]
+}

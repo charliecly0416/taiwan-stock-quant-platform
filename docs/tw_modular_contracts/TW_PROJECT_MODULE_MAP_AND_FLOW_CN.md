@@ -121,6 +121,8 @@ PortfolioState
 StrategyRule / StrategyDependency
 ```
 
+`PortfolioState` 必须先通过 `PORTFOLIO_STATE_ARTIFACT_CONTRACT_CN.md` 的标准 artifact 接口。WF-5B 只定义 owner-independent replay simulation 模板，不创建正式组合，也不允许 per-user paper 状态直接携带账户或用户身份进入通用 artifact。paper adapter 后续只能把私有状态投影成不含 PII 的标准接口。
+
 策略输出：
 
 ```text

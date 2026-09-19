@@ -37,6 +37,7 @@ git status --short
 | PIT 特征 | `docs/tw_modular_contracts/FEATURE_ARTIFACT_CONTRACT_CN.md` |
 | 新模型/adapter | `docs/tw_modular_contracts/MODEL_SIGNAL_CONTRACT_CN.md` |
 | 新策略 | `docs/tw_modular_contracts/STRATEGY_RULE_CONTRACT_CN.md` 和 `configs/strategy_dependencies/` |
+| 组合状态 | `docs/tw_modular_contracts/PORTFOLIO_STATE_ARTIFACT_CONTRACT_CN.md` |
 | 回放 | `docs/tw_modular_contracts/REPLAY_RESULT_CONTRACT_CN.md` |
 | readonly 前端/API | `docs/tw_modular_contracts/FRONTEND_READONLY_DISPLAY_CONTRACT_CN.md` |
 | 日更 | `docs/tw_modular_contracts/TW_DAILY_AUTO_UPDATE_RUNBOOK_CN.md` |

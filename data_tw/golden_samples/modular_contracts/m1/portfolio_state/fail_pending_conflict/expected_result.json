@@ -1,0 +1,12 @@
+{
+  "contract": "portfolio_state",
+  "schema_version": "m1.0.0",
+  "expected_ok": false,
+  "expected_status": "failed",
+  "expected_error_codes": [
+    "portfolio_pending_action_conflict",
+    "portfolio_pending_duplicate_instrument",
+    "portfolio_pending_position_mismatch",
+    "portfolio_pending_source_unbound"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": "m1.0.0",
+  "files": [
+    {"path": "portfolio_state.csv", "sha256": "524f1992ceaa92ae47c3e7506e3c3d16c97bba0059d72238474de3aa0de58442", "bytes": 128},
+    {"path": "pending_intents.csv", "sha256": "3e9cea0fb4646866d72ff496f627ac1384b53f8a68934aa375aacb1a6c276299", "bytes": 171},
+    {"path": "schema.json", "sha256": "3031667bd72a6d12956cb384a05f918b538f8e7510dd98b27358e582895ec558", "bytes": 515},
+    {"path": "source_lineage.json", "sha256": "979631a18a132f868bca674c09fe677a2c8902cb839eadb01bc8b0d08602537b", "bytes": 609},
+    {"path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_owner_independent/source_manifest.json", "sha256": "e5983141a14620a9ef98c1e66087a7ffceb0709686a7479c75789599d248d468", "bytes": 3341},
+    {"path": "forbidden_action_audit.json", "sha256": "01d51d53849abf7a11d8da681c0e9ed37c26cc8c0a081bc6c1fbc2d4ebb1df55", "bytes": 475},
+    {"path": "forbidden_field_audit.json", "sha256": "6dfeffd4523ae183ef0507adc202c84f8b6a777d4d23eda15ba96dcc74e46597", "bytes": 350}
+  ]
+}

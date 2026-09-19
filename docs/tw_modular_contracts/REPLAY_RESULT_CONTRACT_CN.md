@@ -64,6 +64,7 @@ strategy_rule
 start_date
 end_date
 initial_cash
+fee_and_tax
 final_equity
 total_return
 max_drawdown
@@ -89,12 +90,14 @@ quantity
 execution_price
 commission
 tax
+fee_and_tax
 cash_after
 position_after
 intent_reason
 strategy_rule
 model_name
 order_intent_artifact
+order_intent_row_id
 ```
 
 `daily_nav.csv` 必需字段：

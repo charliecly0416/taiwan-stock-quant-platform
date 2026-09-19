@@ -1,0 +1,14 @@
+{
+  "schema_version": "m1.0.0",
+  "status": "pass",
+  "forbidden_fields": [],
+  "scanned_files": [
+    "empty_state_evidence.json",
+    "forbidden_action_audit.json",
+    "pending_intents.csv",
+    "portfolio_state.csv",
+    "schema.json",
+    "source_lineage.json",
+    "source_manifest.json"
+  ]
+}

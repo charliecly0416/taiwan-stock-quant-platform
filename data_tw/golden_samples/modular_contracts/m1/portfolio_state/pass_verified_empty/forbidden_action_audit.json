@@ -1,0 +1,18 @@
+{
+  "schema_version": "m1.0.0",
+  "actions": {
+    "provider_publish": false,
+    "provider_refresh": false,
+    "accepted_latest_switch": false,
+    "qlib_accepted_latest_switch": false,
+    "monitor_write": false,
+    "monitor_scan": false,
+    "broker_order": false,
+    "quick_trade": false,
+    "order_action": false,
+    "default_strategy_switch": false,
+    "agent_tool_expansion": false,
+    "agent_prompt_expansion": false,
+    "agent_action_expansion": false
+  }
+}

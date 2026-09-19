@@ -1,0 +1,46 @@
+{
+  "artifact_type": "replay_result",
+  "schema_version": "portfolio_state_replay_source_v1",
+  "contract_version": "REPLAY_RESULT_CONTRACT_CN.md@2026-06-16",
+  "run_id": "source_empty_001",
+  "asof": "2026-09-18",
+  "status": "VERIFIED_COMPLETE",
+  "generated_by": "replay_execution_engine",
+  "decision_source": "order_intent_artifact",
+  "source_inputs": {
+    "order_intent": {"artifact_id": "order_intent:wf5b-empty-fixture", "sha256": "2cd0c30ad99a06ded98529c89db0e941a4eca504c2bdb62eabd31e0d974c657d"},
+    "price_store": {"artifact_id": "price_store:wf5b-fixture", "sha256": "a2cce8c6468d53753c3e8dbb591a4d265d2dd976d644ef988f17b5b73475db8e"},
+    "initial_portfolio_state": {"artifact_id": "portfolio_state:wf5b-empty-bootstrap", "sha256": "d56e5aaebd4cab650101b00bc10520cb8489a98b4140cf11499ed2f539bd0d52"},
+    "execution_config": {"artifact_id": "execution_config:wf5b-fixture", "sha256": "0df7457cd53b7cbf6fc6155dc6cfb830cb6a02e5b5d2c9dfb4cf386a42ab1392"}
+  },
+  "artifacts": {
+    "summary": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_summary.csv",
+    "daily_nav": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_daily_nav.csv",
+    "actions": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_actions.csv",
+    "snapshots": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_position_snapshots.csv",
+    "coverage_audit": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_coverage_audit.csv",
+    "position_integrity_audit": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_integrity_audit.csv",
+    "forbidden_field_audit": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_forbidden_audit.csv",
+    "execution_audit": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_execution_audit.csv",
+    "forbidden_action_audit": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_forbidden_action_audit.json",
+    "decision_source_audit": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_decision_source_audit.csv",
+    "forbidden_scope_audit": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_forbidden_scope_audit.csv",
+    "action_lineage_audit": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_action_lineage_audit.csv",
+    "source_identity_audit": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_identity_audit.json"
+  },
+  "checksum_manifest": {
+    "path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_verified_empty/source_checksum_manifest.json",
+    "sha256": "afec502f57a77459987343770725bf8882cc3c7ae5fdec7f7146297208e1415b",
+    "bytes": 2978
+  },
+  "readonly_only": true,
+  "simulation_only": true,
+  "production_allowed": false,
+  "product_index_admission": false,
+  "runtime_admission": false,
+  "no_training": true,
+  "no_score_recompute": true,
+  "no_provider_publish": true,
+  "no_accepted_latest_switch": true,
+  "no_order_action": true
+}

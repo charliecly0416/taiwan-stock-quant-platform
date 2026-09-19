@@ -11,6 +11,9 @@ contracts:
   full_rank:
     version: full_rank_r9_v1
     docs: docs/tw_modular_contracts/FULL_RANK_CONTRACT_CN.md
+  portfolio_state:
+    version: m1.0.0
+    docs: docs/tw_modular_contracts/PORTFOLIO_STATE_ARTIFACT_CONTRACT_CN.md
 capabilities:
   core_signal_v1:
     required_fields:
@@ -38,6 +41,17 @@ capabilities:
     required_fields:
     - signal_asof
     - available_at
+  portfolio_state_v1:
+    required_fields:
+    - asof_date
+    - instrument
+    - quantity
+    - cost_basis
+    - current_holding_flag
+    required_evidence:
+    - source_lineage
+    - pending_intents_projection
+    - checksum_closure
 strategies:
   production_selectable:
     top50_exit_one_worst_sell:
@@ -229,6 +243,31 @@ m2_registry:
       production_allowed: false
       diagnostic_only: true
       owner_or_stage: model_b19r2r_research_shadow
+    portfolio_state.owner_independent_replay_m2_template:
+      artifact_type: portfolio_state
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/PORTFOLIO_STATE_ARTIFACT_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      validator_contract: portfolio_state
+      golden_sample: data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_owner_independent
+      capabilities:
+      - portfolio_state_v1
+      - owner_independent_replay_simulation
+      - pending_intents_projection
+      - checksum_closure
+      dependencies: []
+      allowed_consumers:
+      - strategy_rule
+      - replay_execution
+      forbidden_consumers:
+      - frontend_direct
+      - broker
+      - order
+      - provider_latest
+      - accepted_latest_switch
+      production_allowed: false
+      diagnostic_only: false
+      owner_or_stage: wf5b_contract_template
     strategy_rule.m2_onboarding_template:
       artifact_type: strategy_rule
       schema_version: m1.0.0

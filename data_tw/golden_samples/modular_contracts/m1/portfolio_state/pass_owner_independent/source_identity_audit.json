@@ -1,0 +1,23 @@
+{
+  "artifact_type": "portfolio_state_replay_source_identity_audit",
+  "schema_version": "portfolio_state_replay_source_v1",
+  "status": "pass",
+  "source_inputs": {
+    "order_intent": {
+      "artifact_id": "order_intent:wf5b-owner-fixture",
+      "sha256": "2cd0c30ad99a06ded98529c89db0e941a4eca504c2bdb62eabd31e0d974c657d"
+    },
+    "price_store": {
+      "artifact_id": "price_store:wf5b-fixture",
+      "sha256": "a2cce8c6468d53753c3e8dbb591a4d265d2dd976d644ef988f17b5b73475db8e"
+    },
+    "initial_portfolio_state": {
+      "artifact_id": "portfolio_state:wf5b-owner-bootstrap",
+      "sha256": "d56e5aaebd4cab650101b00bc10520cb8489a98b4140cf11499ed2f539bd0d52"
+    },
+    "execution_config": {
+      "artifact_id": "execution_config:wf5b-fixture",
+      "sha256": "0df7457cd53b7cbf6fc6155dc6cfb830cb6a02e5b5d2c9dfb4cf386a42ab1392"
+    }
+  }
+}

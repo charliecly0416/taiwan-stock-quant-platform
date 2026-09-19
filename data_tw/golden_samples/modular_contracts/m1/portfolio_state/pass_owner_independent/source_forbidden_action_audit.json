@@ -1,0 +1,12 @@
+{
+  "status": "pass",
+  "no_training": true,
+  "no_tuning": true,
+  "no_score_recompute": true,
+  "no_strategy_intent_mutation": true,
+  "no_default_switch": true,
+  "no_provider_publish": true,
+  "no_accepted_latest_switch": true,
+  "no_monitor_write": true,
+  "no_broker_order": true
+}

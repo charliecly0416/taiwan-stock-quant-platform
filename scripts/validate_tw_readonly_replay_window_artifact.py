@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 from pathlib import Path
@@ -138,6 +139,41 @@ FORBIDDEN_OUTPUT_FIELDS = {
     "accepted_latest_status",
     "monitor_config_write_status",
 }
+PORTFOLIO_SOURCE_SCHEMA_VERSION = "portfolio_state_replay_source_v1"
+PORTFOLIO_SOURCE_CONTRACT_VERSION = "REPLAY_RESULT_CONTRACT_CN.md@2026-06-16"
+PORTFOLIO_SOURCE_MANIFEST_FIELDS = {
+    "artifact_type",
+    "schema_version",
+    "contract_version",
+    "run_id",
+    "asof",
+    "status",
+    "generated_by",
+    "decision_source",
+    "source_inputs",
+    "artifacts",
+    "checksum_manifest",
+    "readonly_only",
+    "simulation_only",
+    "production_allowed",
+    "product_index_admission",
+    "runtime_admission",
+    "no_training",
+    "no_score_recompute",
+    "no_provider_publish",
+    "no_accepted_latest_switch",
+    "no_order_action",
+}
+PORTFOLIO_SOURCE_ARTIFACTS = REQUIRED_ARTIFACTS
+PORTFOLIO_SOURCE_COLUMNS = {
+    key: sorted(columns) for key, columns in REQUIRED_COLUMNS.items()
+}
+PORTFOLIO_SOURCE_INPUT_KEYS = {
+    "order_intent",
+    "price_store",
+    "initial_portfolio_state",
+    "execution_config",
+}
 
 
 def rel(path: Path) -> str:
@@ -187,6 +223,22 @@ def read_csv(path: Path) -> pd.DataFrame:
         return pd.read_csv(path)
     except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError):
         return pd.DataFrame()
+
+
+def read_exact_csv(path: Path, required_columns: set[str]) -> tuple[pd.DataFrame, str]:
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            raw_rows = list(csv.reader(handle, strict=True))
+    except (OSError, UnicodeError, csv.Error) as exc:
+        return pd.DataFrame(), type(exc).__name__
+    if not raw_rows:
+        return pd.DataFrame(), "empty_file"
+    header = raw_rows[0]
+    if set(header) != required_columns or len(header) != len(required_columns):
+        return pd.DataFrame(), f"columns={header}"
+    if any(len(row) != len(header) for row in raw_rows[1:]):
+        return pd.DataFrame(), "row_width_mismatch"
+    return pd.DataFrame(raw_rows[1:], columns=header), ""
 
 
 def bool_true(value: Any) -> bool:
@@ -466,6 +518,233 @@ def validate_e1_lineage(manifest: dict[str, Any]) -> tuple[bool, str]:
     }
     failed = sorted(name for name, ok in checks.items() if not ok)
     return not failed, f"failed={failed}"
+
+
+def validate_portfolio_state_source_artifact(manifest_path: Path) -> dict[str, Any]:
+    manifest_path = manifest_path.resolve()
+    manifest = load_json(manifest_path)
+    checks: list[dict[str, Any]] = [
+        check("manifest_fields", set(manifest) == PORTFOLIO_SOURCE_MANIFEST_FIELDS),
+        check("artifact_type", manifest.get("artifact_type") == "replay_result"),
+        check("schema_version", manifest.get("schema_version") == PORTFOLIO_SOURCE_SCHEMA_VERSION),
+        check("contract_version", manifest.get("contract_version") == PORTFOLIO_SOURCE_CONTRACT_VERSION),
+        check("status", manifest.get("status") == "VERIFIED_COMPLETE"),
+        check(
+            "producer_identity",
+            manifest.get("generated_by") == "replay_execution_engine"
+            and manifest.get("decision_source") == "order_intent_artifact",
+        ),
+        check(
+            "runtime_hold",
+            manifest.get("production_allowed") is False
+            and manifest.get("product_index_admission") is False
+            and manifest.get("runtime_admission") is False,
+        ),
+        check(
+            "readonly_safety",
+            all(
+                manifest.get(key) is True
+                for key in (
+                    "readonly_only",
+                    "simulation_only",
+                    "no_training",
+                    "no_score_recompute",
+                    "no_provider_publish",
+                    "no_accepted_latest_switch",
+                    "no_order_action",
+                )
+            ),
+        ),
+    ]
+    source_inputs = manifest.get("source_inputs")
+    source_inputs_ok = isinstance(source_inputs, dict) and set(source_inputs) == PORTFOLIO_SOURCE_INPUT_KEYS
+    if source_inputs_ok:
+        for value in source_inputs.values():
+            source_inputs_ok = source_inputs_ok and (
+                isinstance(value, dict)
+                and set(value) == {"artifact_id", "sha256"}
+                and isinstance(value.get("artifact_id"), str)
+                and bool(value["artifact_id"])
+                and isinstance(value.get("sha256"), str)
+                and len(value["sha256"]) == 64
+                and all(char in "0123456789abcdef" for char in value["sha256"])
+            )
+    checks.append(check("source_input_lineage", source_inputs_ok))
+
+    artifacts = manifest.get("artifacts")
+    artifacts_ok = isinstance(artifacts, dict) and set(artifacts) == PORTFOLIO_SOURCE_ARTIFACTS
+    checks.append(check("required_artifacts", artifacts_ok))
+    if not artifacts_ok:
+        return {"ok": False, "artifact": rel(manifest_path), "checks": checks}
+
+    paths = {key: resolve(value) for key, value in artifacts.items() if isinstance(value, str)}
+    checks.append(check(
+        "artifact_files_exist",
+        set(paths) == PORTFOLIO_SOURCE_ARTIFACTS and all(path.is_file() for path in paths.values()),
+    ))
+    frames: dict[str, pd.DataFrame] = {}
+    for key, required_columns in REQUIRED_COLUMNS.items():
+        path = paths.get(key, Path())
+        frame, issue = read_exact_csv(path, required_columns)
+        checks.append(check(f"{key}_schema", not issue, issue))
+        if not issue:
+            frames[key] = frame
+
+    checksum_binding = manifest.get("checksum_manifest")
+    checksum_path = resolve(checksum_binding.get("path", "")) if isinstance(checksum_binding, dict) else Path()
+    checksum = load_json(checksum_path)
+    checksum_files = checksum.get("files") if isinstance(checksum, dict) else None
+    checksum_contract_ok = (
+        isinstance(checksum_binding, dict)
+        and set(checksum_binding) == {"path", "sha256", "bytes"}
+        and checksum_path.is_file()
+        and checksum_binding.get("sha256") == sha256_file(checksum_path)
+        and type(checksum_binding.get("bytes")) is int
+        and checksum_binding.get("bytes") == checksum_path.stat().st_size
+        and checksum.get("artifact_type") == "portfolio_state_replay_source_checksum"
+        and checksum.get("schema_version") == PORTFOLIO_SOURCE_SCHEMA_VERSION
+        and checksum.get("run_id") == manifest.get("run_id")
+        and isinstance(checksum_files, list)
+    )
+    declared: dict[str, dict[str, Any]] = {}
+    if isinstance(checksum_files, list):
+        for item in checksum_files:
+            if (
+                not isinstance(item, dict)
+                or set(item) != {"path", "sha256", "bytes"}
+                or not isinstance(item.get("path"), str)
+                or item["path"] in declared
+            ):
+                checksum_contract_ok = False
+                continue
+            declared[item["path"]] = item
+            path = resolve(item["path"])
+            checksum_contract_ok = checksum_contract_ok and (
+                path.is_file()
+                and item.get("sha256") == sha256_file(path)
+                and type(item.get("bytes")) is int
+                and item.get("bytes") == path.stat().st_size
+            )
+    expected_checksum_paths = {str(value) for value in artifacts.values()}
+    checksum_contract_ok = checksum_contract_ok and set(declared) == expected_checksum_paths
+    checks.append(check("checksum_closure", checksum_contract_ok))
+
+    if set(frames) != set(REQUIRED_COLUMNS):
+        return {"ok": False, "artifact": rel(manifest_path), "checks": checks}
+    summary = frames["summary"]
+    actions = frames["actions"]
+    nav = frames["daily_nav"]
+    snapshots = frames["snapshots"]
+    asof = str(manifest.get("asof") or "")
+    checks.append(check("summary_one_row", len(summary) == 1))
+    checks.append(check("actions_empty_bootstrap_profile", actions.empty))
+    checks.append(check(
+        "daily_nav_asof_unique",
+        len(nav) == 1 and str(nav.iloc[0]["date"]) == asof,
+    ))
+
+    snapshots_numeric = snapshots.copy()
+    snapshot_numeric_ok = True
+    for column in ("quantity", "cost_basis", "mark_price", "market_value", "unrealized_pnl"):
+        snapshots_numeric[column] = pd.to_numeric(snapshots_numeric[column], errors="coerce")
+        snapshot_numeric_ok = snapshot_numeric_ok and snapshots_numeric[column].notna().all()
+    snapshot_numeric_ok = bool(
+        snapshot_numeric_ok
+        and not snapshots_numeric.duplicated(["date", "instrument"]).any()
+        and snapshots_numeric["date"].astype(str).eq(asof).all()
+        and (snapshots_numeric["quantity"] > 0).all()
+        and (snapshots_numeric["cost_basis"] > 0).all()
+        and (
+            snapshots_numeric["market_value"]
+            - snapshots_numeric["quantity"] * snapshots_numeric["mark_price"]
+        ).abs().le(0.011).all()
+        and (
+            snapshots_numeric["unrealized_pnl"]
+            - snapshots_numeric["quantity"]
+            * (snapshots_numeric["mark_price"] - snapshots_numeric["cost_basis"])
+        ).abs().le(0.011).all()
+    )
+    checks.append(check("position_snapshots_accounting", snapshot_numeric_ok))
+
+    nav_row = nav.iloc[0] if len(nav) == 1 else None
+    nav_ok = nav_row is not None
+    if nav_ok:
+        try:
+            cash = float(nav_row["cash"])
+            market_value = float(nav_row["market_value"])
+            equity = float(nav_row["equity"])
+            daily_return = float(nav_row["daily_return"])
+            holding_count = int(nav_row["holding_count"])
+            missing_price_count = int(nav_row["missing_price_count"])
+            nav_ok = (
+                abs(market_value - float(snapshots_numeric["market_value"].sum())) <= 0.02
+                and abs(equity - cash - market_value) <= 0.02
+                and abs(daily_return) <= 1e-12
+                and holding_count == len(snapshots_numeric)
+                and missing_price_count == 0
+            )
+        except (KeyError, TypeError, ValueError):
+            nav_ok = False
+    checks.append(check("nav_snapshot_accounting", bool(nav_ok)))
+
+    summary_ok = len(summary) == 1 and nav_row is not None
+    if summary_ok:
+        row = summary.iloc[0]
+        try:
+            summary_ok = (
+                str(row["end_date"]) == asof
+                and float(row["initial_cash"]) == float(nav_row["equity"])
+                and float(row["final_equity"]) == float(nav_row["equity"])
+                and abs(float(row["total_return"])) <= 1e-12
+                and abs(float(row["max_drawdown"])) <= 1e-12
+                and int(row["action_count"]) == 0
+                and int(row["buy_count"]) == 0
+                and int(row["sell_count"]) == 0
+                and int(row["max_holding_count"]) == len(snapshots_numeric)
+                and str(row["diagnostic_only"]).lower() == "false"
+            )
+        except (KeyError, TypeError, ValueError):
+            summary_ok = False
+    checks.append(check("summary_recomputed", bool(summary_ok)))
+
+    audits_ok = all(
+        not frames[key].empty
+        and frames[key]["status"].astype(str).str.lower().eq("pass").all()
+        for key in (
+            "coverage_audit",
+            "position_integrity_audit",
+            "forbidden_field_audit",
+            "execution_audit",
+        )
+    )
+    forbidden_action = load_json(paths.get("forbidden_action_audit", Path()))
+    action_audit_ok = forbidden_action.get("status") == "pass" and all(
+        forbidden_action.get(key) is True
+        for key in (
+            "no_training",
+            "no_tuning",
+            "no_score_recompute",
+            "no_strategy_intent_mutation",
+            "no_default_switch",
+            "no_provider_publish",
+            "no_accepted_latest_switch",
+            "no_monitor_write",
+            "no_broker_order",
+        )
+    )
+    source_identity = load_json(paths.get("source_identity_audit", Path()))
+    identity_ok = (
+        source_identity.get("artifact_type") == "portfolio_state_replay_source_identity_audit"
+        and source_identity.get("schema_version") == PORTFOLIO_SOURCE_SCHEMA_VERSION
+        and source_identity.get("status") == "pass"
+        and source_identity.get("source_inputs") == source_inputs
+    )
+    checks.append(check("required_audits_pass", audits_ok and action_audit_ok and identity_ok))
+    return {
+        "ok": all(row["status"] == "pass" for row in checks),
+        "artifact": rel(manifest_path),
+        "checks": checks,
+    }
 
 
 def validate_artifact(manifest_path: Path) -> dict[str, Any]:

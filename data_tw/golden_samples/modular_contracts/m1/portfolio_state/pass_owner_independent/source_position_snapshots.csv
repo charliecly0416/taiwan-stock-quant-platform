@@ -1,0 +1,3 @@
+date,instrument,quantity,cost_basis,mark_price,market_value,unrealized_pnl,strategy_rule,model_name
+2026-09-18,TW2330,100,975.5,975.5,97550.0,0.0,top50_exit_one_worst_sell,model_a
+2026-09-18,TW2317,200,214.0,214.0,42800.0,0.0,top50_exit_one_worst_sell,model_a

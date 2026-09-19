@@ -1,0 +1,1 @@
+signal_date,execution_date,instrument,action,quantity,execution_price,commission,tax,fee_and_tax,cash_after,position_after,intent_reason,strategy_rule,model_name,order_intent_artifact,order_intent_row_id

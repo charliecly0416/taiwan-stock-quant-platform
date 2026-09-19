@@ -1,0 +1,2 @@
+audit_name,requested_start_date,requested_end_date,actual_start_date,actual_end_date,trading_day_count,signal_day_count,price_day_count,missing_signal_day_count,missing_price_day_count,status,details
+window_coverage,2026-09-18,2026-09-18,2026-09-18,2026-09-18,1,1,1,0,0,pass,complete

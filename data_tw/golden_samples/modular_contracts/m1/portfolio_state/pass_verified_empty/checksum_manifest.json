@@ -1,0 +1,13 @@
+{
+  "schema_version": "m1.0.0",
+  "files": [
+    {"path": "portfolio_state.csv", "sha256": "7c4372ecc27c2d1c0aaaddc4140c5447bbe625f6d7e4ba619a4a09a0b1aa7b35", "bytes": 62},
+    {"path": "pending_intents.csv", "sha256": "f966d68d37e5321f842ccef58cbfe8c54046d887ae9d39874ca5506075712691", "bytes": 54},
+    {"path": "schema.json", "sha256": "3031667bd72a6d12956cb384a05f918b538f8e7510dd98b27358e582895ec558", "bytes": 515},
+    {"path": "source_lineage.json", "sha256": "c675bfed93efdde40d3d0f26ef68d4f7e938a7c9fde8705a91abf3c41eac83ff", "bytes": 530},
+    {"path": "source_manifest.json", "sha256": "2c4ba316cee0bc34045f33c861255017457748df67a8012e865d45201a7b5acc", "bytes": 3298},
+    {"path": "forbidden_action_audit.json", "sha256": "01d51d53849abf7a11d8da681c0e9ed37c26cc8c0a081bc6c1fbc2d4ebb1df55", "bytes": 475},
+    {"path": "forbidden_field_audit.json", "sha256": "8e7f684faff3b356fa990e66cfaefbcaeeb54d976400acad23739ea408800127", "bytes": 300},
+    {"path": "empty_state_evidence.json", "sha256": "1da08ab2d3e213be1aee2dd84ee407b8e23a9e05bc8c77d95d9f7a26d997ff7d", "bytes": 230}
+  ]
+}

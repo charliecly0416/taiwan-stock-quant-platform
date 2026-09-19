@@ -1,0 +1,17 @@
+{
+  "schema_version": "m1.0.0",
+  "portfolio_id": "ps_0123456789abcdef0123456789abcdef",
+  "state_kind": "owner_independent_replay_simulation",
+  "asof": "2026-09-18",
+  "lineage_kind": "replay_execution",
+  "source_artifacts": [
+    {
+      "admission_id": "wf5b_golden_owner_replay",
+      "artifact_type": "replay_result",
+      "run_id": "source_replay_001",
+      "manifest_path": "data_tw/golden_samples/modular_contracts/m1/portfolio_state/pass_owner_independent/source_manifest.json",
+      "sha256": "e5983141a14620a9ef98c1e66087a7ffceb0709686a7479c75789599d248d468",
+      "bytes": 3341
+    }
+  ]
+}

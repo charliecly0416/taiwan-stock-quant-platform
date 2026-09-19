@@ -1,0 +1,10 @@
+{
+  "contract": "portfolio_state",
+  "schema_version": "m1.0.0",
+  "expected_ok": false,
+  "expected_status": "failed",
+  "expected_error_codes": [
+    "portfolio_source_lineage_invalid",
+    "portfolio_state_kind_invalid"
+  ]
+}
