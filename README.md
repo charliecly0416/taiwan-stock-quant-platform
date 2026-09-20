@@ -148,9 +148,9 @@ make verify
 ## 继续阅读
 
 - [项目原理与当前限制](docs/PROJECT_INTRO_CN.md)
+- [技术架构、模块、数据结构与流向](docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md)（新开发者第一技术入口）
 - [使用与环境配置](docs/USER_GUIDE_CN.md)
 - [开发接手指南](docs/DEVELOPMENT_ONBOARDING_CN.md)
-- [模块地图与 artifact 流程](docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md)
 - [新模型与策略接入指南](docs/tw_modular_contracts/NEW_MODEL_AND_STRATEGY_DEVELOPER_GUIDE_CN.md)
 - [稳定运维手册](docs/ops/STABLE_OPERATIONS_RUNBOOK_CN.md)
 - [产品与运维审查](docs/PRODUCT_OPERATIONS_REVIEW_CN.md)

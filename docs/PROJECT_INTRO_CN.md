@@ -123,6 +123,7 @@ Model A 研究产品已经完成本机只读部署验收、数据库与产物备
 
 ## 9. 推荐入口
 
+- 新开发者理解技术全景：`docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`
 - 新 Codex/维护者：`docs/CODEX_HANDOFF_CN.md`
 - 日常运维：`docs/ops/DAILY_OPERATIONS_CHECKLIST_CN.md`
 - 开发接手：`docs/DEVELOPMENT_ONBOARDING_CN.md`

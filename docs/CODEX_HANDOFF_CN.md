@@ -23,9 +23,9 @@
 1. 根目录 `AGENTS.md`：强制安全、真相源和验证规则。
 2. 本文：当前状态与处理流程。
 3. `docs/PROJECT_INTRO_CN.md`：产品价值、用户流程和系统边界。
-4. `docs/PRODUCT_OPERATIONS_REVIEW_CN.md`：最近一次总体审查与未闭环事项。
-5. `docs/ops/STABLE_OPERATIONS_RUNBOOK_CN.md`：探针、备份、恢复、日志和部署验收。
-6. `docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`：模块输入、输出、成熟度与四条真实数据流。
+4. `docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`：第一技术入口，包含架构、模块实现、数据结构、数据流与追溯方法。
+5. `docs/PRODUCT_OPERATIONS_REVIEW_CN.md`：最近一次总体审查与未闭环事项。
+6. `docs/ops/STABLE_OPERATIONS_RUNBOOK_CN.md`：探针、备份、恢复、日志和部署验收。
 7. `docs/tw_modular_contracts/TW_PROJECT_DEVELOPMENT_CONSTITUTION_CN.md`：开发红线。
 
 遇到专项任务后，再从 `docs/DEVELOPMENT_ONBOARDING_CN.md` 进入相应合同或开发指南。不要从阶段历史报告反推当前默认状态。
