@@ -65,7 +65,7 @@
 
 ---
 
-> **当前台股项目入口：** 本仓库当前运行的台股主线是只读研究工作台与 simulation-only 模拟账户，不启用下文 QuantDinger 上游能力中的实盘执行。当前 baseline、B19R2R 研究影子、运维方式和开发边界请从[项目介绍](PROJECT_INTRO_CN.md)、[新 Codex 接手指南](CODEX_HANDOFF_CN.md)和[日常运维清单](ops/DAILY_OPERATIONS_CHECKLIST_CN.md)进入。
+> **当前台股项目入口：** 本仓库当前运行的台股主线是只读研究工作台与 simulation-only 模拟账户，不启用下文 QuantDinger 上游能力中的实盘执行。当前 baseline、B19R2R 研究影子和产品边界请先看[项目介绍](PROJECT_INTRO_CN.md)；模块输入输出与数据流见[模块地图](tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md)；维护工作从[新 Codex 接手指南](CODEX_HANDOFF_CN.md)和[日常运维清单](ops/DAILY_OPERATIONS_CHECKLIST_CN.md)进入。
 
 ## 目录
 

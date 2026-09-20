@@ -24,6 +24,7 @@ crontab -l
 - `all_readonly_guards=true`，orders/broker/quick-trade 均关闭。
 - 周末或台湾市场休市日，latest 保持上一有效交易日。
 - B19 `BLOCKED` 可以与 Model A ready 同时存在，但必须是 `mainline_blocking=false`。
+- 前端今日总览只采用当前 `signal_asof`；异日 Phase YZ 或 paper decision 显示为历史状态且不能应用。
 
 不要只看最后一条 cron job。周末 no-op 是最新自然任务时，还要查看最近一个工作日成功的 Model A evidence 和最近 full-lane B19 evidence。
 
@@ -75,6 +76,12 @@ curl -fsS http://127.0.0.1:5000/api/tw-stock/quant/ops/daily-auto-update/status 
 - Model A、snapshot、Agent prompt 和 accepted latest 是否未受影响。
 
 B19 失败不要求回滚健康的 Model A。只有当前 v2 自动 full lane 的证据才能证明自动影子运行；人工 `READY_RESEARCH_SHADOW` 只证明受控路径可运行。
+
+### 前端日期或比较结果异常
+
+先比较 current context、snapshot、Agent prompt 的 `signal_asof`。三者不一致属于主链 artifact 问题；只有旧 Phase YZ 或 paper decision 日期不同属于可隔离的历史状态，不应导致 Model A 页面失败。
+
+模型比较只读取 checksum 验证的静态组合。确认 API 返回 `readonly_only=true`、`no_apply=true`、`runtime_effect=none`；切换下拉框后 baseline、latest 和模拟账户不得变化。比较 API 失败时，当前 Model A 候选仍应可浏览。
 
 ### provider quota 或 cooldown
 

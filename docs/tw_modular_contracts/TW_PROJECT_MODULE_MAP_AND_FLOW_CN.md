@@ -1,348 +1,254 @@
-# 台股量化平台模块地图与链路串联说明
+# 台股量化平台模块地图与数据流
 
-生成日期：2026-06-18
+状态基准日期：2026-09-20。
 
-## 1. 文档目的
+## 1. 先看懂三种状态
 
-本文档给后续开发者快速理解当前项目：有哪些模块、各模块输入输出是什么、前端/API/日更/回放/模拟账户如何串起来，以及哪些旧研究产物仍被保留为可追溯资料。
+本文同时描述当前产品和后续架构，因此每个模块都标记成熟度：
 
-本项目当前产品主线是只读研究与模拟账户，不是实盘交易系统。任何新增能力都必须遵守只读、安全和模块合同边界。
-
-## 2. 当前核心产品口径
-
-当前产品口径分为 active baseline、研究 challenger 和 legacy artifact：
-
-| 角色 | model_id | 说明 |
+| 标记 | 含义 | 可以怎样理解 |
 | --- | --- | --- |
-| Active baseline / Model A | `e4_frozen_qlib_2018_2022` | 2018-2022 训练的 frozen qlib 底座，当前唯一 baseline |
-| Research challenger / B19R2R | `modelb_b19r2r_lambdarank_exact50_78f_v2` | 在 Model A 同日 Top50 内用 78 个 PIT-safe 特征重排；不进入默认、模拟账户或订单 |
-| Legacy Orthogonal LTR | `e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025` | 仅保留追溯和兼容路径，不是当前 challenger |
+| `CURRENT` | 当前产品真实读取或运行的链路 | 线上行为以它为准 |
+| `SHADOW` | 已自动接入或用于观察，但失败不会阻断 Model A | 可积累证据，不可替换 baseline |
+| `CONTRACT` | 合同、模板或纯函数已具备，生产 runtime 尚未全面迁移 | 是扩展地基，不代表已经上线 |
 
-当前默认策略规则：
+判断当前事实时，依次查看：
 
-```text
-top50_exit_one_worst_sell
-```
+1. `configs/active_baseline_descriptor.yaml`：唯一 active baseline 和默认策略。
+2. `configs/tw_modular_registry.yaml`：模块能力、允许和禁止的 consumer。
+3. `configs/tw_product_artifact_registry.yaml`：产品 artifact 路径。
+4. `configs/tw_replay_window_policy.yaml`：允许展示的回放窗口和组合。
+5. live artifact、validator 和 API：某个日期是否真的已产生并通过门禁。
 
-当前 baseline 身份与产品 artifact registry：
+旧 Phase YZ 路径、阶段报告和前端文案只能帮助追溯，不能覆盖上述真相源。
 
-```text
-configs/active_baseline_descriptor.yaml
-configs/tw_product_artifact_registry.yaml
-```
+## 2. 当前产品口径
 
-后续开发者不得在代码里新增另一套默认模型、默认策略或核心路径常量。需要改默认口径时，先改 registry，再跑测试，再审查。
-
-## 3. 关键 Registry 分工
-
-| Registry | 作用 | 是否产品入口 |
+| 角色 | 当前身份 | 产品用途 |
 | --- | --- | --- |
-| `configs/active_baseline_descriptor.yaml` | 当前唯一 baseline、默认策略和受保护指针 | 是，baseline 权威来源 |
-| `configs/tw_product_artifact_registry.yaml` | 产品 artifact 路径、重建源和 legacy 兼容字段 | 是，路径来源 |
-| `configs/tw_modular_registry.yaml` | 模块合同、生产可选模型/策略、research/deprecated 策略分类 | 是 |
-| `configs/tw_replay_window_policy.yaml` | 只读回放允许窗口、模型/策略选择、默认回放配置 | 是 |
-| `configs/strategy_dependencies/*.yaml` | 每个策略允许消费哪些字段和能力 | 是 |
-| `configs/data_source_registry.yaml` 等 M 系列 registry | 模块化模板/扩展地基 | 开发参考 |
+| Model A：`e4_frozen_qlib_2018_2022` | `CURRENT`，唯一 active baseline | 生成当前候选、默认策略输入和只读展示 |
+| B19R2R：`modelb_b19r2r_lambdarank_exact50_78f_v2` | `SHADOW`，冻结 research challenger | 使用 78 个 PIT-safe 特征，在 Model A 同日 exact Top50 内重排 |
+| 旧 Orthogonal LTR | legacy artifact | 只用于追溯和兼容，不是当前 Model B |
+| `top50_exit_one_worst_sell` | `CURRENT`，唯一产品默认策略 | 按 `next_open` 语义生成只读回放或受控模拟意图 |
 
-新增模型、策略、数据源时，至少要判断是否需要更新前三个 registry。
+B19R2R 排除 TW7769 且不补位。它的历史回放净收益较高，但稳定性、弱市表现和收益集中度的联合门槛没有全部通过，因此保持 `production_allowed=false`、`no_apply=true`，不得进入 provider/accepted latest、前端默认模型、模拟账户或订单。
 
-## 4. 当前模块地图
+## 3. Artifact 的共同语言
 
-### 4.1 数据与价格
+Artifact 是一个可追溯、可校验的模块输出。不同合同的真实字段并不完全相同，但应能表达下面这些共同概念：
 
-主要职责：保存价格、成交、日更原始数据或标准化价格。
-
-当前相关位置：
-
-```text
-qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/normalized_nonempty
-qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin/calendars/day.txt
-backend/scripts/update_tw_stock_daily.py
-scripts/run_daily_tw_stock_auto_update.py
+```json
+{
+  "artifact_type": "model_signal",
+  "schema_version": "m1.0.0",
+  "run_id": "stable-run-identity",
+  "asof": "YYYY-MM-DD",
+  "available_at": "ISO-8601 timestamp",
+  "decision_cutoff": "ISO-8601 timestamp",
+  "status": "READY",
+  "source_artifacts": [
+    { "manifest_path": "data_tw/artifacts/.../manifest.json" }
+  ],
+  "checksum_manifest": "checksum_manifest.json"
+}
 ```
 
-边界：
+这段 JSON 是阅读用的共同外壳，不是可以直接替代各合同的万能 schema。实现时必须阅读对应合同，因为有些现有产物使用 `signal_asof`、`artifact_id`、单独 checksum evidence 或更严格的字段名。
 
-- 数据模块不得输出策略结论。
-- 数据模块不得切换 provider accepted latest，除非用户明确授权。
-- 价格进入回放时必须经过可得性检查，尤其是 next_open / next_close。
+这些字段分别回答：
 
-### 4.2 特征
+| 字段概念 | 回答的问题 |
+| --- | --- |
+| `artifact_type`、`schema_version` | 这是什么数据，按哪一版合同解释 |
+| `run_id` | 哪一次不可变运行产生了它 |
+| `asof` / `signal_asof` | 数据或信号属于哪个交易日 |
+| `available_at` | 它在现实中何时可被下游看见 |
+| `decision_cutoff` | 本次决策最晚允许使用何时可得的数据 |
+| `status` | 产物是否完整并可被合同允许的 consumer 使用 |
+| `source_artifacts` | 它由哪些上游产物产生 |
+| checksum evidence | 文件是否完整、内容是否被改变 |
 
-当前严格 E4/YZ 使用的正交特征来自：
+最重要的时间规则是：
 
 ```text
-data_tw/experiments/ltr_orthogonal_features_controlled/phase_o2_pit_safe_feature_builder/normalized_feature_daily.csv
+source available_at <= decision_cutoff
 ```
 
-对应配置在：
+最重要的当前页面日期规则是：
 
 ```text
-configs/tw_product_artifact_registry.yaml -> rebuild_sources.o2_pit_feature_daily
+current signal_asof
+  == readonly snapshot signal_asof
+  == Agent prompt signal_asof
 ```
 
-边界：
+旧 Phase YZ 或 paper decision 的日期不同，只能显示为历史状态，不能参与今日总览或当前模拟应用。
 
-- 特征必须满足 `available_at <= signal_asof`。
-- 特征不得包含未来收益、label、真实成交、持仓收益等字段。
-- 策略不得直接读取特征文件，只能读标准 ModelSignalArtifact 或显式 extension。
+## 4. 模块输入输出总表
 
-### 4.3 模型与信号
+| 模块 / Artifact | 成熟度 | 输入 | 输出与关键身份 | 校验入口 | 消费方 | 明确禁止 |
+| --- | --- | --- | --- | --- | --- | --- |
+| DataSourceSnapshot / DataIngestion | `CURRENT` runtime；标准 M2 artifact 为 `CONTRACT` | provider 原始行情、交易日历、抓取时间 | 原始来源证据、标准化价格；`source_name/asof/available_at/run_id` | `scripts/validate_tw_modular_m_contracts.py`；日更各阶段 gate | Feature、PriceStore | 产生策略结论、直接改 baseline |
+| FeatureArtifact | `CURRENT` 数据被 Model A/B 使用；统一 M2 外壳为 `CONTRACT` | 标准化行情、价格、可得时间 | PIT-safe 特征；`asof/available_at/feature_schema/source_artifacts` | 同上；B19 另有冻结 78 特征和 PIT 审计 | Model adapter、分析模块 | future return、label 泄漏；被策略或前端直接读取 |
+| ModelSignalArtifact | Model A 为 `CURRENT`；B19 为 `SHADOW` | FeatureArtifact、冻结模型、底座候选边界 | `signals.csv`；`model_id/signal_asof/run_id/candidate_rank/buy_score/full_qlib_rank` | `MODEL_SIGNAL_CONTRACT_CN.md` 对应 validator、research stack | Strategy、readonly context、comparison | 输出交易动作；B19 改变 Model A exact Top50 边界 |
+| PortfolioStateArtifact | `CONTRACT`，WF-5B 地基 | 已确认的历史模拟持仓、pending intent lineage | `portfolio_state.csv`、`pending_intents.csv`；`portfolio_id/asof/run_id` | `scripts/validate_tw_modular_m_contracts.py` | Strategy、Replay | 携带用户/账户/券商身份；由模型分数反推持仓 |
+| StrategyRule / dependency | 当前默认规则为 `CURRENT`；通用纯内核为 `CONTRACT` | ModelSignalArtifact、PortfolioState、dependency YAML | 确定性的买卖意图规则；`strategy_id/version/required_capabilities` | dependency validator、WF-5A 纯函数测试 | OrderIntent builder | 读取模型私有 CSV、未来收益或回放结果 |
+| OrderIntentArtifact | 现有只读/模拟链路为 `CURRENT`；统一 runtime 迁移中 | 标准信号、组合状态、策略规则 | `order_intents.csv`；`signal_date/instrument/intent_action/strategy_rule/signal_artifact` | `ORDER_INTENT_CONTRACT_CN.md` 对应 validator | Replay、受控 paper adapter | 真实下单、伪装为成交或目标持仓 |
+| ReplayResultArtifact | 产品静态窗口为 `CURRENT`；WF-2 candidate 为 `CONTRACT` | OrderIntent、PriceStore、费用、`next_open` 执行配置 | 收益、回撤、换手、费用、每日轨迹；`model/strategy/window/run_id` | replay validator、D7 index/checksum gate | Readonly replay API、comparison | 按收益反改模型或策略；按请求临时重跑并写 runtime |
+| ReadonlyStrategySnapshot | `CURRENT` | 已验证 Model A 信号、策略摘要、日期身份 | 当前候选与只读策略快照；`signal_asof/run_id/checksum` | snapshot validator、`GET /api/ready` | current context、Agent、前端 | 充当订单或 target position；失败时覆盖 previous latest |
+| DailyAgentPromptArtifact | `CURRENT` | 同日 snapshot、候选、来源摘要 | 只读 Agent 上下文；`signal_asof/source checksums` | Agent prompt validator、readiness | simple-chat / Agent 面板 | 调用交易工具、给出收益承诺、使用异日信号 |
+| Comparison API DTO | `CURRENT`，只读 | checksum 验证的静态 catalog、paired metrics、gate diagnostics | A 与 A+B 同窗结果；`selected/result/comparison/no_apply` | service 内 catalog、组合和 checksum 检查 | 前端模型比较区 | 动态训练、动态回放、切 baseline、写模拟账户 |
+| Frontend Workbench ViewState | `CURRENT` | GET API DTO、当前 `signal_asof` | 页面筛选状态、候选、回放、比较、运维摘要 | fixture Playwright、network/console audit、build | 最终用户 | 直读 CSV、本地重算收益、用旧 Phase YZ 状态覆盖当前日期 |
 
-当前产品信号位置：
+各合同原文：
 
-```text
-data_tw/artifacts/phase_yz/yz1_strict_e4_model_signals/{signal_asof}/model_a/manifest.json
-data_tw/artifacts/phase_yz/yz1_strict_e4_model_signals/{signal_asof}/model_b_yz2/manifest.json
+- [数据源](DATA_SOURCE_CONTRACT_CN.md)、[数据标准化](DATA_INGESTION_ARTIFACT_CONTRACT_CN.md)
+- [特征](FEATURE_ARTIFACT_CONTRACT_CN.md)、[价格](PRICE_STORE_CONTRACT_CN.md)
+- [模型信号](MODEL_SIGNAL_CONTRACT_CN.md)、[组合状态](PORTFOLIO_STATE_ARTIFACT_CONTRACT_CN.md)
+- [策略规则](STRATEGY_RULE_CONTRACT_CN.md)、[订单意图](ORDER_INTENT_CONTRACT_CN.md)
+- [回放结果](REPLAY_RESULT_CONTRACT_CN.md)、[前端只读展示](FRONTEND_READONLY_DISPLAY_CONTRACT_CN.md)
+- [Agent 每日上下文](TW_AGENT_DAILY_PROMPT_ARTIFACT_CONTRACT_CN.md)
+
+### 4.1 在仓库中去哪里找
+
+| 想查看的部分 | 当前入口 |
+| --- | --- |
+| baseline、模型和产品 artifact 身份 | `configs/active_baseline_descriptor.yaml`、`configs/tw_modular_registry.yaml`、`configs/tw_product_artifact_registry.yaml` |
+| 每日编排与状态 | `scripts/run_daily_tw_stock_auto_update.py`、`backend/app/services/tw_stock_readonly_ops_status.py` |
+| 特征和历史数据索引 | `configs/feature_registry.yaml`、`data_tw/catalog/research_data_history/index.json`、产品 registry 的 `rebuild_sources` |
+| 当前 Model A 上下文 | `backend/app/services/tw_stock_current_strategy_context.py` |
+| 纯策略计算 | `tw_stock_strategy/top50_exit_one_worst_sell.py` |
+| PortfolioState 校验 | `scripts/contracts/portfolio_state.py`、`scripts/validate_tw_modular_m_contracts.py` |
+| OrderIntent 构建与校验 | `scripts/build_tw_modular_order_intent_artifact.py`、`scripts/validate_tw_modular_order_intent_artifact.py` |
+| Replay 内核与产品读取 | `tw_stock_workflow/replay_execution.py`、`backend/app/services/readonly_replay_window.py` |
+| Readonly snapshot | `tw_stock_workflow/readonly_snapshot.py`、`backend/app/services/readonly_strategy_snapshot.py` |
+| Agent 每日上下文 | `backend/app/services/tw_stock_agent_daily_prompt.py` |
+| A / A+B 比较 | `backend/app/services/readonly_model_strategy_comparison.py` |
+| 模拟账户 | `backend/app/services/tw_stock_paper_portfolio.py`、`backend/app/routes/tw_stock_paper_routes.py` |
+| 前端工作台 | `frontend/src/views/tw-stock-monitor/index.vue` 及其 `components/` |
+
+## 5. 四条真实数据流
+
+### 5.1 每日 Model A 主链
+
+```mermaid
+flowchart LR
+    D[行情与来源证据] --> N[标准化与可得性检查]
+    N --> F[PIT-safe 特征]
+    F --> A[冻结 Model A]
+    A --> S[ModelSignalArtifact]
+    S --> R[默认 StrategyRule]
+    R --> V[ReadonlyStrategySnapshot]
+    V --> C[current-strategy-context API]
+    V --> G[DailyAgentPromptArtifact]
+    C --> U[前端工作台]
+    G --> U
 ```
 
-当前统一上下文服务：
+当前编排入口是 `scripts/run_daily_tw_stock_auto_update.py`。它负责调度、重试、状态记录和 publish gate。任何阶段失败时保留 previous latest，不能用半成品覆盖当前可用结果。
+
+### 5.2 B19R2R 非阻断影子链
+
+```mermaid
+flowchart LR
+    A[Model A 同日 exact Top50] --> B[B19R2R]
+    F[同日 78 个 PIT-safe 特征] --> B
+    B --> S[Research shadow artifact]
+    S --> P[Prospective ledger / 后续结算]
+    S --> C[只读 comparison]
+```
+
+这条链是 `SHADOW`。B19 缺数据或失败时记录 `BLOCKED`，只要 `mainline_blocking=false`，Model A 主链继续运行。B19 不能补位 TW7769，不能写 Model A pending/latest，也不能成为 paper input。
+
+### 5.3 历史回放与模型比较链
+
+```mermaid
+flowchart LR
+    S[冻结 ModelSignalArtifact] --> R[StrategyRule]
+    P[PortfolioState] --> R
+    R --> I[OrderIntentArtifact]
+    X[PriceStore + next_open + fees] --> E[Replay execution]
+    I --> E
+    E --> O[ReplayResultArtifact]
+    O --> K[Checksum-verified readonly index]
+    K --> A[Replay / comparison GET API]
+    A --> U[前端下拉选择与结果展示]
+```
+
+前端下拉框只选择已经审计的静态组合。`no_apply=true` 表示选择不会改变 baseline、latest 或模拟账户；它不表示 Model A 在整个产品里不可用。
+
+### 5.4 模拟账户链
+
+```mermaid
+flowchart LR
+    S[当前同日 Model A 信号] --> R[默认策略]
+    P[simulation-only 账户状态] --> R
+    R --> I[Paper decision / intent]
+    I --> Q{日期、epoch、checksum、幂等校验}
+    Q -->|通过且用户显式应用| W[qd_tw_sim_* tables]
+    Q -->|失败| H[保持原状态]
+```
+
+模拟账户是产品中单独的受控写路径，只写 `qd_tw_sim_*` 表，不连接真实券商。decision 或旧 Phase YZ `signal_asof` 与当前信号不同，前端和后端都必须阻止应用。
+
+## 6. 前端与 API 的分工
+
+普通用户侧栏只保留台股研究、台股模拟账户和个人中心。台股研究页主要读取：
 
 ```text
-backend/app/services/tw_stock_current_strategy_context.py
 GET /api/tw-stock/current-strategy-context
-```
-
-Model A 输出 qlib top150/top50。当前 B19R2R 只在 Model A 同日 exact Top50 内重排；旧 `model_b_yz2` 路径属于 legacy Orthogonal LTR 兼容产物，不能据此判断当前 challenger 或 baseline。
-
-边界：
-
-- 模型只输出分数和排名，不输出买卖动作。
-- LTR 不改变 qlib top50 的卖出边界，只改变 top50 内买入排序。
-- 任何新模型必须先转成 ModelSignalArtifact。
-
-### 4.4 策略决策
-
-策略只消费：
-
-```text
-ModelSignalArtifact
-PortfolioState
-StrategyRule / StrategyDependency
-```
-
-`PortfolioState` 必须先通过 `PORTFOLIO_STATE_ARTIFACT_CONTRACT_CN.md` 的标准 artifact 接口。WF-5B 只定义 owner-independent replay simulation 模板，不创建正式组合，也不允许 per-user paper 状态直接携带账户或用户身份进入通用 artifact。paper adapter 后续只能把私有状态投影成不含 PII 的标准接口。
-
-策略输出：
-
-```text
-OrderIntentArtifact
-```
-
-当前生产可选策略只有：
-
-```text
-top50_exit_one_worst_sell
-```
-
-边界：
-
-- 策略不得读模型私有文件。
-- 策略不得读 future return、label、回放收益。
-- 策略不得输出真实订单，只能输出只读/模拟 order intent。
-
-### 4.5 回放
-
-回放消费：
-
-```text
-OrderIntentArtifact
-PriceStore / price source
-ExecutionConfig
-InitialPortfolioState
-```
-
-回放输出：
-
-```text
-ReplayResultArtifact
-ReadonlyReplayWindow
-```
-
-当前 API：
-
-```text
-GET /api/tw-stock/readonly-replay-window
-GET /api/tw-stock/readonly-replay-window-index
-```
-
-边界：
-
-- 回放不得反向修改策略动作。
-- 回放不得根据收益改变模型分数或策略规则。
-- 用户选择窗口时必须受 `configs/tw_replay_window_policy.yaml` 限制，不能回到训练集窗口做产品证据。
-
-### 4.6 Readonly Snapshot
-
-当前 snapshot latest：
-
-```text
-data_tw/artifacts/publish/readonly_strategy_snapshot/latest.json
-```
-
-当前 API：
-
-```text
 GET /api/tw-stock/readonly-strategy-snapshot
-GET /api/tw-stock/readonly-strategy-snapshot/{asof}
+GET /api/tw-stock/readonly-replay-window
+GET /api/tw-stock/readonly/model-strategy-comparison
+GET /api/tw-stock/quant/ops/daily-auto-update/status
+GET /api/tw-stock/quant/ops/readonly-status
 ```
 
-边界：
+前端只负责选择和展示。指标、收益、策略动作、模型排名和日期一致性结论都由后端读取已验证 artifact 后返回，浏览器不直接读取实验 CSV，也不重算回放。
 
-- snapshot 是只读展示产物，不是 broker order，不是 target position。
-- latest pointer 不是 provider accepted latest。
-- 只有 validator 和 checksum 通过的 snapshot 才能作为当前展示。
+## 7. Workflow Kernel 现在做到哪里
 
-### 4.7 Paper Portfolio / 模拟账户
+`tw_stock_workflow/` 已提供 artifact resolver、模块注册、DAG、required/optional/nonblocking 依赖、幂等 run evidence 和若干纯模块。它用于逐步收敛历史脚本之间的连接方式。
 
-当前模块：
+当前必须如实区分：
+
+| 阶段 | 已有能力 | 当前限制 |
+| --- | --- | --- |
+| WF-1 | readonly replay observation | 观察现有产物，不等于完整 ReplayResult 准入 |
+| WF-2 | 隔离 replay candidate execution | 尚未替换产品全部回放 runtime |
+| WF-3 | daily replay 只读 shadow | 默认关闭的非阻断 sidecar |
+| WF-4A/4B | Model A 输入/信号与 snapshot shadow | 默认关闭的非阻断 sidecar，不改 publish |
+| WF-5A | 纯策略计算内核 | 尚未接入 daily 或 replay runtime |
+| WF-5B | PortfolioState 合同与模板 | 只有 owner-independent replay 地基，不是 per-user paper adapter |
+
+因此，当前日更、策略、回放和模拟账户仍有 legacy service/script 负责真实运行。新增模块应优先接标准 artifact 和 kernel，但不得声称整个生产 runtime 已经迁移完成。详细迁移边界见[Workflow Kernel 迁移说明](TW_STOCK_WORKFLOW_KERNEL_MIGRATION_CN.md)。
+
+## 8. 新功能应该怎样接入
 
 ```text
-backend/app/services/tw_stock_paper_portfolio.py
-scripts/build_tw_paper_portfolio_decision_artifact.py
+确认所属模块
+  -> 阅读对应合同
+  -> 在 registry 声明能力、依赖和禁止 consumer
+  -> 生成不可变 artifact
+  -> validator + 正反 golden sample
+  -> 接入 workflow 或现有 adapter
+  -> 只读 API
+  -> 前端展示
 ```
 
-模拟账户可以写入 simulation-only 表，但不得连接真实 broker。
+新模型只需把输出适配为 ModelSignalArtifact；新策略只依赖标准信号、组合状态和 dependency YAML；新回放窗口只消费标准意图、价格和执行配置。这样日更、回放和前端可以复用同一模块，不需要为每个实验再写一套彼此不兼容的脚本。
 
-边界：
+## 9. 最低验证
 
-- 只允许模拟账户 apply/reset。
-- 不允许 real order、quick-trade、broker order。
-- apply 前必须通过 registry/policy/model/strategy/epoch/checksum 校验。
-
-### 4.8 前端
-
-当前主页面：
-
-```text
-frontend/src/views/tw-stock-monitor/index.vue
-```
-
-前端应优先读取统一上下文：
-
-```text
-GET /api/tw-stock/current-strategy-context
-```
-
-然后按需要读取：
-
-```text
-readonly snapshot
-readonly replay window
-paper portfolio state / preview / apply
-```
-
-边界：
-
-- 前端不得本地重算模型、策略、回放收益。
-- 前端不得直接读实验 CSV。
-- 前端不得暴露 deprecated/research-only 模型策略为普通用户选项。
-- 页面展示要遵守用户第一性原则：简单、准确、清晰、实用。
-
-### 4.9 日更与自动化
-
-当前自动脚本：
-
-```text
-scripts/run_daily_tw_stock_auto_update.py
-```
-
-定位：调度、重试、状态记录、只读 snapshot publish gate。它不应该继续膨胀成抓取、特征、模型、策略、展示都写在一起的大脚本。
-
-边界：
-
-- 默认不触发 legacy provider publish / accepted latest。
-- 只有数据、特征、模型、策略、snapshot validator 全通过，才允许更新只读 latest pointer。
-- 失败必须保留 previous latest。
-
-## 5. 功能如何串联模块
-
-### 5.1 今日策略展示
-
-```text
-价格/特征 artifact
-  -> frozen qlib Model A score
-  -> ModelSignalArtifact
-  -> current-strategy-context API
-  -> frontend 当前候选 / Top30 / Top50 展示
-
-Model A same-day exact Top50 + B19 PIT features
-  -> B19R2R research shadow
-  -> readonly comparison / prospective evidence
-```
-
-### 5.2 今日模拟决策
-
-```text
-current ModelSignalArtifact
-  -> StrategyRule top50_exit_one_worst_sell
-  -> OrderIntentArtifact
-  -> PaperPortfolio preview
-  -> 用户确认模拟 apply
-  -> simulation-only tables
-```
-
-### 5.3 历史回放
-
-```text
-ModelSignalArtifact + StrategyRule + PriceStore + ExecutionConfig
-  -> OrderIntent per day
-  -> ReplayExecution
-  -> ReplayResultArtifact
-  -> ReadonlyReplayWindow API
-  -> frontend 回放结果展示
-```
-
-### 5.4 每日自动更新
-
-```text
-两小时调度
-  -> 数据可得性检查
-  -> 数据更新/标准化
-  -> 特征更新
-  -> 模型信号生成
-  -> 策略快照/只读 snapshot
-  -> validators
-  -> latest pointer update or keep previous latest
-  -> frontend 读取最新只读上下文
-```
-
-## 6. 历史研究与归档规则
-
-历史脚本归档位置：
-
-```text
-scripts/archive/historical_research/
-```
-
-历史实验数据归档位置：
-
-```text
-data_tw/experiments/archive/historical_research/
-```
-
-归档规则：
-
-- 归档不代表删除研究证据。
-- 归档脚本不得作为当前产品入口。
-- 如果要恢复归档脚本，必须重新审查它是否符合当前 registry、合同和只读边界。
-
-## 7. 当前开发者最低验证命令
+纯文档修改执行链接、路径和命令检查以及 `git diff --check`。修改合同或实现时，至少运行对应 validator 和 focused tests；跨模块行为变化再运行：
 
 ```bash
-python -m py_compile   backend/app/services/tw_stock_artifact_registry.py   backend/app/services/tw_stock_current_strategy_context.py   backend/app/services/phase_yz3_productization_status.py   backend/app/services/tw_stock_paper_portfolio.py   scripts/build_phase_yz2_orthogonal_package.py   scripts/build_tw_paper_portfolio_decision_artifact.py
+PYTHONPATH=.:backend python scripts/run_tw_modular_contract_regression.py \
+  --out-dir tmp/modular_contract_regression_onboarding --json
 
-PYTHONPATH=backend python -m pytest   backend/tests/test_phase_yz0_clean_registry.py   backend/tests/test_phase_yz1_strict_e4_model_adapters.py   backend/tests/test_phase_yz2_orthogonal_package.py   backend/tests/test_phase_yz3_productization_status.py   backend/tests/test_build_tw_paper_portfolio_decision_artifact.py   backend/tests/test_tw_stock_paper_portfolio_x2.py   backend/tests/test_tw_stock_paper_portfolio_x2r_api.py   backend/tests/test_tw_stock_readonly_replay_window_api.py   backend/tests/test_tw_stock_readonly_strategy_snapshot_api.py -q
+PYTHONPATH=.:backend python backend/scripts/verify_tw_stock_research_stack.py
 
 cd frontend && corepack pnpm build
 ```
 
-## 8. 仍可优化的模块
-
-当前项目已比之前清晰，但仍有后续优化空间：
-
-1. 将 `frontend/src/views/tw-stock-monitor/index.vue` 拆成更小组件。
-2. 将仍被当前重建链路引用的历史实验数据提升为正式 product artifact。
-3. 将日更脚本进一步拆成 orchestrator + module steps。
-4. 为新增模型、新增策略提供一键模板生成器。
-5. 为 readonly snapshot 设计更稳定的 checksum 范围，避免旧快照因脚本归档而失效。
+这些命令不会自动刷新 provider、切换 accepted latest、训练模型或提交订单。完整运维步骤见 `../ops/STABLE_OPERATIONS_RUNBOOK_CN.md`。

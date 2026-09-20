@@ -41,6 +41,8 @@ flowchart LR
 
 每一层只读取上游的标准 artifact。registry 决定模块可以服务哪些 consumer，validator 与 checksum 负责阻止缺字段、错日期或被篡改的结果继续向下游传播。
 
+这张图描述目标接口和当前产品关系，不表示所有生产步骤都已迁移到统一 kernel。`tw_stock_workflow/` 已承载通用 resolver、DAG、观察 sidecar 和部分纯模块；现有日更、策略、回放与模拟账户正按合同增量迁移。当前实现状态见[模块地图与 artifact 流程](docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md)。
+
 ## 常用命令
 
 ```bash
@@ -136,7 +138,7 @@ make verify
 | `backend/app/routes/` | Flask API 与台股路由 |
 | `backend/app/services/` | 候选上下文、回放、Agent、模拟账户和运维状态 |
 | `frontend/src/views/tw-stock-monitor/` | 台股研究工作台 |
-| `tw_stock_workflow/` | 标准信号、策略、回放和只读快照流程 |
+| `tw_stock_workflow/` | 通用 workflow kernel、标准 adapter、观察 sidecar 和迁移中的纯模块 |
 | `configs/` | active baseline、模块 registry、artifact 路径和回放政策 |
 | `scripts/` | validator、日更编排、fixture 和验收脚本 |
 | `tests/`、`backend/tests/` | 合同、服务与安全边界测试 |

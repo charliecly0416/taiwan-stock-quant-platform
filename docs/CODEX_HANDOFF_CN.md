@@ -1,6 +1,6 @@
 # 新 Codex 接手指南
 
-状态基准日期：2026-09-19。本文提供接手时的最短路径；详细规则以所链接的合同和 runbook 为准。
+状态基准日期：2026-09-20。本文提供接手时的最短路径；详细规则以所链接的合同和 runbook 为准。
 
 ## 1. 先建立正确认知
 
@@ -16,6 +16,8 @@
 - 受控人工重试曾产生 `READY_RESEARCH_SHADOW`，但不能写成 scheduled 成功。
 - 2026-09-19 是周六，latest 保持 2026-09-18 属于正常状态。
 
+阅读架构时先区分三类状态：`CURRENT` 是当前真实产品，`SHADOW` 是不阻断 Model A 的观察链，`CONTRACT` 是尚未全面接入 runtime 的合同或模板。`tw_stock_workflow/` 已具备通用内核和若干模块，但日更、策略、回放、模拟账户仍在增量迁移，不能根据类名或 registry entry 宣称生产链已全部切换。
+
 ## 2. 阅读顺序
 
 1. 根目录 `AGENTS.md`：强制安全、真相源和验证规则。
@@ -23,7 +25,7 @@
 3. `docs/PROJECT_INTRO_CN.md`：产品价值、用户流程和系统边界。
 4. `docs/PRODUCT_OPERATIONS_REVIEW_CN.md`：最近一次总体审查与未闭环事项。
 5. `docs/ops/STABLE_OPERATIONS_RUNBOOK_CN.md`：探针、备份、恢复、日志和部署验收。
-6. `docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`：代码与 artifact 链路。
+6. `docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`：模块输入、输出、成熟度与四条真实数据流。
 7. `docs/tw_modular_contracts/TW_PROJECT_DEVELOPMENT_CONSTITUTION_CN.md`：开发红线。
 
 遇到专项任务后，再从 `docs/DEVELOPMENT_ONBOARDING_CN.md` 进入相应合同或开发指南。不要从阶段历史报告反推当前默认状态。
@@ -66,7 +68,7 @@ crontab -l
 
 ### 前端变更
 
-页面通过 GET API 消费标准 artifact，不直读实验目录，也不在浏览器内重算模型或策略。核心研究结果不得因维护型状态接口失败而被清空。比较页保持 `no_apply`；模拟账户写操作属于独立流程。涉及用户流程时运行 fixture Playwright 和桌面/平板/手机检查。
+页面通过 GET API 消费标准 artifact，不直读实验目录，也不在浏览器内重算模型或策略。核心研究结果不得因维护型状态接口失败而被清空。比较页保持 `no_apply`；模拟账户写操作属于独立流程。普通用户侧栏只保留台股研究、台股模拟账户和个人中心。旧 Phase YZ 或 paper decision 与当前 `signal_asof` 不同时只能显示历史状态，不能参与今日总览或 apply。涉及用户流程时运行 fixture Playwright 和桌面/平板/手机检查。
 
 ## 5. 权威状态如何判定
 

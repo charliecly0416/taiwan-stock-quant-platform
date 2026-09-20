@@ -93,6 +93,24 @@ python scripts/verify_tw_stock_readonly_deployment.py \
 
 脚本只对七个查询端点执行 GET，并确认 readiness、实际进程的只读运行边界、日期一致、Model A baseline、accepted/无 pending、只读运维门禁和比较页不可应用。它还用 POST/PUT/PATCH/DELETE 验证三个只读端点均返回 405；这些请求不会进入业务 handler。
 
+部署后还应人工打开台股研究页，确认普通用户侧栏只显示台股研究、台股模拟账户和个人中心，并检查三组产品语义：
+
+1. 候选名单、readonly snapshot 与 Agent 显示同一个 `signal_asof`。
+2. Model A / A+B 比较可以切换已审计组合，同时明确显示只读、不可应用，选择后 baseline 和模拟账户不变。
+3. 旧 Phase YZ 或 paper decision 日期与当前信号不一致时显示为历史状态，今日总览不采用它，模拟应用按钮不可用。
+
+### 页面日期错位
+
+如果页面同时显示不同交易日，先读取以下三个只读接口，不要先重跑任务：
+
+```bash
+curl -fsS http://127.0.0.1:5000/api/tw-stock/current-strategy-context | jq '.data | {context,consistency_audit}'
+curl -fsS http://127.0.0.1:5000/api/tw-stock/readonly-strategy-snapshot | jq '.data | {signal_asof,asof,manifest}'
+curl -fsS http://127.0.0.1:5000/api/tw-stock/quant/ops/readonly-status | jq '.data | {controlled_signal_latest,readonly_strategy_snapshot_latest,agent_prompt_latest}'
+```
+
+以 current context 的 `signal_asof` 为页面当前日期。snapshot 与 Agent prompt 应与它同日；不同则按 readiness 的 artifact check 修复。Phase YZ 和 paper decision 是独立历史状态，日期不同时不应强行对齐或覆盖 current context。若 API 已正确隔离但页面仍混用，按前端回归处理，并运行 fixture Playwright、network audit 和 console audit。
+
 候选通过后才停止旧 backend，并运行 `scripts/ensure_tw_stock_services.sh`。随后把同一命令的 `--base-url` 改为 `http://127.0.0.1:5000`，失败时立即停止新进程、恢复部署前版本与密钥备份，再启动旧版本。未保留可启动的部署前源码和密钥时，禁止执行替换。
 
 部署验收还必须完成：

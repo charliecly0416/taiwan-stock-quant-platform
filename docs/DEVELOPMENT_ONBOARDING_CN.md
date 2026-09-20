@@ -8,7 +8,7 @@
 git status --short
 ```
 
-当前工作区可能包含用户和前序 agent 的大量未提交改动，也包含不受 Git 管理的生产 artifact。不要 reset、checkout、clean 或覆盖现有改动。先读根目录 `AGENTS.md` 和 `CODEX_HANDOFF_CN.md`，再确认任务属于哪个模块。
+当前工作区可能包含用户和前序 agent 的大量未提交改动，也包含不受 Git 管理的生产 artifact。不要 reset、checkout、clean 或覆盖现有改动。先读根目录 `AGENTS.md`、`CODEX_HANDOFF_CN.md` 和 `tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`，再确认任务属于哪个模块。
 
 权威默认口径：
 
@@ -18,6 +18,8 @@ git status --short
 - 回放窗口：`configs/tw_replay_window_policy.yaml`。
 
 旧阶段报告、旧 LTR 路径或前端显示文案不能覆盖这些配置与 live readiness。
+
+模块地图使用三个成熟度标签：`CURRENT` 是当前真实产品链，`SHADOW` 是不阻断 Model A 的观察链，`CONTRACT` 只是合同或迁移地基。看到 registry entry、golden sample 或 workflow module 时，必须先确认标签，不能把“接口存在”直接写成“生产已使用”。
 
 ## 2. 模块优先的开发方式
 
@@ -108,6 +110,8 @@ GET /api/tw-stock/quant/ops/readonly-status
 ```
 
 比较页的模型/策略下拉框只选择历史展示，不修改 runtime。模拟账户的 apply/reset 是独立、显式、simulation-only 的写路径；不要把两者合并。
+
+普通用户目前只看到台股研究、台股模拟账户和个人中心。旧 Phase YZ 或 paper decision 只能在其 `signal_asof` 与当前策略日期一致时进入今日状态；异日结果必须保持历史标记并禁止 apply。
 
 ## 7. 完成标准
 

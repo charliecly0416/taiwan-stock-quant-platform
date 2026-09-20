@@ -1,6 +1,6 @@
 # Taiwan Stock Quant Platform 项目介绍
 
-状态基准日期：2026-09-19。
+状态基准日期：2026-09-20。
 
 ## 1. 这是一个什么产品
 
@@ -30,6 +30,8 @@
 B19R2R 使用 LightGBM LambdaRank 和 78 个 PIT-safe 特征。TW7769 因正交数据不可用而被明确排除，并且不补位。它不能改变 Model A 的候选边界，也不能写入 provider/accepted latest、前端默认模型、模拟账户或订单链路。
 
 历史只读回放中，A+B 在已审计窗口优于 A，但联合确认 gate 仍未全部通过。历史回放可以加快研究，不能替代按目标交易日生成的 prospective shadow 和后续收益结算。因此当前没有把 B19R2R 纳入 baseline。
+
+用产品语言说，当前结论是：A+B 在这段历史里赚得更多，但优势集中在部分时期，弱市和跨阶段稳定性还不够可靠。用户可以在比较区查看它与 Model A 的差异，系统仍以更稳妥的 Model A 作为当前默认结果。
 
 ## 3. 为什么比较页面“不可应用”
 
@@ -66,6 +68,10 @@ flowchart LR
 - 模拟账户可以写 simulation-only 状态，但不连接真实券商。
 
 模块合同、registry、validator 和 checksum 共同保证一项实验不能仅凭“历史收益较好”直接进入默认产品。
+
+普通用户侧栏只显示台股研究、台股模拟账户和个人中心。模型比较属于台股研究页中的只读工具，不会把研究选项变成运行配置。旧 Phase YZ 或模拟决策只有在 `signal_asof` 与当前策略日期一致时才参与今日总览；异日数据只显示为历史状态，并阻止模拟应用。
+
+仓库中的 `tw_stock_workflow/` 已提供 artifact resolver、DAG、非阻断依赖和部分纯模块，但仍处于增量迁移阶段。当前日更、策略、回放和模拟账户并未全部改由 kernel 执行；详细成熟度见 `tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`。
 
 ## 5. 日更与故障隔离
 
