@@ -1,0 +1,1 @@
+"""Focused modular contract validators."""

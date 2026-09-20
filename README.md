@@ -1,175 +1,157 @@
 # Taiwan Stock Quant Platform
 
-A standalone packaged Taiwan stock research platform that combines QuantDinger backend services, qlib Option C signal consumption/ops integration, cross-analysis, an OpenAI-powered research agent, and a Vue monitoring frontend. It also documents the Scrapling/Yahoo data collection workflow used by the related qlib pipeline.
+一个面向台股研究者的每日复盘工作台。它把候选排名、资料日期、模型与策略比较、历史回放、模拟账户和研究解释放在同一条可追溯链路中，帮助用户减少手工核对口径的时间。
 
-The project is designed for research and human review. It does not place broker orders by default, and the Taiwan stock monitor keeps generated recommendations in a read-only research workflow.
+这是只读研究产品，模拟账户也只用于 simulation。系统不连接真实券商，不自动下单，也不把模型分数包装成收益承诺。
 
-## Current Product Status
+## 你可以用它做什么
 
-The active baseline is **Model A only** (`e4_frozen_qlib_2018_2022`) with `top50_exit_one_worst_sell`. B19R2R is a frozen LightGBM LambdaRank reranker over Model A's same-day Top50, using 78 PIT-safe features and excluding TW7769 without substitution. It is a research challenger in the readonly comparison workbench and an isolated automatic shadow, not the production default.
+- 查看 Model A 当日 Top30/Top50 候选、行情日期、K 线和技术背景。
+- 在同一已审计窗口比较 Model A 与 Model A+B 的收益、回撤、换手和费用。
+- 回看策略意图、执行价格和费用如何形成历史模拟结果。
+- 查看 simulation-only 模拟账户与每日运行状态。
+- 让研究助手基于已验证的每日 artifact 解释候选；浏览核心结果不依赖 LLM。
 
-The daily lane maintains Model A artifacts; the weekday full lane captures orthogonal sources and attempts the A+B shadow. A shadow blocker must not change the baseline or the mainline pending state. Successful configuration checks do not prove a real scheduled shadow has completed. See [product and operations review](docs/PRODUCT_OPERATIONS_REVIEW_CN.md) for acceptance evidence and remaining limits.
+## Model A 与 A+B
 
-The product helps a researcher inspect dated candidates, compare audited historical model/strategy results, and review a simulation account. Historical comparisons cannot be applied from the comparison page. Agent explanations are optional; inspecting artifacts does not require an LLM call.
+| 方案 | 当前角色 | 能做什么 | 不能做什么 |
+| --- | --- | --- | --- |
+| Model A：`e4_frozen_qlib_2018_2022` | 唯一 active baseline | 生成当前候选，进入默认策略与只读产品链路 | 不能绕过策略、回放和安全门禁直接变成订单 |
+| Model A+B：`modelb_b19r2r_lambdarank_exact50_78f_v2` | 冻结的 research challenger | 用 78 个 PIT-safe 特征在 Model A 同日 Top50 内重排，参与历史比较和 prospective shadow | 不能成为前端默认、provider/accepted latest、模拟账户或订单输入 |
 
+默认策略是 `top50_exit_one_worst_sell`，回放采用 `next_open` 执行语义。B19R2R 排除 TW7769 且不补位；它保持 `production_allowed=false`。历史表现更好本身不足以切换 baseline，还需要独立的前瞻证据与准入决定。
 
-## Chinese Documentation
+## 系统如何工作
 
-- [项目介绍与原理](docs/PROJECT_INTRO_CN.md)
-- [新 Codex 接手指南](docs/CODEX_HANDOFF_CN.md)
-- [日常运维清单](docs/ops/DAILY_OPERATIONS_CHECKLIST_CN.md)
-- [稳定运维手册](docs/ops/STABLE_OPERATIONS_RUNBOOK_CN.md)
-- [开发接手指南](docs/DEVELOPMENT_ONBOARDING_CN.md)
-- [当前项目文档入口与归档政策](docs/tw_modular_contracts/TW_CURRENT_PROJECT_DOC_ENTRY_AND_ARCHIVE_POLICY_CN.md)
-- [使用文档](docs/USER_GUIDE_CN.md)
-- [产品、工程与稳定运维审查](docs/PRODUCT_OPERATIONS_REVIEW_CN.md)
-- [面试演示与工程说明](docs/INTERVIEW_DEMO_CN.md)
-- [模块化研究管线未来开发规范](docs/tw_modular_contracts/TW_MODULAR_PIPELINE_FUTURE_DEVELOPMENT_GUIDE_CN.md)
-- [项目模块地图与链路串联说明](docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md)
-- [开发、测试与实验手册](docs/tw_modular_contracts/TW_DEVELOPER_TEST_AND_EXPERIMENT_PLAYBOOK_CN.md)
-- [当前策略上下文 API 字段字典](docs/tw_modular_contracts/TW_CURRENT_STRATEGY_CONTEXT_API_FIELD_DICTIONARY_CN.md)
-- [新策略接入模板](docs/tw_modular_contracts/TW_NEW_STRATEGY_ONBOARDING_TEMPLATE_CN.md)
-- [台股日更自动化 Runbook](docs/tw_modular_contracts/TW_DAILY_AUTO_UPDATE_RUNBOOK_CN.md)
-- [每日自动更新闭环](docs/DAILY_AUTO_UPDATE_CN.md)
-- [最大生产闭环说明](docs/FULL_PRODUCTION_CLOSED_LOOP_CN.md)
+```mermaid
+flowchart LR
+    D[行情与来源证据] --> F[PIT-safe 特征]
+    F --> A[Model A]
+    A --> S[ModelSignalArtifact]
+    S --> R[StrategyRule]
+    R --> I[OrderIntentArtifact]
+    I --> P[执行价与费用回放]
+    P --> V[Readonly API / 工作台]
+    S --> V
+    S --> B[B19R2R 研究影子]
+    B --> C[比较与 prospective 证据]
+    C --> V
+    S --> Q[受控模拟账户]
+```
 
-## What It Contains
+每一层只读取上游的标准 artifact。registry 决定模块可以服务哪些 consumer，validator 与 checksum 负责阻止缺字段、错日期或被篡改的结果继续向下游传播。
 
-- `backend/`: Flask/Python services extracted from QuantDinger for Taiwan stock data, qlib signals, cross-analysis, trend analysis, agent context, and safety guardrails.
-- `frontend/`: Vue 2 + Vite monitoring UI extracted from QuantDinger-Vue.
-- `docs/`: architecture, deployment, qlib integration, cross-analysis, Agent, frontend, and acceptance documents.
-- `.github/workflows/`: CI checks for backend research stack and frontend monitor.
-- `.env.example`: safe environment template. Do not commit real credentials.
-
-## Core Capabilities
-
-- Taiwan stock symbol sync and daily data archive.
-- Executable FinMind/TWSE Taiwan stock archive and validation scripts.
-- qlib Option C normalized data export, accepted latest artifact consumption, ops integration, EOD automation wrappers, and scheduler support.
-- Built-in Yahoo/Scrapling crawler handoff scripts, FinMind/TWSE archive/export scripts, and qlib Option C production pipeline scripts.
-- QuantDinger cross-analysis between qlib research signals, trend data, technical state, and entry-position risk.
-- Read-only strategy replay using registered strategies and audited windows; the active rule is `top50_exit_one_worst_sell`. Historical research rules are not interchangeable production defaults.
-- Taiwan stock simulation account workflow for research-only observation, manual review, K-line markers, and performance review.
-- OpenAI Agent module for questions such as top ranked stocks, trend metrics, freshness, and research-only review context.
-- Frontend dashboard focused on current Top30/Top50 ranking, today's review priorities, cross-analysis, K-line charts, strategy replay, Agent panel, and safety labels. Internal data-status, dry-run, and historical-run diagnostics are no longer part of the normal user-first page flow.
-- Artifact contracts, validators and research evidence for model/strategy extensions; B19R2R development is frozen while its prospective shadow evidence accumulates.
-
-## Safety Boundary
-
-This repository is intended for research, analysis, and visualization only.
-
-- No real broker credentials should be committed.
-- `orders_enabled=false` is the expected Taiwan stock research mode.
-- Generated recommendations are not orders.
-- The UI and backend use explicit safety labels such as read-only, human review, dry-run only, and no trading.
-- Any live broker integration must be handled outside this project with separate approval, credentials, and risk controls.
-
-## Quick Start
-
-### Backend
+## 常用命令
 
 ```bash
+make help
+make start
+make test
+make verify
+make demo
+```
+
+| 命令 | 用途 | 是否需要本机生产资产 |
+| --- | --- | --- |
+| `make start` | 在 `127.0.0.1` 启动现有后端和前端开发服务 | 需要 PostgreSQL、自己的 `.env`、市场数据与冻结模型 |
+| `make test` | 自包含的快速检查：启动安全、PortfolioState facade 和前端主流程 | 不需要 live 数据或 ignored runtime artifact |
+| `make verify` | 完整本机发布 gate：研究栈、ARCH-1、M1/M2/M3 合同和前端构建 | 需要冻结模型、active latest、运行证据及完整 ignored golden/runtime assets |
+| `make demo` | fresh-checkout 的 healthy/fault fixture 桌面、平板、手机验收 | 不需要生产资产；需要先安装依赖和 Playwright Chromium |
+
+这些入口只是包装仓库已有脚本，没有引入新的应用框架。
+
+## 五分钟启动本机工作台
+
+环境要求：Python 3.10+、PostgreSQL 14+、Node.js 20/22、corepack 和 pnpm。fresh checkout 不包含生产行情、数据库或冻结模型，完整页面需要先供应这些本机资产。
+
+```bash
+# 1. 后端依赖
 cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp ../.env.example .env
-# Set a persistent SECRET_KEY and your own ADMIN_PASSWORD in backend/.env.
-# Generate the signing key with: python -c "import secrets; print(secrets.token_hex(32))"
-python run.py
+cd ..
+
+# 2. 前端依赖
+cd frontend
+corepack pnpm install
+cd ..
+
+# 3. 从仓库根目录建立本机配置，再填写自己的 PostgreSQL、SECRET_KEY 和管理员凭证
+cp .env.example backend/.env
+# 编辑 backend/.env；不要使用或提交示例密钥
+
+# 4. 启动
+make start
 ```
 
-### Frontend
+浏览器打开：<http://127.0.0.1:8000/#/tw-stock-monitor>。按 `Ctrl+C` 会一起停止两个服务。`make start` 显式关闭订单、持仓同步、交易策略恢复和支付 worker，不会执行数据刷新、模型训练或 latest 发布。
+
+## 没有生产资产也能演示
+
+fixture 演示使用封存的测试数据，适合 fresh checkout 和面试前自检。它验证当前工作台在正常及依赖失败时的用户流程，不代表 live 数据新鲜度或真实模型评分。
 
 ```bash
 cd frontend
-corepack enable
-pnpm install
-pnpm dev
-```
-
-By default the frontend expects the backend API to be available through `/api` proxy settings in `vite.config.js`.
-
-
-## Production Assets
-
-Production data and frozen models are local assets and are not distributed in git. A fresh checkout cannot reproduce live predictions without supplying those assets. Demo fixtures verify reader contracts and must remain separate from live latest pointers. Do not run an asset replacement or demo generator against an operating deployment as a health check.
-
-Use `GET /api/health` as the process liveness probe. Use `GET /api/ready` for local product readiness: it performs a read-only PostgreSQL probe and checks the registry and Model A -> readonly snapshot -> Agent prompt pointer chain. It never contacts a market-data provider or runs a model. A missing or inconsistent dependency returns HTTP 503 with bounded error codes and no filesystem paths, connection strings, or secret values.
-
-The current product workbench has a self-contained fixture acceptance path. It builds the frontend, starts a temporary local preview, runs healthy and injected-failure desktop/tablet/mobile checks, then stops the preview:
-
-```bash
-cd frontend && corepack pnpm install
+corepack pnpm install
 corepack pnpm exec playwright install chromium
-corepack pnpm test:product-fixture
+cd ..
+
+make demo
 ```
 
-Evidence is written under `tmp/product_fixture_acceptance/`; the fixture dates are intentionally sealed demo data and are not evidence of live market freshness.
+验收结果和真实截图写入 `tmp/product_fixture_acceptance/`，脚本结束后会关闭临时服务，不接触真实 latest 指针。
 
-To reproduce the original local production effect with the existing qlib assets on this machine:
+建议面试时依次展示：候选及日期 -> 单一标的与研究解释 -> A 与 A+B 同窗比较 -> simulation-only 账户与运维状态。详细讲解见[面试演示说明](docs/INTERVIEW_DEMO_CN.md)。
+
+## 测试与发布检查
+
+日常改动先运行：
 
 ```bash
-python scripts/bootstrap_full_production_assets.py --replace
-python scripts/verify_full_production_loop.py
+make test
 ```
 
-This bootstraps repo-local ignored assets under `qlib_pipeline/data_tw/` and `qlib_pipeline/mlruns/`, then validates the real Option C 150-stock accepted latest artifact and qlib provider dry-run. See `docs/FULL_PRODUCTION_CLOSED_LOOP_CN.md`.
-
-Large market data and model artifacts are not committed to git. Publish them as GitHub Release artifacts or regenerate them with the included crawler/export/dump/signal scripts.
-
-## Self-Contained Closed Loop
-
-To verify the single-repository demo loop without external qlib/Scrapling projects:
+供应本机冻结资产后，发布前运行完整的本机 gate：
 
 ```bash
-python scripts/verify_self_contained_closed_loop.py
+make verify
 ```
 
-This generates local fixture market data, creates an accepted Option C style `latest_signal.json`, and validates that the QuantDinger backend reader can consume latest/top30/top50/health. See `docs/SELF_CONTAINED_CLOSED_LOOP_CN.md`.
+`make verify` 运行 CI 级研究栈、ARCH-1、M1/M2/M3 合同 gate 和前端生产构建。它不需要已启动的 live 服务，但需要本机已有冻结模型、active latest、运行证据以及完整的 ignored golden/runtime assets，因此不是 fresh-checkout 演示入口。它不会刷新 provider、切换 accepted latest、训练模型或提交订单。部署候选时，再按[稳定运维手册](docs/ops/STABLE_OPERATIONS_RUNBOOK_CN.md)在备用端口执行 live 只读验收。
 
-For production daily operation, keep using or migrate the full qlib/Scrapling producer path. The included demo generator proves the repository contract and UI/backend consumption loop; it is not a replacement for production qlib LightGBM/Alpha158 training.
+## 安全边界
 
-## Validation
+- 产品用于研究、解释和人工复核，所有候选与评分都不是投资建议。
+- comparison workbench 始终 `no_apply=true`；页面选择不会修改 baseline、latest 或模拟账户。
+- Model A 主链与 B19R2R shadow 分开判定。B19 `BLOCKED` 且 `mainline_blocking=false` 时，不应污染 Model A pending 状态。
+- `GET /api/health` 只检查进程存活；`GET /api/ready` 还会只读检查数据库、registry、artifact 链和运行边界。
+- 密钥、数据库 URL、真实市场数据和冻结模型不进入 Git。
+- 数据刷新、provider publish、latest 切换、训练和任何订单路径都不在这些 Make 命令中。
 
-Backend focused tests used during packaging:
+## 仓库地图
 
-```bash
-cd backend
-python -m pytest tests/test_tw_stock_agent_context.py tests/test_tw_stock_agent_chat.py tests/test_tw_stock_cross_analysis_service.py tests/test_tw_stock_cross_analysis_api.py tests/test_tw_stock_qlib_option_c_signals.py tests/test_tw_stock_quant_signal_api.py -q
-```
+| 路径 | 内容 |
+| --- | --- |
+| `backend/app/routes/` | Flask API 与台股路由 |
+| `backend/app/services/` | 候选上下文、回放、Agent、模拟账户和运维状态 |
+| `frontend/src/views/tw-stock-monitor/` | 台股研究工作台 |
+| `tw_stock_workflow/` | 标准信号、策略、回放和只读快照流程 |
+| `configs/` | active baseline、模块 registry、artifact 路径和回放政策 |
+| `scripts/` | validator、日更编排、fixture 和验收脚本 |
+| `tests/`、`backend/tests/` | 合同、服务与安全边界测试 |
+| `docs/tw_modular_contracts/` | artifact 合同和扩展规范 |
+| `docs/ops/` | 稳定运维、备份和恢复手册 |
 
-Frontend focused checks:
+## 继续阅读
 
-```bash
-cd frontend
-node tests/unit/tw-stock-monitor-static-check.mjs
-node tests/unit/tw-stock-agent-panel-check.mjs
-node tests/unit/tw-stock-monitor-workflow-check.mjs
-node tests/unit/tw-stock-monitor-qlib-ops-check.mjs
-node tests/unit/tw-stock-cross-analysis-check.mjs
-node tests/unit/tw-stock-rank-tech-portfolio-replay-check.mjs
-TW_STOCK_MONITOR_BASE_URL=http://127.0.0.1:8000 node tests/e2e/tw-stock-rank-tech-portfolio-replay-readonly.mjs
-corepack pnpm build
-```
+- [项目原理与当前限制](docs/PROJECT_INTRO_CN.md)
+- [使用与环境配置](docs/USER_GUIDE_CN.md)
+- [开发接手指南](docs/DEVELOPMENT_ONBOARDING_CN.md)
+- [模块地图与 artifact 流程](docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md)
+- [新模型与策略接入指南](docs/tw_modular_contracts/NEW_MODEL_AND_STRATEGY_DEVELOPER_GUIDE_CN.md)
+- [稳定运维手册](docs/ops/STABLE_OPERATIONS_RUNBOOK_CN.md)
+- [产品与运维审查](docs/PRODUCT_OPERATIONS_REVIEW_CN.md)
+- [维护者接手指南](docs/CODEX_HANDOFF_CN.md)
 
-The historical `tw-stock-full-scenario-readonly.mjs` script is kept as an old fixture for the previous diagnostic-heavy page. It is not the current one-click acceptance standard for the simplified user-first Taiwan stock page.
-
-## Data Policy
-
-The repository intentionally excludes generated market data and qlib binary artifacts.
-
-Ignored examples:
-
-- `data/`
-- `data_tw/`
-- `backend/data/`
-- `backend/data_tw/`
-- `frontend/dist/`
-- caches and virtual environments
-
-Use the scripts and docs to regenerate local data in your own environment. The repository now includes a self-contained demo loop under `scripts/verify_self_contained_closed_loop.py`; generated `data_tw/` artifacts remain ignored. For production-grade live Yahoo/Scrapling -> qlib LightGBM/Alpha158 training/prediction, migrate the full qlib `examples/tw/*option_c*` scripts into `qlib_pipeline/option_c/` or vendor them as a submodule.
-
-## Attribution
-
-This standalone project is packaged from work built on top of QuantDinger, QuantDinger-Vue, qlib research workflows, and Scrapling-style data collection. Keep upstream license notices and dependency licenses when publishing.
+项目基于 QuantDinger、QuantDinger-Vue、qlib 与 Scrapling 风格的数据采集流程扩展。发布或再分发时请保留上游许可和依赖许可。

@@ -39,6 +39,53 @@ def error_codes(result: dict) -> set[str]:
     return {item["code"] for item in result["errors"]}
 
 
+@pytest.mark.parametrize("raises", [False, True])
+def test_compatibility_facade_restores_child_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raises: bool
+) -> None:
+    child = portfolio_validator.portfolio_state_validator
+    names = (
+        "ROOT",
+        "DEFAULT_GOLDEN_ROOT",
+        "PORTFOLIO_SOURCE_ADMISSIONS",
+        "SCHEMA_VERSION",
+        "replay_artifact_validator",
+    )
+    child_config = (
+        tmp_path / "child-root",
+        tmp_path / "child-golden",
+        tmp_path / "child-admissions.yaml",
+        "child-schema",
+        object(),
+    )
+    expected_active = (
+        portfolio_validator.ROOT,
+        portfolio_validator.DEFAULT_GOLDEN_ROOT,
+        portfolio_validator.PORTFOLIO_SOURCE_ADMISSIONS,
+        portfolio_validator.SCHEMA_VERSION,
+        portfolio_validator.replay_artifact_validator,
+    )
+    for name, value in zip(names, child_config, strict=True):
+        monkeypatch.setattr(child, name, value)
+
+    observed: list[tuple[object, ...]] = []
+
+    def fake_validate(*_args: object) -> None:
+        observed.append(tuple(getattr(child, name) for name in names))
+        if raises:
+            raise RuntimeError("validator failure")
+
+    monkeypatch.setattr(child, "validate_portfolio_state", fake_validate)
+    if raises:
+        with pytest.raises(RuntimeError, match="validator failure"):
+            portfolio_validator.validate_portfolio_state({}, tmp_path, tmp_path, [], [])
+    else:
+        portfolio_validator.validate_portfolio_state({}, tmp_path, tmp_path, [], [])
+
+    assert observed == [expected_active]
+    assert tuple(getattr(child, name) for name in names) == child_config
+
+
 @pytest.fixture
 def nonempty_artifact(tmp_path: Path) -> Path:
     target = tmp_path / "portfolio_state"
