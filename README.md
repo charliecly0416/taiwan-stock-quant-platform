@@ -16,10 +16,10 @@
 
 | 方案 | 当前角色 | 能做什么 | 不能做什么 |
 | --- | --- | --- | --- |
-| Model A：`e4_frozen_qlib_2018_2022` | 唯一 active baseline | 生成当前候选，进入默认策略与只读产品链路 | 不能绕过策略、回放和安全门禁直接变成订单 |
-| Model A+B：`modelb_b19r2r_lambdarank_exact50_78f_v2` | 冻结的 research challenger | 用 78 个 PIT-safe 特征在 Model A 同日 Top50 内重排，参与历史比较和 prospective shadow | 不能成为前端默认、provider/accepted latest、模拟账户或订单输入 |
+| Model A：`e4_frozen_qlib_2018_2022` | 一等 model track；active baseline | 生成当前候选，进入默认策略与只读产品链路 | 不能绕过策略、回放和安全门禁直接变成订单 |
+| Model A+B：`modelb_b19r2r_lambdarank_exact50_78f_v2` | 一等 model track；research candidate | 走与 A 相同的 ModelSignal、OrderIntent、ReplayResult 和比较接口 | 尚未获准成为默认模型或虚拟账户输入 |
 
-默认策略是 `top50_exit_one_worst_sell`，回放采用 `next_open` 执行语义。B19R2R 排除 TW7769 且不补位；它保持 `production_allowed=false`。历史表现更好本身不足以切换 baseline，还需要独立的前瞻证据与准入决定。
+默认策略是 `top50_exit_one_worst_sell`，回放采用 `next_open` 执行语义。当前 14 日共同完整窗口严格保留 Model A 原始 Top50；A+B 只排除缺少完整正交来源的 `TW7769`，不补入第 51 名，`TW6919` 正常参与重排。A+B 保持 `production_allowed=false`。系统只有一种通用 `ModelTrack` 执行模块；Model A 与 A+B 是它的两个配置实例，A+B 内部的 A 候选与 B 重排由 adapter 封装。所有 track 共用策略和回放接口，`configs/readonly_model_tracks.yaml` 单独管理 adapter、默认值和虚拟账户准入。每个 adapter 锁定 canonical model、模型族和候选边界；未知 adapter 或身份错绑都会在读取模型数据前失败，不能回退成 Model A。Paper decision 通过 `model_track_id` 选择轨道，服务端在写入模拟账户前校验 allowlist 及 track 与 canonical model 的绑定；当前 allowlist 只有 Model A。未来新增模型需要完成 registry、adapter、workflow 配置与准入审查，但不必复制模型编排、策略或回放模块。
 
 ## 系统如何工作
 
@@ -27,16 +27,19 @@
 flowchart LR
     D[行情与来源证据] --> F[PIT-safe 特征]
     F --> A[Model A]
-    A --> S[ModelSignalArtifact]
-    S --> R[StrategyRule]
-    R --> I[OrderIntentArtifact]
-    I --> P[执行价与费用回放]
-    P --> V[Readonly API / 工作台]
-    S --> V
-    S --> B[B19R2R 研究影子]
-    B --> C[比较与 prospective 证据]
-    C --> V
-    S --> Q[受控模拟账户]
+    A --> B[Model A+B]
+    A --> SA[ModelSignal A]
+    B --> SB[ModelSignal A+B]
+    SA --> RA[同一策略]
+    SB --> RB[同一策略]
+    RA --> IA[OrderIntent A]
+    RB --> IB[OrderIntent A+B]
+    IA --> PA[ReplayResult A]
+    IB --> PB[ReplayResult A+B]
+    PA --> C[ComparisonArtifact]
+    PB --> C
+    C --> V[Readonly API / 工作台]
+    SA --> Q[受控模拟账户<br/>默认只接受 A]
 ```
 
 每一层只读取上游的标准 artifact。registry 决定模块可以服务哪些 consumer，validator 与 checksum 负责阻止缺字段、错日期或被篡改的结果继续向下游传播。

@@ -14,7 +14,11 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCT_REGISTRY = yaml.safe_load((ROOT / "configs/tw_product_artifact_registry.yaml").read_text(encoding="utf-8")) or {}
-MODEL = str((PRODUCT_REGISTRY.get("models") or {}).get("treatment_display_model_id") or (PRODUCT_REGISTRY.get("models") or {}).get("treatment_model_id"))
+MODEL_TRACK_REGISTRY = yaml.safe_load((ROOT / "configs/readonly_model_tracks.yaml").read_text(encoding="utf-8")) or {}
+MODEL_TRACK_POLICY = MODEL_TRACK_REGISTRY.get("virtual_account_policy") or {}
+MODEL_TRACKS = MODEL_TRACK_REGISTRY.get("tracks") or {}
+DEFAULT_MODEL_TRACK_ID = str(MODEL_TRACK_POLICY.get("default_track_id") or MODEL_TRACK_REGISTRY.get("default_track_id") or "")
+MODEL = str((MODEL_TRACKS.get(DEFAULT_MODEL_TRACK_ID) or {}).get("model_id") or "")
 RULE = str((PRODUCT_REGISTRY.get("strategies") or {}).get("default_strategy_rule"))
 DEFAULT_STRATEGY_SNAPSHOT_LATEST = ROOT / str((PRODUCT_REGISTRY.get("artifacts") or {}).get("readonly_strategy_latest"))
 DEFAULT_STRATEGY = ROOT / "configs/strategy_dependencies" / f"{RULE}.yaml"
@@ -112,6 +116,19 @@ def load_signals(signal_manifest_path: Path) -> tuple[dict[str, Any], list[dict[
         rows = list(csv.DictReader(handle))
     rows = [row for row in rows if tw_symbol(row.get("instrument"))]
     return manifest, rows
+
+
+def resolve_model_track(model_track_id: str = "") -> tuple[str, dict[str, Any]]:
+    track_id = model_track_id or DEFAULT_MODEL_TRACK_ID
+    allowed = {str(item) for item in MODEL_TRACK_POLICY.get("allowed_track_ids") or []}
+    track = MODEL_TRACKS.get(track_id)
+    if not isinstance(track, dict):
+        raise RuntimeError(f"unknown model_track_id: {track_id}")
+    if track_id not in allowed or track.get("virtual_account_eligible") is not True:
+        raise RuntimeError(f"model_track_id is not allowed for simulation account: {track_id}")
+    if not track.get("model_id"):
+        raise RuntimeError(f"model_track_id has no canonical model_id: {track_id}")
+    return track_id, track
 
 
 def load_strategy(path: Path = DEFAULT_STRATEGY) -> dict[str, Any]:
@@ -464,8 +481,16 @@ def build_artifact(
     signal_asof: str = "",
     lot_size: int = 10,
     target_holding_count: int = 10,
+    model_track_id: str = DEFAULT_MODEL_TRACK_ID,
 ) -> dict[str, Any]:
+    model_track_id, model_track = resolve_model_track(model_track_id)
+    model_id = str(model_track["model_id"])
     signal_manifest, signals = load_signals(signal_manifest_path)
+    signal_model_id = str(signal_manifest.get("model_id") or signal_manifest.get("model_name") or "")
+    if signal_model_id != model_id:
+        raise RuntimeError(
+            f"model signal does not match model_track_id {model_track_id}: {signal_model_id or 'missing'}"
+        )
     asof, day_signals = latest_by_symbol(signals, signal_asof or str(signal_manifest.get("asof_date") or ""))
     strategy = load_strategy(strategy_path)
     candidate_k = int(signal_manifest.get("candidate_k") or 50)
@@ -486,6 +511,7 @@ def build_artifact(
     input_payload = {
         "portfolio_state_checksum": portfolio_state["checksum"],
         "source_model_signal_artifact": rel(signal_manifest_path),
+        "model_track_id": model_track_id,
         "strategy_rule": RULE,
         "asof": asof,
         "actions": actions,
@@ -496,7 +522,8 @@ def build_artifact(
         "artifact_type": "PaperOrderIntentArtifact",
         "schema_version": INTENT_SCHEMA,
         "decision_id": decision_id,
-        "model_id": MODEL,
+        "model_id": model_id,
+        "model_track_id": model_track_id,
         "strategy_rule": RULE,
         "paper_account_id": portfolio_state["paper_account_id"],
         "user_id": portfolio_state["user_id"],
@@ -568,7 +595,8 @@ def build_artifact(
         "run_id": run_id,
         "created_at": now_iso(),
         "created_by": rel(Path(__file__)),
-        "model_id": MODEL,
+        "model_id": model_id,
+        "model_track_id": model_track_id,
         "strategy_rule": RULE,
         "paper_account_id": portfolio_state["paper_account_id"],
         "user_id": portfolio_state["user_id"],
@@ -609,6 +637,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--account-uid", default="")
     parser.add_argument("--user-id", type=int, default=0)
     parser.add_argument("--model-signal", default="")
+    parser.add_argument("--model-track-id", default=DEFAULT_MODEL_TRACK_ID)
     parser.add_argument("--strategy-config", default=str(DEFAULT_STRATEGY))
     parser.add_argument("--signal-asof", default="")
     parser.add_argument("--run-id", default="")
@@ -634,6 +663,7 @@ def main(argv: list[str] | None = None) -> int:
         signal_asof=args.signal_asof,
         lot_size=args.lot_size,
         target_holding_count=args.target_holding_count,
+        model_track_id=args.model_track_id,
     )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))

@@ -172,9 +172,21 @@ def test_paper_portfolio_latest_decision_route_is_readonly_and_user_scoped(tmp_p
     assert resp.status_code == 200
     assert data["ok"] is True
     assert data["decision_id"] == payload["decision_id"]
+    assert data["model_track_id"] == "model_a_only"
     assert data["paper_order_intent_artifact_path"] == payload["paper_order_intent_artifact_path"]
     assert data["simulation_only"] is True
     assert data["trading"]["real_orders_enabled"] is False
+    assert not harness.db.apply_runs
+    assert not harness.db.orders
+    assert not harness.db.trades
+
+    blocked = harness.client.get(
+        "/api/tw-stock/paper-portfolio/latest-decision",
+        query_string={"model_track_id": "model_a_plus_b_b19r2r"},
+        headers=harness.headers,
+    )
+    assert blocked.status_code == 400
+    assert blocked.get_json()["data"]["status"] == "model_track_not_allowed"
     assert not harness.db.apply_runs
     assert not harness.db.orders
     assert not harness.db.trades

@@ -238,6 +238,20 @@ def test_apply_happy_path_writes_paper_only_tables_and_audit():
         assert item not in forbidden
 
 
+def test_apply_rejects_model_track_outside_simulation_allowlist():
+    db = X2Db(); seed_account(db)
+    service = make_service(db)
+    payload = apply_payload(actions=[buy_action()])
+    payload["model_track_id"] = "model_a_plus_b_b19r2r"
+    payload["paper_order_intent"]["model_track_id"] = "model_a_plus_b_b19r2r"
+
+    result = service.apply_decision(user_id=7, payload=payload)
+
+    assert result["ok"] is False
+    assert result["status"] == "model_track_not_allowed"
+    assert db.trades == []
+
+
 def test_apply_duplicate_same_idempotency_returns_existing_result_and_conflict_rejected():
     db = X2Db(); seed_account(db)
     service = make_service(db)

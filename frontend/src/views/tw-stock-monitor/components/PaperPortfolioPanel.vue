@@ -190,16 +190,6 @@
 
 <script>
 import { usePaperPortfolio } from '../composables/usePaperPortfolio'
-// Legacy API ownership remains explicit while the composable delegates to these helpers.
-import {
-  getTwStockPaperPortfolioLatestDecision,
-  getTwStockPaperPortfolioState,
-  getTwStockPaperPortfolioApplyRuns
-} from '@/api/tw-stock-readonly'
-import {
-  applyTwStockPaperPortfolioDecision,
-  resetTwStockPaperPortfolio
-} from '@/api/tw-stock-action'
 
 export default {
   name: 'PaperPortfolioPanel',
@@ -290,6 +280,7 @@ export default {
         { label: 'paper_account_id', value: this.accountId },
         { label: 'paper_account_epoch', value: this.accountEpoch },
         { label: 'decision_id', value: this.decision.decision_id },
+        { label: 'model_track_id', value: this.decision.model_track_id },
         { label: 'model_id', value: this.decision.model_id },
         { label: 'strategy_rule', value: this.decision.strategy_rule },
         { label: 'paper_order_intent_artifact_path', value: this.decision.paper_order_intent_artifact_path },
@@ -369,6 +360,7 @@ export default {
           paper_account_id: this.decision.paper_account_id,
           paper_account_epoch: this.decision.paper_account_epoch,
           decision_id: this.decision.decision_id,
+          model_track_id: this.decision.model_track_id,
           paper_order_intent_artifact_path: this.decision.paper_order_intent_artifact_path,
           input_checksum: this.decision.input_checksum,
           idempotency_key: `paper_apply_${this.decision.decision_id}_${Date.now()}`,

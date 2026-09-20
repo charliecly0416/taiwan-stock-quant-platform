@@ -172,7 +172,7 @@ def _sim_response(payload: dict):
     http_status = 200
     if status == "not_found":
         http_status = 404
-    elif status in {"invalid_initial_cash", "invalid_symbol", "invalid_side", "invalid_quantity", "invalid_lot_size", "unsupported_source_type", "invalid_request", "invalid_confirmation", "invalid_artifact", "stale_epoch", "same_day_apply_rejected", "idempotency_conflict", "execution_price_unavailable"}:
+    elif status in {"invalid_initial_cash", "invalid_symbol", "invalid_side", "invalid_quantity", "invalid_lot_size", "unsupported_source_type", "invalid_request", "invalid_confirmation", "invalid_artifact", "model_track_not_allowed", "stale_epoch", "same_day_apply_rejected", "idempotency_conflict", "execution_price_unavailable"}:
         http_status = 400
     return jsonify({"code": 1 if payload.get("ok") else 0, "msg": "success" if payload.get("ok") else payload.get("message", status), "data": payload}), http_status
 
@@ -343,7 +343,10 @@ def get_tw_stock_paper_portfolio_apply_runs():
 def get_tw_stock_paper_portfolio_latest_decision():
     """Read the latest server-side paper decision artifact for the current user."""
     paper_account_id = (request.args.get("paper_account_id") or request.args.get("paperAccountId") or "").strip()
-    payload = tw_stock_paper_portfolio_service.latest_decision(user_id=_current_user_id(), paper_account_id=paper_account_id)
+    model_track_id = (request.args.get("model_track_id") or request.args.get("modelTrackId") or "").strip()
+    payload = tw_stock_paper_portfolio_service.latest_decision(
+        user_id=_current_user_id(), paper_account_id=paper_account_id, model_track_id=model_track_id
+    )
     return _sim_response(payload)
 
 

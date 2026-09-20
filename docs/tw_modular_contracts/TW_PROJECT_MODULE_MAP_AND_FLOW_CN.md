@@ -39,11 +39,11 @@
 | 角色 | 当前身份 | 产品用途 |
 | --- | --- | --- |
 | Model A：`e4_frozen_qlib_2018_2022` | `CURRENT`，唯一 active baseline | 生成当前候选、默认策略输入和只读展示 |
-| B19R2R：`modelb_b19r2r_lambdarank_exact50_78f_v2` | `SHADOW`，冻结 research challenger | 使用 78 个 PIT-safe 特征，在 Model A 同日 exact Top50 内重排 |
+| Model A+B：`modelb_b19r2r_lambdarank_exact50_78f_v2` | `CURRENT` 历史只读 track；`SHADOW` 日更候选 | 与 A 共用标准信号、策略、意图、回放接口，治理状态为 research candidate |
 | 旧 Orthogonal LTR | legacy artifact | 只用于追溯和兼容，不是当前 Model B |
 | `top50_exit_one_worst_sell` | `CURRENT`，唯一产品默认策略 | 按 `next_open` 语义生成只读回放或受控模拟意图 |
 
-B19R2R 排除 TW7769 且不补位。它的历史回放净收益较高，但稳定性、弱市表现和收益集中度的联合门槛没有全部通过，因此保持 `production_allowed=false`、`no_apply=true`，不得进入 provider/accepted latest、前端默认模型、模拟账户或订单。
+Model A 与 A+B 在执行框架中都是 `model track`；`configs/readonly_model_tracks.yaml` 单独定义 workflow policy、默认 track 和虚拟账户允许列表。当前只有 A 是 active baseline 与虚拟账户允许项。Paper decision 使用 `model_track_id` 绑定所选轨道，checksum 和后端 apply gate 会共同校验该参数、allowlist 与 canonical model。当前 14 日完整窗口保留 Model A 原始 Top50；A+B 仅排除 `TW7769` 且不补位，`TW6919` 正常重排。新边界尚未完成准入评估，因此 A+B 保持 `production_allowed=false`、`no_apply=true`。
 
 ## 3. Artifact 的共同语言
 
@@ -125,7 +125,8 @@ flowchart TB
 | ReplayResultArtifact | 产品静态窗口为 `CURRENT`；WF-2 candidate 为 `CONTRACT` | OrderIntent、PriceStore、费用、`next_open` 执行配置 | 收益、回撤、换手、费用、每日轨迹；`model/strategy/window/run_id` | replay validator、D7 index/checksum gate | Readonly replay API、comparison | 按收益反改模型或策略；按请求临时重跑并写 runtime |
 | ReadonlyStrategySnapshot | `CURRENT` | 已验证 Model A 信号、策略摘要、日期身份 | 当前候选与只读策略快照；`signal_asof/run_id/checksum` | snapshot validator、`GET /api/ready` | current context、Agent、前端 | 充当订单或 target position；失败时覆盖 previous latest |
 | DailyAgentPromptArtifact | `CURRENT` | 同日 snapshot、候选、来源摘要 | 只读 Agent 上下文；`signal_asof/source checksums` | Agent prompt validator、readiness | simple-chat / Agent 面板 | 调用交易工具、给出收益承诺、使用异日信号 |
-| Comparison API DTO | `CURRENT`，只读 | checksum 验证的静态 catalog、paired metrics、gate diagnostics | A 与 A+B 同窗结果；`selected/result/comparison/no_apply` | service 内 catalog、组合和 checksum 检查 | 前端模型比较区 | 动态训练、动态回放、切 baseline、写模拟账户 |
+| 通用 ModelTrack workflow | `CURRENT` 历史窗口 | track registry、已注册 adapter、冻结模型输入、执行价格 | 每个配置实例独立输出 ModelSignal、OrderIntent、ReplayResult；ComparisonArtifact | `scripts/validate_tw_readonly_dual_model_tracks.py`、adapter 身份校验、冻结 V3 replay core 独立 parity | Comparison API | 未知 adapter 回退到其他模型；写 provider/latest、修改 baseline、写模拟账户 |
+| Comparison API DTO | `CURRENT`，只读 | checksum 验证的 v9 标准 track catalog；缺失时兼容 v8/v7/v6/v5/v1 catalog | 多 track 同窗结果、三段 lineage；`selected/result/comparison/no_apply` | service 内 catalog、组合、track manifest、parity 和 checksum 检查 | 前端模型比较区 | 动态训练、动态回放、切 baseline、写模拟账户 |
 | Frontend Workbench ViewState | `CURRENT` | GET API DTO、当前 `signal_asof` | 页面筛选状态、候选、回放、比较、运维摘要 | fixture Playwright、network/console audit、build | 最终用户 | 直读 CSV、本地重算收益、用旧 Phase YZ 状态覆盖当前日期 |
 
 各合同原文：
@@ -151,7 +152,8 @@ flowchart TB
 | Replay 内核与产品读取 | `tw_stock_workflow/replay_execution.py`、`backend/app/services/readonly_replay_window.py` |
 | Readonly snapshot | `tw_stock_workflow/readonly_snapshot.py`、`backend/app/services/readonly_strategy_snapshot.py` |
 | Agent 每日上下文 | `backend/app/services/tw_stock_agent_daily_prompt.py` |
-| A / A+B 比较 | `backend/app/services/readonly_model_strategy_comparison.py` |
+| A / A+B 标准历史双轨 | `configs/readonly_model_tracks.yaml`、`configs/workflows/readonly_dual_model_track_comparison.yaml`、`tw_stock_workflow/dual_track.py` |
+| A / A+B 比较 API | `backend/app/services/readonly_model_strategy_comparison.py` |
 | 模拟账户 | `backend/app/services/tw_stock_paper_portfolio.py`、`backend/app/routes/tw_stock_paper_routes.py` |
 | 前端工作台 | `frontend/src/views/tw-stock-monitor/index.vue` 及其 `components/` |
 
@@ -177,7 +179,7 @@ Model A 使用冻结 qlib 模型产生受控推理截面的分数和排名，再
 - `buy_score`：候选池内的买入优先级。
 - `full_qlib_rank`：持仓跌出 Top50 后比较谁最弱。
 
-B19R2R 读取 Model A 同日 exact Top50 和同日 78 个 PIT-safe 特征，只重排 `buy_score`，不能改 `candidate_rank` 或 `full_qlib_rank`。它输出研究 shadow，失败不阻断 Model A。
+B19R2R 读取 Model A 原始 Top50 和同日 78 个 PIT-safe 特征，只重排 `buy_score`。当前完整窗口只有 `TW7769` 因正交来源不完整被排除且不补位；adapter 保留 Model A 的 `full_qlib_rank`，`TW6919` 正常重新评分。它输出研究 track，失败不阻断 Model A。
 
 ### 5.3 组合状态与策略
 
@@ -189,7 +191,7 @@ B19R2R 读取 Model A 同日 exact Top50 和同日 78 个 PIT-safe 特征，只�
 
 OrderIntent 表达“策略想做什么”，不表达“已经成交”。ReplayExecution 在下一交易日价格、手续费、税和现金约束下决定实际成交，再输出 actions、daily NAV、position snapshots 和 summary。
 
-只读回放 API 不根据前端请求临时计算收益。它只允许读取 `configs/tw_replay_window_policy.yaml` 中已准入、已有 checksum 和 validator evidence 的静态窗口。模型比较服务同样读取冻结 catalog 和 paired metrics，所以切换下拉框不会训练、回放、写 latest 或改变 baseline。
+只读回放 API 不根据前端请求临时计算收益。历史 A/A+B 比较由 `readonly.dual_model_track_comparison` workflow 预先生成：A 与 A-only catalog 是 required 节点，A+B 和 paired comparison 是 nonblocking；各 track 独立演化组合状态，却使用同一策略规则、执行价格、费用和初始资金。每个 track 必须声明已注册的 `adapter_id`，adapter 同时锁定 canonical model、模型族、候选边界和自己的 source-bundle manifest；未知 adapter 或身份错绑都会在读取模型数据前失败，Model A 的输入引用也不依赖 B19 特征或训练产物。比较服务只读取已生成且 checksum 验证的 v9 catalog，并兼容回退 v8/v7/v6/v5/v1，所以切换下拉框不会训练、回放、写 provider/latest 或改变 baseline。
 
 ### 5.5 Snapshot、Agent 与 API
 
@@ -362,7 +364,7 @@ flowchart LR
 
 当前编排入口是 `scripts/run_daily_tw_stock_auto_update.py`。它负责调度、重试、状态记录和 publish gate。任何阶段失败时保留 previous latest，不能用半成品覆盖当前可用结果。
 
-### 8.2 B19R2R 非阻断影子链
+### 8.2 B19R2R 日更非阻断影子链
 
 ```mermaid
 flowchart LR
@@ -373,24 +375,27 @@ flowchart LR
     S --> C[只读 comparison]
 ```
 
-这条链是 `SHADOW`。B19 缺数据或失败时记录 `BLOCKED`，只要 `mainline_blocking=false`，Model A 主链继续运行。B19 不能补位 TW7769，不能写 Model A pending/latest，也不能成为 paper input。
+这条链是日更 `SHADOW`。B19 缺数据或失败时记录 `BLOCKED`，只要 `mainline_blocking=false`，Model A 主链继续运行。它与下一节已经标准化的历史双轨不同；canonical daily PortfolioState 和 paper adapter 尚未迁移，因此不能把历史链完成误写成日更或虚拟账户已经完成。
 
 ### 8.3 历史回放与模型比较链
 
 ```mermaid
 flowchart LR
-    S[冻结 ModelSignalArtifact] --> R[StrategyRule]
-    P[PortfolioState] --> R
-    R --> I[OrderIntentArtifact]
-    X[PriceStore + next_open + fees] --> E[Replay execution]
-    I --> E
-    E --> O[ReplayResultArtifact]
-    O --> K[Checksum-verified readonly index]
-    K --> A[Replay / comparison GET API]
-    A --> U[前端下拉选择与结果展示]
+    A[Model A track required] --> SA[ModelSignal A]
+    B[A+B track nonblocking] --> SB[ModelSignal A+B]
+    SA --> RA[同一 StrategyRule]
+    SB --> RB[同一 StrategyRule]
+    RA --> IA[OrderIntent A]
+    RB --> IB[OrderIntent A+B]
+    IA --> PA[ReplayResult A]
+    IB --> PB[ReplayResult A+B]
+    PA --> C[ComparisonArtifact]
+    PB --> C
+    C --> API[comparison GET API]
+    API --> U[前端下拉展示]
 ```
 
-前端下拉框只选择已经审计的静态组合。`no_apply=true` 表示选择不会改变 baseline、latest 或模拟账户；它不表示 Model A 在整个产品里不可用。
+各 track 使用相同合同和计算模块，并分别生成完整 lineage。A+B 失败不会使 A 节点失败；此时 A-only catalog 仍可发布，paired comparison 只有在两轨都通过时才生成。Model A 新结果已与冻结、独立的 V3 replay core 对动作、NAV 和汇总指标逐项 parity；Model B 分数与冻结模型重算结果一致。前端按 catalog 动态展示已审计的静态组合；`no_apply=true` 表示选择不会改变 baseline、latest 或模拟账户。
 
 ### 8.4 模拟账户链
 

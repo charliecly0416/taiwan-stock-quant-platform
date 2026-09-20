@@ -5,7 +5,7 @@
         <div class="comparison-title-line">
           <div class="comparison-title-copy">
             <span>模型与策略对比</span>
-            <small>在同一策略和回放窗口下查看 Model A 与 Model A+B 的历史研究结果。</small>
+            <small>在同一策略和回放窗口下比较已登记模型轨道的历史研究结果。</small>
           </div>
           <div class="comparison-tags">
             <a-tag color="blue">只读研究</a-tag>
@@ -17,7 +17,7 @@
       <div class="comparison-toolbar">
         <div class="comparison-boundary">
           <a-icon type="eye" />
-          <span>此处只查看和切换历史比较结果。Model A 与 Model A+B 都不能在本页直接应用；不会写入模拟账户，也不会改变 baseline 或生产默认值。</span>
+          <span>此处只查看和切换历史比较结果，所有模型轨道都不能在本页直接应用；不会写入模拟账户，也不会改变 baseline 或生产默认值。{{ virtualAccountPolicyText }}</span>
         </div>
         <a-button size="small" :loading="loading" @click="$emit('refresh')">
           <a-icon type="reload" /> 刷新对比
@@ -25,6 +25,13 @@
       </div>
 
       <a-alert v-if="error" class="comparison-alert" type="warning" show-icon :message="error" />
+      <a-alert
+        v-else-if="challengerUnavailable"
+        class="comparison-alert"
+        type="warning"
+        show-icon
+        message="部分研究模型本次暂不可用；当前基线的只读结果仍可独立查看。"
+      />
       <a-alert
         v-else-if="payload && !boundaryPass"
         class="comparison-alert"
@@ -118,7 +125,7 @@
           </section>
         </div>
 
-        <div class="comparison-diagnostics" data-testid="readonly-model-comparison-diagnostics">
+        <div v-if="hasB19Comparison" class="comparison-diagnostics" data-testid="readonly-model-comparison-diagnostics">
           <div>
             <span>Bootstrap 稳定性下界</span>
             <strong>{{ diagnosticPercent(bootstrapDiagnostic) }}</strong>
@@ -156,8 +163,9 @@
               <span>readonly_only <strong>{{ String(payload.readonly_only === true) }}</strong></span>
               <span>no_apply <strong>{{ String(payload.no_apply === true) }}</strong></span>
               <span>runtime_effect <strong>{{ runtimeEffect }}</strong></span>
-              <span>baseline_gate <strong>{{ comparisonItems[0].gateStatus }}</strong></span>
-              <span>challenger_gate <strong>{{ comparisonItems[1].gateStatus }}</strong></span>
+              <span v-for="item in comparisonItems" :key="`gate-${item.key}`">{{ item.key }} gate <strong>{{ item.gateStatus }}</strong></span>
+              <span v-for="item in comparisonItems" :key="`role-${item.key}`">{{ item.key }} role <strong>{{ item.frameworkRole }}</strong></span>
+              <span v-for="item in comparisonItems" :key="`chain-${item.key}`">{{ item.key }} artifacts <strong>{{ item.artifactCount }}/3</strong></span>
               <span>source <strong>{{ sourceText }}</strong></span>
             </div>
           </a-collapse-panel>
@@ -184,6 +192,19 @@ export default {
     combinations () { return Array.isArray(this.catalog.combinations) ? this.catalog.combinations : [] },
     selectableCombinations () { return this.combinations.filter(item => this.isSelectable(item)) },
     selected () { return (this.payload && this.payload.selected) || {} },
+    virtualAccountPolicy () { return this.catalog.virtual_account_policy || {} },
+    virtualAccountPolicyText () {
+      const allowedIds = Array.isArray(this.virtualAccountPolicy.allowed_track_ids) ? this.virtualAccountPolicy.allowed_track_ids : []
+      const labels = allowedIds.map(id => {
+        const model = this.models.find(item => this.modelId(item) === id)
+        return (model && (model.display_name || model.label)) || id
+      }).filter(Boolean)
+      const defaultId = this.virtualAccountPolicy.default_track_id
+      const defaultModel = this.models.find(item => this.modelId(item) === defaultId)
+      const defaultLabel = (defaultModel && (defaultModel.display_name || defaultModel.label)) || defaultId
+      if (!labels.length) return '虚拟账户当前没有获准使用的模型轨道。'
+      return `虚拟账户由独立允许列表控制，当前允许列表只有 ${labels.join('、')}，默认使用 ${defaultLabel || labels[0]}。`
+    },
     selectedModelId () { return this.selected.model_id || (this.modelOptions[0] && this.modelId(this.modelOptions[0])) || '' },
     selectedStrategyId () { return this.selected.strategy_id || (this.strategyOptions[0] && this.strategyId(this.strategyOptions[0])) || '' },
     selectedWindowId () { return this.selected.window_id || (this.windowOptions[0] && this.windowId(this.windowOptions[0])) || '' },
@@ -241,11 +262,28 @@ export default {
       return (this.diagnostics.concentration && this.diagnostics.concentration.top5_abs_contribution_share) || {}
     },
     comparisonItems () {
-      return [
-        this.buildComparisonItem('baseline'),
-        this.buildComparisonItem('challenger')
-      ]
+      const results = (this.payload && this.payload.comparison && this.payload.comparison.results) || []
+      return results.map(record => {
+        const model = this.models.find(item => this.modelId(item) === record.model_id) || {}
+        return this.buildComparisonItem(model, record)
+      }).filter(item => item.available)
     },
+    baselineItem () {
+      return this.comparisonItems.find(item => item.isDefault) || this.comparisonItems[0] || this.emptyComparisonItem()
+    },
+    selectedComparisonItem () {
+      return this.comparisonItems.find(item => item.key === this.selectedModelId) || this.baselineItem
+    },
+    researchComparisonItem () {
+      return this.selectedComparisonItem.isDefault
+        ? (this.comparisonItems.find(item => !item.isDefault) || this.emptyComparisonItem())
+        : this.selectedComparisonItem
+    },
+    challengerUnavailable () {
+      const status = (this.payload && this.payload.status) || {}
+      return !!(status.unavailable_tracks && Object.keys(status.unavailable_tracks).length)
+    },
+    hasB19Comparison () { return this.comparisonItems.some(item => item.key === 'model_a_plus_b_b19r2r') },
     failedDiagnosticLabels () {
       return [
         ['稳定性', this.bootstrapDiagnostic],
@@ -254,22 +292,24 @@ export default {
       ].filter(([, item]) => String(this.diagnosticStatus(item)).toUpperCase() === 'FAIL').map(([label]) => label)
     },
     plainLanguageConclusion () {
-      const baselineValue = this.comparisonItems[0].metrics.netReturn
-      const challengerValue = this.comparisonItems[1].metrics.netReturn
+      const baselineValue = this.baselineItem.metrics.netReturn
+      const researchItem = this.researchComparisonItem
+      const challengerValue = researchItem.metrics.netReturn
+      if (!researchItem.available) return '当前仅有基线模型可供比较；虚拟账户默认和准入状态没有改变。'
       const baselineReturn = Number(baselineValue)
       const challengerReturn = Number(challengerValue)
       const hasReturns = baselineValue !== null && baselineValue !== undefined && baselineValue !== '' && challengerValue !== null && challengerValue !== undefined && challengerValue !== '' && Number.isFinite(baselineReturn) && Number.isFinite(challengerReturn)
       const returnFinding = !hasReturns
-        ? '当前历史收益数据不足，暂时不能判断 A+B 是否优于 Model A'
+        ? `当前历史收益数据不足，暂时不能判断${researchItem.label}是否优于当前基线`
         : challengerReturn > baselineReturn
-          ? 'A+B 在这段历史回放中的净收益高于 Model A'
+          ? `${researchItem.label}在这段历史回放中的净收益高于当前基线`
           : challengerReturn < baselineReturn
-            ? 'A+B 在这段历史回放中的净收益低于 Model A'
-            : 'A+B 与 Model A 在这段历史回放中的净收益相同'
-      if (this.failedDiagnosticLabels.length) {
-        return `${returnFinding}，但${this.failedDiagnosticLabels.join('、')}未通过，因此继续作为研究候选，不替换 Model A。`
+            ? `${researchItem.label}在这段历史回放中的净收益低于当前基线`
+            : `${researchItem.label}与当前基线在这段历史回放中的净收益相同`
+      if (researchItem.key === 'model_a_plus_b_b19r2r' && this.failedDiagnosticLabels.length) {
+        return `${returnFinding}，但${this.failedDiagnosticLabels.join('、')}未通过，因此继续作为研究候选，不进入虚拟账户允许列表。`
       }
-      return `${returnFinding}；现有诊断没有失败项，仍需完成准入审查后才能决定是否替换 Model A。`
+      return `${returnFinding}；现有诊断没有失败项，仍需完成准入审查后才能加入虚拟账户允许列表或调整默认模型。`
     },
     runtimeEffect () {
       const safety = (this.payload && this.payload.safety) || {}
@@ -293,8 +333,9 @@ export default {
       const id = this.modelId(item)
       const name = item.display_name || item.label
       const role = String(item.role || item.kind || '').toLowerCase()
-      if (role === 'active_baseline' || role === 'baseline') return `${name || 'Model A'}（当前基线）`
-      if (role === 'research_challenger' || role === 'challenger' || id.includes('b19r2r')) return `${name || 'Model A+B'}（研究候选，联合门槛未通过）`
+      const governance = String(item.governance_status || role).toLowerCase()
+      if (governance === 'active_baseline' || role === 'baseline') return `${name || id}（当前基线）`
+      if (governance === 'research_candidate' || role === 'research_challenger' || role === 'challenger') return `${name || id}（研究候选）`
       return name || id
     },
     strategyLabel (item) {
@@ -332,34 +373,6 @@ export default {
       const match = this.selectableCombinations.find(item => this.combinationModelId(item) === this.selectedModelId && this.combinationStrategyId(item) === this.selectedStrategyId && this.combinationWindowId(item) === windowId)
       this.emitSelection(match, { model_id: this.selectedModelId, strategy_id: this.selectedStrategyId, window_id: windowId })
     },
-    candidateRecords () {
-      const comparison = (this.payload && this.payload.comparison) || {}
-      const result = (this.payload && this.payload.result) || {}
-      const rows = []
-      ;[comparison.items, comparison.results, comparison.models, result.items, result.results, result.models].forEach(items => {
-        if (Array.isArray(items)) rows.push(...items)
-        else if (items && typeof items === 'object') rows.push(...Object.values(items).filter(value => value && typeof value === 'object'))
-      })
-      ;['baseline', 'baseline_result', 'model_a', 'challenger', 'challenger_result', 'model_a_plus_b'].forEach(key => {
-        if (comparison[key] && typeof comparison[key] === 'object') rows.push(comparison[key])
-        if (result[key] && typeof result[key] === 'object') rows.push(result[key])
-      })
-      if (result && typeof result === 'object') rows.push(result)
-      return rows
-    },
-    modelForRole (role) {
-      const acceptedRoles = role === 'baseline' ? ['baseline', 'active_baseline'] : ['challenger', 'research_challenger']
-      return this.models.find(item => acceptedRoles.includes(String(item.role || item.kind || '').toLowerCase())) ||
-        this.models.find(item => role === 'challenger' ? this.modelId(item).includes('b19r2r') : !this.modelId(item).includes('b19r2r')) || {}
-    },
-    recordForRole (role, model) {
-      const modelId = this.modelId(model)
-      return this.candidateRecords().find(item => {
-        const itemRole = String(item.role || item.kind || item.variant || '').toLowerCase()
-        const itemModelId = item.model_id || item.id || ''
-        return itemRole === role || (modelId && itemModelId === modelId) || (role === 'baseline' && ['model_a', 'a_only'].includes(itemRole)) || (role === 'challenger' && ['model_a_plus_b', 'a+b'].includes(itemRole))
-      }) || {}
-    },
     nestedValue (record, keys) {
       const roots = [record, record.metrics, record.performance, record.diagnostics, record.robustness].filter(Boolean)
       for (const root of roots) {
@@ -369,22 +382,35 @@ export default {
       }
       return null
     },
-    buildComparisonItem (role) {
-      const model = this.modelForRole(role)
-      const record = this.recordForRole(role, model)
+    emptyComparisonItem () {
+      return { key: '', available: false, isDefault: false, metrics: {} }
+    },
+    buildComparisonItem (model, record) {
+      const governance = String(record.governance_status || model.governance_status || model.role || '').toLowerCase()
+      const isDefault = model.production_default === true || governance === 'active_baseline'
+      const role = isDefault ? 'baseline' : 'research'
+      const available = !!this.modelId(model) && !!(record.combination_id || record.model_id)
       const gate = record.gate || record.quality_gate || {}
       const gateStatus = gate.status || gate.verdict || record.gate_status || record.status || (role === 'baseline' ? 'BASELINE' : '待审查')
       const gatePass = ['pass', 'baseline', 'accepted'].includes(String(gateStatus).toLowerCase()) || gate.ok === true
       return {
-        key: role,
+        key: this.modelId(model),
         role,
-        roleLabel: role === 'baseline' ? '当前基线' : '研究候选',
-        label: this.modelLabel(model) || (role === 'baseline' ? 'Model A' : 'Model A+B'),
-        gateText: role === 'baseline' ? '当前基线' : '联合门槛未通过',
+        roleLabel: isDefault ? '当前基线' : '研究候选',
+        label: this.modelLabel(model) || this.modelId(model),
+        available,
+        isDefault,
+        gateText: isDefault
+          ? '当前基线'
+          : String(gateStatus).includes('NOT_EVALUATED') || String(gateStatus).includes('PENDING')
+            ? '尚未重新评估'
+            : '准入门槛未通过',
         gateStatus,
-        gateColor: gatePass ? 'green' : (role === 'challenger' ? 'orange' : 'blue'),
-        note: record.note || record.message || (role === 'baseline' ? '作为当前研究比较基准；此页面不执行应用。' : '仅作历史研究比较；通过准入审查前不改变当前 baseline。'),
-        weakMarketText: role === 'baseline' ? '比较基准' : this.diagnosticDeltaText(this.weakMarketDiagnostic),
+        gateColor: gatePass ? 'green' : (isDefault ? 'blue' : 'orange'),
+        frameworkRole: record.framework_role || model.framework_role || '-',
+        artifactCount: Object.keys(record.artifacts || {}).filter(key => ['model_signal', 'order_intent', 'replay_result'].includes(key)).length,
+        note: record.note || record.message || (isDefault ? '作为当前研究比较基准；此页面不执行应用。' : '仅作历史研究比较；通过准入审查前不改变当前 baseline。'),
+        weakMarketText: isDefault ? '比较基准' : (this.modelId(model) === 'model_a_plus_b_b19r2r' ? this.diagnosticDeltaText(this.weakMarketDiagnostic) : '尚未评估'),
         metrics: {
           netReturn: this.nestedValue(record, ['fee_tax_adjusted_net_return', 'net_return', 'return']),
           maxDrawdown: this.nestedValue(record, ['max_drawdown', 'drawdown']),

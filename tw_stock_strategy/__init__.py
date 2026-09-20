@@ -8,6 +8,7 @@ from .top50_exit_one_worst_sell import (
     StrategyDecision,
     StrategyIntent,
     decide,
+    decide_for_model,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "StrategyDecision",
     "StrategyIntent",
     "decide",
+    "decide_for_model",
 ]

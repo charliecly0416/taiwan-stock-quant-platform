@@ -1,0 +1,13 @@
+{
+  "artifact_type": "model_signal",
+  "schema_version": "m1.0.0",
+  "model_name": "example_readonly_historical_track",
+  "model_family": "registered_model_track",
+  "source_feature_artifact": "frozen_feature_artifact",
+  "model_adapter": "tw_stock_workflow.dual_track",
+  "output_artifact": "readonly_historical_model_signal",
+  "no_provider_publish": true,
+  "no_accepted_latest_switch": true,
+  "readonly_only": true,
+  "production_allowed": false
+}

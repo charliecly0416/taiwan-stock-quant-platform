@@ -28,28 +28,35 @@ def test_default_selection_is_model_a_readonly_and_has_same_window_comparison():
     assert payload["selected"] == {
         "model_id": "model_a_only",
         "strategy_id": "top50_exit_one_worst_sell",
-        "window_id": "b19r2r_retrospective_20260722_20260901",
-        "combination_id": "model_a_only__top50_exit_one_worst_sell__b19r2r_30d",
+        "window_id": "b19r2r_retrospective_complete_20260813_20260901",
+        "combination_id": "model_a_only__top50_exit_one_worst_sell__b19r2r_complete_14d",
     }
-    assert payload["result"]["metrics"]["net_return"] == 0.009950961539552772
+    assert payload["result"]["metrics"]["net_return"] == -0.003394721942222456
     assert {row["model_id"] for row in payload["comparison"]["results"]} == {
         "model_a_only",
         "model_a_plus_b_b19r2r",
     }
     assert all(row["no_apply"] is True and row["runtime_effect"] == "none" for row in payload["comparison"]["results"])
     assert next(row for row in payload["catalog"]["models"] if row["model_id"] == "model_a_only")["role"] == "active_baseline"
-    assert payload["comparison"]["delta"]["net_return_b_minus_a"] == 0.07084610189805995
+    assert payload["comparison"]["delta"]["net_return_b_minus_a"] == 0.06585720060390676
+    assert payload["comparison"]["deltas_from_default"]["model_a_plus_b_b19r2r"]["default_model_id"] == "model_a_only"
+    assert payload["catalog"]["virtual_account_policy"]["allowed_track_ids"] == ["model_a_only"]
     diagnostics = payload["comparison"]["diagnostics"]
-    assert diagnostics["bootstrap_95pct_lower_bound"]["measured_value"] == -0.0056257437697011005
-    assert diagnostics["bootstrap_95pct_lower_bound"]["status"] == "FAIL"
-    assert diagnostics["negative_twii20_regime_return_delta"]["measured_value"] == -0.048125452982926475
-    assert diagnostics["concentration"]["top5_abs_contribution_share"]["status"] == "FAIL"
-    assert diagnostics["concentration"]["abs_contribution_hhi"]["status"] == "FAIL"
-    assert "negative_twii20_regime_return_delta" in diagnostics["failed_gate_ids"]
+    assert diagnostics["joint_status"] == "NOT_EVALUATED_FOR_CURRENT_BOUNDARY"
+    assert diagnostics["bootstrap_95pct_lower_bound"] is None
+    assert diagnostics["negative_twii20_regime_return_delta"] is None
+    assert diagnostics["failed_gate_ids"] == []
     assert payload["status"]["selection_changes_display_only"] is True
     assert payload["status"]["can_apply"] is False
     assert payload["safety"]["paper_portfolio_write"] is False
     assert payload["safety"]["latest_or_provider_write"] is False
+    if payload["sources"]["standard_track_artifacts"]:
+        assert payload["result"]["framework_role"] == "model_track"
+        assert set(payload["result"]["artifacts"]) == {
+            "model_signal",
+            "order_intent",
+            "replay_result",
+        }
 
 
 def test_challenger_selection_exposes_failed_historical_gate_without_application():
@@ -58,14 +65,14 @@ def test_challenger_selection_exposes_failed_historical_gate_without_application
         query_string={
             "model_id": "model_a_plus_b_b19r2r",
             "strategy_id": "top50_exit_one_worst_sell",
-            "window_id": "b19r2r_retrospective_20260722_20260901",
+            "window_id": "b19r2r_retrospective_complete_20260813_20260901",
         },
     )
     assert response.status_code == 200
     payload = response.get_json()["data"]
 
-    assert payload["result"]["metrics"]["net_return"] == 0.08079706343761273
-    assert payload["result"]["gate_status"] == "FAIL_ALL_JOINT_CONFIRMATION_GATES_AS_HISTORICAL_DIAGNOSTIC"
+    assert payload["result"]["metrics"]["net_return"] == 0.062462478661684306
+    assert payload["result"]["gate_status"] == "NOT_EVALUATED_FOR_ORIGINAL_TOP50_NO_REPLACEMENT"
     assert payload["result"]["historical_replay"] is True
     assert payload["result"]["prospective_pit_anchor"] is False
     assert payload["result"]["no_apply"] is True
@@ -107,6 +114,39 @@ def test_catalog_checksum_drift_fails_closed(monkeypatch, tmp_path):
     response = _client().get("/api/tw-stock/readonly/model-strategy-comparison")
     assert response.status_code == 400
     assert response.get_json()["data"]["status"] == "checksum_failed"
+
+
+def test_challenger_failure_degrades_to_model_a_without_stale_pair(monkeypatch):
+    catalog, pointer, sources, availability = comparison_service._load_catalog()
+    degraded = {
+        **availability,
+        "unavailable_tracks": {
+            "model_a_plus_b_b19r2r": {
+                "status": "challenger_unavailable",
+                "reason": "missing_artifact",
+            }
+        },
+    }
+    monkeypatch.setattr(
+        comparison_service,
+        "_load_catalog",
+        lambda: (catalog, pointer, sources, degraded),
+    )
+
+    response = _client().get("/api/tw-stock/readonly/model-strategy-comparison")
+    assert response.status_code == 200
+    payload = response.get_json()["data"]
+    assert [item["model_id"] for item in payload["comparison"]["results"]] == ["model_a_only"]
+    assert payload["comparison"]["delta"] is None
+    assert payload["status"]["degraded"] is True
+    assert payload["status"]["unavailable_tracks"]["model_a_plus_b_b19r2r"]["reason"] == "missing_artifact"
+
+    challenger = _client().get(
+        "/api/tw-stock/readonly/model-strategy-comparison",
+        query_string={"model_id": "model_a_plus_b_b19r2r"},
+    )
+    assert challenger.status_code == 400
+    assert challenger.get_json()["data"]["status"] == "challenger_unavailable"
 
 
 def test_route_and_service_do_not_contain_write_or_execution_calls():

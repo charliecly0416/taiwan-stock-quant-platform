@@ -1,0 +1,11 @@
+{
+  "artifact_type": "readonly_model_track_source_bundle",
+  "model_id": "e4_frozen_qlib_2018_2022",
+  "asof": "2026-09-01",
+  "status": "FROZEN",
+  "run_id": "model_a_frozen_complete_20260813_20260901",
+  "adapter_id": "model_a_passthrough_v1",
+  "source_role": "frozen_model_a_cross_section",
+  "readonly_only": true,
+  "production_allowed": false
+}

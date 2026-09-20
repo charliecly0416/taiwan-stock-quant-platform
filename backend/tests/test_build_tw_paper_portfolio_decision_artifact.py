@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "build_tw_paper_portfolio_decision_artifact.py"
 SPEC = importlib.util.spec_from_file_location("build_tw_paper_portfolio_decision_artifact", SCRIPT_PATH)
@@ -116,6 +118,8 @@ def test_builds_readonly_paper_decision_bundle_from_fixture(tmp_path: Path):
 
     assert manifest["readonly_only"] is True
     assert manifest["not_applied"] is True
+    assert manifest["model_track_id"] == "model_a_only"
+    assert intent["model_track_id"] == "model_a_only"
     assert state["paper_account_id"] == "tw_sim_fixture"
     assert state["positions"][0]["instrument"] == "TW9999"
     assert manifest["action_counts"] == {"paper_buy_intent": 1, "paper_sell_intent": 1, "paper_skip": 0}
@@ -126,6 +130,30 @@ def test_builds_readonly_paper_decision_bundle_from_fixture(tmp_path: Path):
     assert preview["readonly_preview_only"] is True
     assert preview["not_applied"] is True
     assert all(value is False for value in forbidden["actions"].values())
+
+
+def test_rejects_model_track_outside_simulation_allowlist(tmp_path: Path):
+    signal_manifest = _write_signal_artifact(tmp_path)
+    account_json = tmp_path / "paper_account.json"
+    account_json.write_text(
+        json.dumps({
+            "account": {"account_uid": "tw_sim_fixture", "user_id": 7, "cash": 100000},
+            "positions": [],
+            "prices": {"1111": 10},
+        }),
+        encoding="utf-8",
+    )
+    account_state = build_tw_paper.load_account_state_from_json(account_json)
+
+    with pytest.raises(RuntimeError, match="not allowed for simulation account"):
+        build_tw_paper.build_artifact(
+            account_state=account_state,
+            signal_manifest_path=signal_manifest,
+            strategy_path=Path("configs/strategy_dependencies/top50_exit_one_worst_sell.yaml"),
+            out_root=tmp_path / "out_blocked",
+            run_id="blocked",
+            model_track_id="model_a_plus_b_b19r2r",
+        )
 
 
 def test_main_writes_fixture_artifact_without_account_writes(tmp_path: Path):

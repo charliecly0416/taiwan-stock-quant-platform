@@ -8,6 +8,7 @@ from .modules import ModuleRegistry, ResearchHistoryObservation
 from .replay import ReadonlyReplayWindowAdapter, ReadonlyReplayWindowObservation
 from .replay_execution import ReplayCandidateExecution
 from .readonly_snapshot import ReadonlyStrategySnapshotObservation
+from .dual_track import ReadonlyModelTrackComparison, ReadonlyModelTrackExecution, _load_track_registry
 from .spec import WorkflowSpec
 from .types import ExecutionContext
 
@@ -26,6 +27,11 @@ def build_default_engine(
         ReadonlyStrategySnapshotObservation(repo_root)
     )
     modules.register(ReplayCandidateExecution(repo_root))
+    track_registry = _load_track_registry(repo_root)
+    for track_id in track_registry["tracks"]:
+        modules.register(ReadonlyModelTrackExecution(repo_root, track_id))
+    modules.register(ReadonlyModelTrackComparison(repo_root, module_id="readonly_model_track.catalog"))
+    modules.register(ReadonlyModelTrackComparison(repo_root))
     return WorkflowEngine(modules, resolver)
 
 

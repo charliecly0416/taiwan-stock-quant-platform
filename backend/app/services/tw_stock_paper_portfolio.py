@@ -34,6 +34,7 @@ ARTIFACT_ROOT = Path(__file__).resolve().parents[3] / "data_tw" / "artifacts" / 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 REGISTRY_PATH = REPO_ROOT / "configs" / "tw_modular_registry.yaml"
 POLICY_PATH = REPO_ROOT / "configs" / "tw_replay_window_policy.yaml"
+MODEL_TRACK_POLICY_PATH = REPO_ROOT / "configs" / "readonly_model_tracks.yaml"
 
 
 def _utc_now() -> datetime:
@@ -120,6 +121,7 @@ class TWStockPaperPortfolioService:
         self.productization_status_loader = productization_status_loader
         self._schema_ready = False
         self._policy_cache: Optional[Dict[str, set[str]]] = None
+        self._model_track_policy_cache: Optional[Dict[str, Any]] = None
 
     def ensure_schema(self) -> None:
         if self._schema_ready:
@@ -217,7 +219,18 @@ class TWStockPaperPortfolioService:
             cur.close()
         return {"ok": True, "status": "ok", "items": [self._apply_run_payload(row) for row in rows], "count": len(rows), "simulation_only": True, "trading": sim_trading_flags()}
 
-    def latest_decision(self, *, user_id: int, paper_account_id: str = "") -> Dict[str, Any]:
+    def latest_decision(
+        self, *, user_id: int, paper_account_id: str = "", model_track_id: str = ""
+    ) -> Dict[str, Any]:
+        track_policy = self._model_track_policy()
+        selected_track_id = model_track_id or str(track_policy["default_track_id"])
+        if selected_track_id not in track_policy["allowed_track_ids"]:
+            return self._reject(
+                "model_track_not_allowed",
+                "model_track_id is not allowed for the simulation account",
+                model_track_id=selected_track_id,
+                allowed_track_ids=sorted(track_policy["allowed_track_ids"]),
+            )
         root = self.artifact_root.resolve()
         if not root.exists():
             return self._reject("no_decision", "paper decision artifact root not found", warnings=[str(root)])
@@ -237,6 +250,9 @@ class TWStockPaperPortfolioService:
                 if int(manifest.get("user_id") or -1) != int(user_id):
                     continue
                 if paper_account_id and str(manifest.get("paper_account_id") or "") != paper_account_id:
+                    continue
+                manifest_track_id = str(manifest.get("model_track_id") or track_policy["default_track_id"])
+                if manifest_track_id != selected_track_id:
                     continue
                 candidates.append({"manifest_path": resolved, "manifest": manifest, "mtime": resolved.stat().st_mtime})
             except Exception as exc:
@@ -286,6 +302,7 @@ class TWStockPaperPortfolioService:
             "status": "ok",
             "asof": intent.get("asof") or manifest.get("asof"),
             "model_id": intent.get("model_id") or manifest.get("model_id"),
+            "model_track_id": intent.get("model_track_id") or manifest.get("model_track_id") or selected_track_id,
             "strategy_rule": intent.get("strategy_rule") or manifest.get("strategy_rule"),
             "decision_id": intent.get("decision_id") or manifest.get("decision_id"),
             "paper_account_id": account_id,
@@ -311,6 +328,11 @@ class TWStockPaperPortfolioService:
         if artifact_error:
             return artifact_error
         intent = intent_result["intent"]
+        track_policy = self._model_track_policy()
+        intent_track_id = str(intent.get("model_track_id") or track_policy["default_track_id"])
+        requested_track_id = str(payload.get("model_track_id") or payload.get("modelTrackId") or intent_track_id)
+        if requested_track_id != intent_track_id:
+            return self._reject("invalid_artifact", "model_track_id mismatch with server artifact")
         server_checksum = str(intent_result["input_checksum"])
         decision_id = str(payload.get("decision_id") or payload.get("decisionId") or intent.get("decision_id") or "")
         requested_epoch = int(payload.get("paper_account_epoch") or payload.get("paperAccountEpoch") or intent.get("paper_account_epoch") or 0)
@@ -598,6 +620,8 @@ class TWStockPaperPortfolioService:
             "asof": intent.get("asof"),
             "actions": intent.get("actions") or [],
         }
+        if "model_track_id" in intent:
+            input_payload["model_track_id"] = intent.get("model_track_id")
         return _canonical_checksum(input_payload), None
 
     def _validate_intent(self, intent: Dict[str, Any], *, paper_account_id: str, decision_id: str, input_checksum: str) -> Optional[Dict[str, Any]]:
@@ -606,6 +630,12 @@ class TWStockPaperPortfolioService:
             if intent.get(field) is not True:
                 return self._reject("invalid_artifact", f"{field} must be true")
         model_id = str(intent.get("model_id") or "")
+        track_policy = self._model_track_policy()
+        model_track_id = str(intent.get("model_track_id") or track_policy["default_track_id"])
+        if model_track_id not in track_policy["allowed_track_ids"]:
+            return self._reject("model_track_not_allowed", "model_track_id is not allowed for the simulation account")
+        if track_policy["model_ids_by_track"].get(model_track_id) != model_id:
+            return self._reject("invalid_artifact", "model_track_id does not match model_id")
         strategy_rule = str(intent.get("strategy_rule") or "")
         execution_price_mode = str(intent.get("execution_price_mode") or EXECUTION_PRICE_MODE)
         clean = self._clean_policy()
@@ -634,10 +664,39 @@ class TWStockPaperPortfolioService:
         self._policy_cache = {"models": registry_models & policy_models, "strategies": strategies}
         return self._policy_cache
 
+    def _model_track_policy(self) -> Dict[str, Any]:
+        if self._model_track_policy_cache is not None:
+            return self._model_track_policy_cache
+        payload = yaml.safe_load(MODEL_TRACK_POLICY_PATH.read_text(encoding="utf-8")) or {}
+        tracks = payload.get("tracks") or {}
+        policy = payload.get("virtual_account_policy") or {}
+        default_track_id = str(policy.get("default_track_id") or payload.get("default_track_id") or "")
+        allowed_track_ids = {str(item) for item in policy.get("allowed_track_ids") or []}
+        if not default_track_id or default_track_id not in allowed_track_ids:
+            raise RuntimeError("readonly model-track policy has no allowed default track")
+        if any(track_id not in tracks for track_id in allowed_track_ids):
+            raise RuntimeError("readonly model-track policy references an unknown track")
+        if any((tracks[track_id] or {}).get("virtual_account_eligible") is not True for track_id in allowed_track_ids):
+            raise RuntimeError("readonly model-track policy allows an ineligible track")
+        self._model_track_policy_cache = {
+            "default_track_id": default_track_id,
+            "allowed_track_ids": allowed_track_ids,
+            "model_ids_by_track": {
+                track_id: str((track or {}).get("model_id") or "")
+                for track_id, track in tracks.items()
+            },
+        }
+        return self._model_track_policy_cache
+
     def _manifest_is_clean_decision(self, manifest: Dict[str, Any]) -> bool:
         clean = self._clean_policy()
+        track_policy = self._model_track_policy()
+        model_track_id = str(manifest.get("model_track_id") or track_policy["default_track_id"])
+        model_id = str(manifest.get("model_id") or "")
         return (
-            str(manifest.get("model_id") or "") in clean["models"]
+            model_track_id in track_policy["allowed_track_ids"]
+            and track_policy["model_ids_by_track"].get(model_track_id) == model_id
+            and model_id in clean["models"]
             and str(manifest.get("strategy_rule") or "") in clean["strategies"]
             and str(manifest.get("execution_price_mode") or EXECUTION_PRICE_MODE) == EXECUTION_PRICE_MODE
         )

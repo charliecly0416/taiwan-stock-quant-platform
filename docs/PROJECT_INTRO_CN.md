@@ -22,16 +22,18 @@
 
 | 角色 | 当前状态 | 用途 |
 | --- | --- | --- |
-| Model A：`e4_frozen_qlib_2018_2022` | 唯一 active baseline | 生成当前候选与默认研究链路 |
-| B19R2R：`modelb_b19r2r_lambdarank_exact50_78f_v2` | 冻结的 research challenger | 在 Model A 同日 Top50 内重排，参与只读比较与自动影子 |
+| Model A：`e4_frozen_qlib_2018_2022` | 一等 model track；active baseline | 生成当前候选，也是虚拟账户默认接受的 track |
+| Model A+B：`modelb_b19r2r_lambdarank_exact50_78f_v2` | 一等 model track；research candidate | 走与 A 相同的信号、策略、意图、回放和展示接口 |
 | 旧 Orthogonal LTR | legacy research artifact | 保留追溯和兼容路径，不是当前 challenger |
 | `top50_exit_one_worst_sell` | 默认策略规则 | 以 `next_open` 口径执行只读回放或受控模拟流程 |
 
-B19R2R 使用 LightGBM LambdaRank 和 78 个 PIT-safe 特征。TW7769 因正交数据不可用而被明确排除，并且不补位。它不能改变 Model A 的候选边界，也不能写入 provider/accepted latest、前端默认模型、模拟账户或订单链路。
+B19R2R 使用 LightGBM LambdaRank 和 78 个 PIT-safe 特征。当前比较选择 `2026-08-13..2026-09-01` 的 14 个连续完整交易日：Model A 使用原始 Top50；A+B 只排除缺少完整正交来源的 `TW7769` 且不补位，`TW6919` 已由冻结模型重新评分并正常参与。A+B 不能写入 provider/accepted latest，也还没有通过虚拟账户准入。
 
-历史只读回放中，A+B 在已审计窗口优于 A，但联合确认 gate 仍未全部通过。历史回放可以加快研究，不能替代按目标交易日生成的 prospective shadow 和后续收益结算。因此当前没有把 B19R2R 纳入 baseline。
+当前 14 日历史只读回放中，A+B 的净收益高于 A；由于候选边界已经改成“仅排除 TW7769、不补位”，旧 30 日联合 gate 不再适用于这份结果，当前状态是 `NOT_EVALUATED`。历史回放可以加快研究，不能替代按目标交易日生成的 prospective shadow 和后续收益结算。因此当前没有把 B19R2R 纳入 baseline。
 
-用产品语言说，当前结论是：A+B 在这段历史里赚得更多，但优势集中在部分时期，弱市和跨阶段稳定性还不够可靠。用户可以在比较区查看它与 Model A 的差异，系统仍以更稳妥的 Model A 作为当前默认结果。
+用产品语言说，当前结论是：A+B 在这 14 个交易日的历史回放中表现更好，但窗口较短且新边界尚未完成准入评估。用户可以在比较区查看差异，系统仍以 Model A 作为当前默认结果。
+
+两个模型在框架中的地位相同，治理状态不同。系统只有一种通用 `ModelTrack` 执行模块；Model A 与 A+B 是它的两个配置实例，A+B 内部的 A 候选与 B 重排由自己的 adapter 封装。`configs/readonly_model_tracks.yaml` 要求每个实例显式绑定已注册的 `adapter_id`；adapter 同时锁定 canonical model、模型族和候选边界，未知 adapter 或身份错绑都会在读取模型数据前失败，不能把 Model A 分数改名后冒充新模型。独立准入配置决定默认展示、失败是否阻断主线以及能否进入虚拟账户。目前虚拟账户参数名是 `model_track_id`，允许列表仍只有 Model A。该参数写入 paper decision artifact 并参与 checksum；后端在模拟账户写入前校验 allowlist 以及 track 与 canonical model 的绑定。新增模型或组合需要登记 registry、实现标准 ModelSignal adapter、增加 workflow 配置并完成准入审查；API、UI、策略、OrderIntent、Replay 和比较组件继续复用，不必复制这些模块。
 
 ## 3. 为什么比较页面“不可应用”
 
@@ -45,16 +47,19 @@ B19R2R 使用 LightGBM LambdaRank 和 78 个 PIT-safe 特征。TW7769 因正交�
 flowchart LR
     D[行情与来源证据] --> F[PIT-safe 特征]
     F --> A[Model A]
-    A --> S[ModelSignalArtifact]
-    S --> R[StrategyRule]
-    R --> I[OrderIntentArtifact]
-    I --> P[价格与费用回放]
-    P --> V[Readonly API / 工作台]
-    S --> V
-    S --> B[B19R2R 研究影子]
-    B --> C[比较与 prospective 证据]
-    C --> V
-    S --> G[受控模拟账户]
+    A --> B[Model A+B]
+    A --> SA[ModelSignal A]
+    B --> SB[ModelSignal A+B]
+    SA --> RA[同一 StrategyRule]
+    SB --> RB[同一 StrategyRule]
+    RA --> IA[OrderIntent A]
+    RB --> IB[OrderIntent A+B]
+    IA --> PA[ReplayResult A]
+    IB --> PB[ReplayResult A+B]
+    PA --> C[ComparisonArtifact]
+    PB --> C
+    C --> V[Readonly API / 工作台]
+    SA --> G[受控模拟账户<br/>当前默认只接受 A]
 ```
 
 每层只消费上游的标准产物：
@@ -71,7 +76,7 @@ flowchart LR
 
 普通用户侧栏只显示台股研究、台股模拟账户和个人中心。模型比较属于台股研究页中的只读工具，不会把研究选项变成运行配置。旧 Phase YZ 或模拟决策只有在 `signal_asof` 与当前策略日期一致时才参与今日总览；异日数据只显示为历史状态，并阻止模拟应用。
 
-仓库中的 `tw_stock_workflow/` 已提供 artifact resolver、DAG、非阻断依赖和部分纯模块，但仍处于增量迁移阶段。当前日更、策略、回放和模拟账户并未全部改由 kernel 执行；详细成熟度见 `tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`。
+仓库中的 `tw_stock_workflow/` 已提供 artifact resolver、DAG、非阻断依赖和标准历史双轨模块。历史比较已经使用统一管线；日更和模拟账户仍处于增量迁移阶段，尚未全部改由 kernel 执行。详细成熟度见 `tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`。
 
 ## 5. 日更与故障隔离
 

@@ -170,37 +170,46 @@ function modelStrategyComparisonPayload (rawUrl) {
     runtime_effect: 'none',
     catalog: {
       models: [
-        { model_id: 'model_a_only', display_name: 'Model A', role: 'active_baseline', comparison_selectable: true },
-        { model_id: 'model_a_plus_b_b19r2r', display_name: 'Model A + Model B (B19R2R)', role: 'research_challenger', comparison_selectable: true }
+        { model_id: 'model_a_only', display_name: 'Model A', framework_role: 'model_track', governance_status: 'active_baseline', workflow_policy: 'required', virtual_account_eligible: true, production_default: true, role: 'active_baseline', comparison_selectable: true },
+        { model_id: 'model_a_plus_b_b19r2r', display_name: 'Model A + Model B (B19R2R)', framework_role: 'model_track', governance_status: 'research_candidate', workflow_policy: 'nonblocking', virtual_account_eligible: false, production_default: false, role: 'research_candidate', comparison_selectable: true }
       ],
       strategies: [
         { strategy_id: 'top50_exit_one_worst_sell', display_name: 'Top 50 / exit one worst', comparison_selectable: true },
         { strategy_id: 'phase1c_ltr_simple_daily', display_name: 'Legacy LTR simple daily', compatibility: 'legacy_lineage_only', comparison_selectable: false, compatible_model_ids: [] }
       ],
-      windows: [{ window_id: 'b19r2r_retrospective_20260722_20260901', display_name: '历史回放 30 日' }],
+      windows: [{ window_id: 'b19r2r_retrospective_complete_20260813_20260901', display_name: '完整特征历史回放（14 日）' }],
       combinations: [
-        { combination_id: 'model_a_30d', model_id: 'model_a_only', strategy_id: 'top50_exit_one_worst_sell', window_id: 'b19r2r_retrospective_20260722_20260901', comparison_selectable: true },
-        { combination_id: 'model_ab_30d', model_id: 'model_a_plus_b_b19r2r', strategy_id: 'top50_exit_one_worst_sell', window_id: 'b19r2r_retrospective_20260722_20260901', comparison_selectable: true }
-      ]
+        { combination_id: 'model_a_only__top50_exit_one_worst_sell__b19r2r_complete_14d', model_id: 'model_a_only', strategy_id: 'top50_exit_one_worst_sell', window_id: 'b19r2r_retrospective_complete_20260813_20260901', comparison_selectable: true },
+        { combination_id: 'model_a_plus_b_b19r2r__top50_exit_one_worst_sell__b19r2r_complete_14d', model_id: 'model_a_plus_b_b19r2r', strategy_id: 'top50_exit_one_worst_sell', window_id: 'b19r2r_retrospective_complete_20260813_20260901', comparison_selectable: true }
+      ],
+      virtual_account_policy: {
+        default_track_id: 'model_a_only',
+        selection_parameter: 'model_track_id',
+        allowed_track_ids: ['model_a_only'],
+        extension_requires_admission_review: true
+      }
     },
     selected: {
       model_id: modelId,
       strategy_id: 'top50_exit_one_worst_sell',
-      window_id: 'b19r2r_retrospective_20260722_20260901',
-      combination_id: modelId === 'model_a_only' ? 'model_a_30d' : 'model_ab_30d'
+      window_id: 'b19r2r_retrospective_complete_20260813_20260901',
+      combination_id: modelId === 'model_a_only' ? 'model_a_only__top50_exit_one_worst_sell__b19r2r_complete_14d' : 'model_a_plus_b_b19r2r__top50_exit_one_worst_sell__b19r2r_complete_14d'
     },
     result: { model_id: modelId },
     comparison: {
       results: [
-        { model_id: 'model_a_only', model_role: 'active_baseline', metrics: { net_return: 0.00995096, max_drawdown: -0.0770845, fee_tax: 13194.7678, turnover: 4.9645611, top5_abs_contribution_share: 0.4519841 }, gate_status: 'BASELINE_DESCRIPTOR_ACTIVE_MODEL_A_ONLY' },
-        { model_id: 'model_a_plus_b_b19r2r', model_role: 'research_challenger', metrics: { net_return: 0.08079706, max_drawdown: -0.05199786, fee_tax: 12640.0892, turnover: 4.6111538, top5_abs_contribution_share: 0.5074759 }, gate_status: 'FAIL_ALL_JOINT_CONFIRMATION_GATES_AS_HISTORICAL_DIAGNOSTIC' }
+        { model_id: 'model_a_only', framework_role: 'model_track', governance_status: 'active_baseline', workflow_policy: 'required', metrics: { net_return: -0.003394721942222456, max_drawdown: -0.02293822433302306, fee_tax: 3499.721331871033, turnover: 1.4944290048217774, top5_abs_contribution_share: 0.7665576923271123 }, gate_status: 'BASELINE_DESCRIPTOR_ACTIVE_MODEL_A_ONLY', artifacts: { model_signal: {}, order_intent: {}, replay_result: {} } },
+        { model_id: 'model_a_plus_b_b19r2r', framework_role: 'model_track', governance_status: 'research_candidate', workflow_policy: 'nonblocking', metrics: { net_return: 0.062462478661684306, max_drawdown: -0.013392308393651242, fee_tax: 4427.477011533738, turnover: 1.7575382537078856, top5_abs_contribution_share: 0.7309891627334426 }, gate_status: 'NOT_EVALUATED_FOR_ORIGINAL_TOP50_NO_REPLACEMENT', artifacts: { model_signal: {}, order_intent: {}, replay_result: {} } }
       ],
-      delta: { net_return_b_minus_a: 0.0708461 },
+      delta: { net_return_b_minus_a: 0.06585720060390676 },
+      deltas_from_default: { model_a_plus_b_b19r2r: { net_return_minus_default: 0.06585720060390676 } },
       diagnostics: {
-        bootstrap_95pct_lower_bound: { measured_value: -0.0056257, threshold: 0, status: 'FAIL' },
-        negative_twii20_regime_return_delta: { measured_value: -0.0481254, threshold: -0.02, status: 'FAIL' },
-        concentration: { top5_abs_contribution_share: { measured_value: 0.5074759, threshold: 0.45, status: 'FAIL' } },
-        failed_gate_ids: ['negative_twii20_regime_return_delta']
+        joint_status: 'NOT_EVALUATED_FOR_CURRENT_BOUNDARY',
+        admission_effect: 'NONE_NOT_EVALUATED',
+        bootstrap_95pct_lower_bound: null,
+        negative_twii20_regime_return_delta: null,
+        concentration: { top5_abs_contribution_share: null },
+        failed_gate_ids: []
       }
     },
     status: { selection_changes_display_only: true, can_apply: false, baseline_admission_allowed: false },
@@ -509,9 +518,11 @@ await page.waitForSelector('.tw-stock-monitor', { timeout: 45000 })
 const comparisonPanel = page.getByTestId('readonly-model-strategy-comparison-panel')
 await comparisonPanel.waitFor()
 const comparisonText = await comparisonPanel.innerText()
-assert.ok(comparisonText.includes('8.08%'))
-assert.ok(comparisonText.includes('研究候选，联合门槛未通过'))
-assert.ok(comparisonText.includes('都不能在本页直接应用'))
+assert.ok(comparisonText.includes('6.25%'))
+assert.ok(comparisonText.includes('研究候选'))
+assert.ok(comparisonText.includes('尚未重新评估'))
+assert.ok(comparisonText.includes('所有模型轨道都不能在本页直接应用'))
+assert.ok(comparisonText.includes('当前允许列表只有 Model A'))
 assert.equal(await page.getByTestId('data-freshness-technical-details').getAttribute('open'), null)
 await page.getByTestId('data-freshness-technical-details').locator('summary').click()
 assert.ok((await page.getByTestId('b19r2r-shadow-status').innerText()).includes('影子信号阻断'))
@@ -525,8 +536,8 @@ if (faultIsolation) {
   assert.ok((await page.getByTestId('readonly-strategy-snapshot-panel').innerText()).includes('台积电'))
 }
 await comparisonPanel.locator('.ant-select').first().click()
-await page.getByText('Model A + Model B (B19R2R)（研究候选，联合门槛未通过）', { exact: true }).last().click()
-await page.waitForFunction(() => document.body.innerText.includes('Model A + Model B (B19R2R)（研究候选，联合门槛未通过） · Top 50 / exit one worst'))
+await page.getByText('Model A + Model B (B19R2R)（研究候选）', { exact: true }).last().click()
+await page.waitForFunction(() => document.body.innerText.includes('Model A + Model B (B19R2R)（研究候选） · Top 50 / exit one worst'))
 const advancedToggle = page.getByRole('checkbox', { name: '高级研究与运维' })
 assert.equal(await advancedToggle.isChecked(), false)
 assert.equal(await page.getByTestId('rank-tech-portfolio-replay-readonly').isVisible(), false)
@@ -549,7 +560,7 @@ async function viewportAudit (name, width, height) {
   await page.waitForTimeout(500)
   const metrics = await page.evaluate(() => {
     const text = document.body.innerText
-    const required = ['数据链路状态', '查看数据链路详情', 'provider/raw latest 已到 2026-06-21', 'qlib accepted latest 仍为 2026-06-18', '策略总览', '目标交易日：2026-06-19', '已作为历史状态隔离', '模型与策略对比', '8.08%', '研究候选，联合门槛未通过', '都不能在本页直接应用', '怎么理解这次对比', '继续作为研究候选，不替换 Model A', '候选名单', '历史模拟', '模拟账户状态', '解释原因', '策略解释助手', '不构成交易建议', '不连接券商', '不产生真实交易委托']
+    const required = ['数据链路状态', '查看数据链路详情', 'provider/raw latest 已到 2026-06-21', 'qlib accepted latest 仍为 2026-06-18', '策略总览', '目标交易日：2026-06-19', '已作为历史状态隔离', '模型与策略对比', '6.25%', '研究候选', '尚未重新评估', '所有模型轨道都不能在本页直接应用', '当前允许列表只有 Model A', '怎么理解这次对比', '仍需完成准入审查后才能加入虚拟账户允许列表或调整默认模型', '候选名单', '历史模拟', '模拟账户状态', '解释原因', '策略解释助手', '不构成交易建议', '不连接券商', '不产生真实交易委托']
     const forbiddenMain = ['统一策略上下文', 'YZ Clean E4 产品化', 'clean registry', 'execution_price_mode: next_open', '只展示 Model A / Model B', 'paper_order_intent_artifact_path', 'ReplayWindowPolicy', 'final equity', 'turnover_proxy_by_notional_over_avg_equity', '生成模拟草稿']
     const visibleText = Array.from(document.querySelectorAll('body *')).filter(el => {
       const style = window.getComputedStyle(el)

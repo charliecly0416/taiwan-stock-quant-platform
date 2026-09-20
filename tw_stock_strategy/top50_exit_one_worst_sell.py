@@ -209,7 +209,13 @@ def _validate_config(config: Mapping[str, Any]) -> None:
             raise StrategyContractError(f"strategy config {field} must equal {expected!r}")
 
 
-def _parse_signals(rows: tuple[Mapping[str, Any], ...]) -> tuple[str, dict[str, _Signal]]:
+def _parse_signals(
+    rows: tuple[Mapping[str, Any], ...],
+    *,
+    expected_model_id: str,
+    expected_model_family: str,
+    candidate_rank_policy: str,
+) -> tuple[str, dict[str, _Signal]]:
     if not rows:
         raise StrategyContractError("model signal rows must not be empty")
     parsed: dict[str, _Signal] = {}
@@ -237,10 +243,17 @@ def _parse_signals(rows: tuple[Mapping[str, Any], ...]) -> tuple[str, dict[str, 
         if instrument in parsed:
             raise StrategyContractError(f"duplicate model signal instrument: {instrument}")
         model_name = _strict_text(row["model_name"], f"{label}.model_name")
-        if model_name != ACTIVE_MODEL_ID:
-            raise StrategyContractError(f"{label} model_name is not the active Model A")
-        if _strict_text(row["model_family"], f"{label}.model_family") != "qlib":
-            raise StrategyContractError(f"{label} model_family must be qlib")
+        if model_name != expected_model_id:
+            raise StrategyContractError(
+                f"{label} model_name does not match the authorized model identity"
+            )
+        if (
+            _strict_text(row["model_family"], f"{label}.model_family")
+            != expected_model_family
+        ):
+            raise StrategyContractError(
+                f"{label} model_family does not match the authorized model identity"
+            )
         _strict_text(row["source_artifact"], f"{label}.source_artifact")
         for optional in _SIGNAL_OPTIONAL & set(row):
             _strict_text(row[optional], f"{label}.{optional}")
@@ -249,10 +262,17 @@ def _parse_signals(rows: tuple[Mapping[str, Any], ...]) -> tuple[str, dict[str, 
         full_rank = _strict_int(row["full_qlib_rank"], f"{label}.full_qlib_rank", minimum=1)
         buy_score = _strict_float(row["buy_score"], f"{label}.buy_score")
         _strict_float(row["raw_score"], f"{label}.raw_score")
-        if candidate_rank != full_rank:
+        if candidate_rank_policy == "full_rank" and candidate_rank != full_rank:
             raise StrategyContractError(
                 f"{label} candidate_rank must preserve Model A full_qlib_rank"
             )
+        if candidate_rank_policy == "original_top50_exclude_tw7769_no_replacement" and (
+            (candidate_rank != full_rank and candidate_rank <= _CONFIG["candidate_k"])
+            or (full_rank > _CONFIG["candidate_k"] and candidate_rank != full_rank)
+        ):
+            raise StrategyContractError(f"{label} cannot replace the original Model A Top50")
+        if candidate_rank_policy not in {"full_rank", "frozen_eligible_exact50", "original_top50_exclude_tw7769_no_replacement"}:
+            raise StrategyContractError("candidate rank policy is not authorized")
         if candidate_rank in candidate_ranks or full_rank in full_ranks:
             raise StrategyContractError(f"{label} contains duplicate Model A rank")
         candidate_ranks.add(candidate_rank)
@@ -269,7 +289,7 @@ def _parse_signals(rows: tuple[Mapping[str, Any], ...]) -> tuple[str, dict[str, 
     if len(signal_dates) != 1 or len(model_names) != 1:
         raise StrategyContractError("model signal rows must have one date and one model")
     expected_candidate_ranks = set(range(1, _CONFIG["candidate_k"] + 1))
-    if not expected_candidate_ranks.issubset(candidate_ranks):
+    if candidate_rank_policy != "original_top50_exclude_tw7769_no_replacement" and not expected_candidate_ranks.issubset(candidate_ranks):
         raise StrategyContractError(
             f"model signal rows must expose candidate ranks 1..{_CONFIG['candidate_k']}"
         )
@@ -323,10 +343,14 @@ def _parse_portfolio(
     return tuple(sorted(held))
 
 
-def decide(
+def _decide(
     model_signal_rows: Iterable[Mapping[str, Any]],
     portfolio_state_rows: Iterable[Mapping[str, Any]],
     strategy_config: Mapping[str, Any],
+    *,
+    expected_model_id: str,
+    expected_model_family: str,
+    candidate_rank_policy: str,
 ) -> StrategyDecision:
     """Return the canonical strategy decision for one signal date.
 
@@ -338,7 +362,12 @@ def decide(
     _validate_config(strategy_config)
     signal_rows = _rows(model_signal_rows, "model signal rows")
     portfolio_rows = _rows(portfolio_state_rows, "portfolio state rows")
-    signal_date, signals = _parse_signals(signal_rows)
+    signal_date, signals = _parse_signals(
+        signal_rows,
+        expected_model_id=expected_model_id,
+        expected_model_family=expected_model_family,
+        candidate_rank_policy=candidate_rank_policy,
+    )
     held = _parse_portfolio(portfolio_rows, signal_date, signals)
     candidate_set = {
         signal.instrument
@@ -379,7 +408,7 @@ def decide(
                     intent_action=action,
                     intent_reason=f"{STRATEGY_RULE}_{action}",
                     strategy_rule=STRATEGY_RULE,
-                    model_name=ACTIVE_MODEL_ID,
+                    model_name=expected_model_id,
                     candidate_rank=signal.candidate_rank,
                     buy_rank=buy_rank.get(instrument, -1),
                     full_qlib_rank=signal.full_qlib_rank,
@@ -388,7 +417,7 @@ def decide(
             )
     return StrategyDecision(
         signal_date=signal_date,
-        model_name=ACTIVE_MODEL_ID,
+        model_name=expected_model_id,
         strategy_rule=STRATEGY_RULE,
         candidate_k=_CONFIG["candidate_k"],
         target_holding_count=_CONFIG["target_holding_count"],
@@ -399,4 +428,44 @@ def decide(
         hold=holds,
         skip=skips,
         intents=tuple(intents),
+    )
+
+
+def decide(
+    model_signal_rows: Iterable[Mapping[str, Any]],
+    portfolio_state_rows: Iterable[Mapping[str, Any]],
+    strategy_config: Mapping[str, Any],
+) -> StrategyDecision:
+    """Evaluate the production baseline identity with the frozen strategy rule."""
+
+    return _decide(
+        model_signal_rows,
+        portfolio_state_rows,
+        strategy_config,
+        expected_model_id=ACTIVE_MODEL_ID,
+        expected_model_family="qlib",
+        candidate_rank_policy="full_rank",
+    )
+
+
+def decide_for_model(
+    model_signal_rows: Iterable[Mapping[str, Any]],
+    portfolio_state_rows: Iterable[Mapping[str, Any]],
+    strategy_config: Mapping[str, Any],
+    *,
+    model_id: str,
+    model_family: str,
+    candidate_rank_policy: str = "full_rank",
+) -> StrategyDecision:
+    """Evaluate a model identity already authorized by the caller's registry."""
+
+    _strict_text(model_id, "model_id")
+    _strict_text(model_family, "model_family")
+    return _decide(
+        model_signal_rows,
+        portfolio_state_rows,
+        strategy_config,
+        expected_model_id=model_id,
+        expected_model_family=model_family,
+        candidate_rank_policy=candidate_rank_policy,
     )

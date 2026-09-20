@@ -9,7 +9,17 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[3]
-ARTIFACT_ROOT = ROOT / "data_tw/artifacts/readonly_model_strategy_comparison/v1"
+V6_ARTIFACT_ROOT = ROOT / "data_tw/artifacts/readonly_model_strategy_comparison/v9"
+V5_ARTIFACT_ROOT = ROOT / "data_tw/artifacts/readonly_model_strategy_comparison/v8"
+V4_ARTIFACT_ROOT = ROOT / "data_tw/artifacts/readonly_model_strategy_comparison/v7"
+V3_ARTIFACT_ROOT = ROOT / "data_tw/artifacts/readonly_model_strategy_comparison/v6"
+V2_ARTIFACT_ROOT = ROOT / "data_tw/artifacts/readonly_model_strategy_comparison/v5"
+V1_ARTIFACT_ROOT = ROOT / "data_tw/artifacts/readonly_model_strategy_comparison/v1"
+ARTIFACT_ROOT = next(
+    root
+    for root in (V6_ARTIFACT_ROOT, V5_ARTIFACT_ROOT, V4_ARTIFACT_ROOT, V3_ARTIFACT_ROOT, V2_ARTIFACT_ROOT, V1_ARTIFACT_ROOT)
+    if (root / "latest.json").is_file()
+)
 LATEST_PATH = ARTIFACT_ROOT / "latest.json"
 
 
@@ -84,8 +94,10 @@ def _require_hash(path: Path, expected: str, *, source_id: str) -> None:
         )
 
 
-def _load_catalog() -> tuple[dict[str, Any], dict[str, Any], dict[str, Path]]:
-    pointer = _load_json(LATEST_PATH)
+def _load_catalog_at(
+    latest_path: Path, artifact_root: Path
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Path], dict[str, Any]]:
+    pointer = _load_json(latest_path)
     if pointer.get("artifact_type") != "readonly_model_strategy_comparison_catalog_pointer":
         raise ReadonlyModelStrategyComparisonError("invalid_latest_pointer", "Invalid comparison catalog pointer")
     if not (
@@ -97,13 +109,18 @@ def _load_catalog() -> tuple[dict[str, Any], dict[str, Any], dict[str, Path]]:
         raise ReadonlyModelStrategyComparisonError("unsafe_latest_pointer", "Comparison pointer safety flags are invalid")
 
     catalog_path = _resolve_repo_path(str(pointer.get("catalog_path") or ""))
-    if not catalog_path.is_relative_to(ARTIFACT_ROOT.resolve()):
+    if not catalog_path.is_relative_to(artifact_root.resolve()):
         raise ReadonlyModelStrategyComparisonError(
             "catalog_outside_readonly_root", "Comparison catalog is outside its readonly artifact root"
         )
     _require_hash(catalog_path, str(pointer.get("catalog_sha256") or ""), source_id="catalog")
     catalog = _load_json(catalog_path)
-    if catalog.get("schema_version") != "readonly_model_strategy_comparison_catalog_v1":
+    catalog_schema = catalog.get("schema_version")
+    if catalog_schema not in {
+        "readonly_model_strategy_comparison_catalog_v1",
+        "readonly_model_strategy_comparison_catalog_v2",
+        "readonly_model_strategy_comparison_catalog_v3",
+    }:
         raise ReadonlyModelStrategyComparisonError("invalid_catalog", "Unsupported comparison catalog schema")
     if not (
         catalog.get("readonly_only") is True
@@ -117,60 +134,166 @@ def _load_catalog() -> tuple[dict[str, Any], dict[str, Any], dict[str, Path]]:
     sources = catalog.get("sources") or {}
     if not isinstance(sources, dict) or not sources:
         raise ReadonlyModelStrategyComparisonError("invalid_catalog", "Comparison catalog has no static sources")
+    unavailable_tracks: dict[str, dict[str, str]] = {}
+    default_track_id = str((catalog.get("default_selection") or {}).get("model_id") or "")
+    optional_sources = {
+        f"{item.get('model_id')}_track_manifest"
+        for item in catalog.get("models", [])
+        if item.get("model_id") and item.get("model_id") != default_track_id
+    } if catalog_schema in {"readonly_model_strategy_comparison_catalog_v2", "readonly_model_strategy_comparison_catalog_v3"} else set()
     for source_id, source in sources.items():
         if not isinstance(source, dict):
             raise ReadonlyModelStrategyComparisonError(
                 "invalid_catalog", "Comparison source entry is invalid", {"source_id": source_id}
             )
-        source_path = _resolve_repo_path(str(source.get("path") or ""))
-        if not source_path.exists() or not source_path.is_file():
-            raise ReadonlyModelStrategyComparisonError(
-                "missing_artifact", "Missing readonly comparison source", {"source_id": source_id, "path": _rel(source_path)}
-            )
-        _require_hash(source_path, str(source.get("sha256") or ""), source_id=str(source_id))
-        source_paths[str(source_id)] = source_path
+        try:
+            source_path = _resolve_repo_path(str(source.get("path") or ""))
+            if not source_path.exists() or not source_path.is_file():
+                raise ReadonlyModelStrategyComparisonError(
+                    "missing_artifact", "Missing readonly comparison source", {"source_id": source_id, "path": _rel(source_path)}
+                )
+            _require_hash(source_path, str(source.get("sha256") or ""), source_id=str(source_id))
+            source_paths[str(source_id)] = source_path
+        except ReadonlyModelStrategyComparisonError as exc:
+            if source_id not in optional_sources:
+                raise
+            track_id = str(source_id).removesuffix("_track_manifest")
+            unavailable_tracks[track_id] = {
+                "status": "challenger_unavailable",
+                "reason": exc.status,
+            }
 
-    manifest = _load_json(source_paths["b19r2r_manifest"])
-    validator = _load_json(source_paths["b19r2r_validator"])
-    review = _load_json(source_paths["b19r2r_independent_review"])
-    legacy_review = _load_json(source_paths["legacy_static_safety_review"])
-    manifest_sha256 = str((sources.get("b19r2r_manifest") or {}).get("sha256") or "")
-    validator_sha256 = str((sources.get("b19r2r_validator") or {}).get("sha256") or "")
-    reviewed_version = review.get("reviewed_version") or {}
-    if validator.get("status") != "PASS" or validator.get("historical_replay") is not True:
-        raise ReadonlyModelStrategyComparisonError("validator_not_passed", "B19R2R historical replay validator is not PASS")
-    if review.get("verdict") != "PASS_WITH_FINDINGS" or (review.get("blocking_findings") or []):
-        raise ReadonlyModelStrategyComparisonError("review_not_accepted", "B19R2R independent review is not accepted")
-    if not (
-        validator.get("manifest_sha256") == manifest_sha256
-        and reviewed_version.get("manifest_sha256") == manifest_sha256
-        and reviewed_version.get("validator_result_sha256") == validator_sha256
-    ):
+    if catalog_schema == "readonly_model_strategy_comparison_catalog_v1":
+        manifest = _load_json(source_paths["b19r2r_manifest"])
+        validator = _load_json(source_paths["b19r2r_validator"])
+        review = _load_json(source_paths["b19r2r_independent_review"])
+        legacy_review = _load_json(source_paths["legacy_static_safety_review"])
+        manifest_sha256 = str((sources.get("b19r2r_manifest") or {}).get("sha256") or "")
+        validator_sha256 = str((sources.get("b19r2r_validator") or {}).get("sha256") or "")
+        reviewed_version = review.get("reviewed_version") or {}
+        if validator.get("status") != "PASS" or validator.get("historical_replay") is not True:
+            raise ReadonlyModelStrategyComparisonError("validator_not_passed", "B19R2R historical replay validator is not PASS")
+        if review.get("verdict") != "PASS_WITH_FINDINGS" or (review.get("blocking_findings") or []):
+            raise ReadonlyModelStrategyComparisonError("review_not_accepted", "B19R2R independent review is not accepted")
+        if not (
+            validator.get("manifest_sha256") == manifest_sha256
+            and reviewed_version.get("manifest_sha256") == manifest_sha256
+            and reviewed_version.get("validator_result_sha256") == validator_sha256
+        ):
+            raise ReadonlyModelStrategyComparisonError(
+                "lineage_binding_failed", "Validator or independent review is not bound to the catalogued B19R2R manifest"
+            )
+        safety = manifest.get("safety") or {}
+        if not (
+            manifest.get("historical_replay") is True
+            and manifest.get("prospective_pit_anchor") is False
+            and safety.get("prospective_ledger_append") is False
+            and safety.get("latest_or_provider_write") is False
+            and safety.get("baseline_or_production_change") is False
+            and safety.get("production_allowed") is False
+        ):
+            raise ReadonlyModelStrategyComparisonError(
+                "unsafe_source_manifest", "B19R2R source manifest does not preserve the readonly historical boundary"
+            )
+        if not (
+            (review.get("disposition") or {}).get("baseline_admission_allowed") is False
+            and (review.get("disposition") or {}).get("production_activation_allowed") is False
+        ):
+            raise ReadonlyModelStrategyComparisonError(
+                "unsafe_review_disposition", "Independent review does not prohibit baseline admission and production activation"
+            )
+        if legacy_review.get("ok") is not True or legacy_review.get("endpoint_get_only") is not True:
+            raise ReadonlyModelStrategyComparisonError("legacy_review_not_passed", "Legacy strategy safety review is not PASS")
+    if catalog_schema in {"readonly_model_strategy_comparison_catalog_v2", "readonly_model_strategy_comparison_catalog_v3"}:
+        unavailable_tracks.update(_validate_standard_track_sources(catalog, source_paths))
+    return catalog, pointer, source_paths, {
+        "catalog_pointer": _rel(latest_path),
+        "unavailable_tracks": unavailable_tracks,
+    }
+
+
+def _load_catalog() -> tuple[dict[str, Any], dict[str, Any], dict[str, Path], dict[str, Any]]:
+    catalog, pointer, sources, availability = _load_catalog_at(LATEST_PATH, ARTIFACT_ROOT)
+    availability["fallback_from_v2"] = ARTIFACT_ROOT == V1_ARTIFACT_ROOT
+    availability["unavailable_tracks"].update(catalog.get("unavailable_tracks") or {})
+    return catalog, pointer, sources, availability
+
+
+def _validate_standard_track_sources(
+    catalog: dict[str, Any], source_paths: dict[str, Path]
+) -> dict[str, dict[str, str]]:
+    default_track_id = str((catalog.get("default_selection") or {}).get("model_id") or "")
+    combinations = catalog.get("combinations") or []
+    seen: set[str] = set()
+    unavailable: dict[str, dict[str, str]] = {}
+    for combination in combinations:
+        track_id = str(combination.get("model_id") or "")
+        if not track_id:
+            continue
+        source_key = f"{track_id}_track_manifest"
+        path = source_paths.get(source_key)
+        try:
+            if path is None:
+                raise ReadonlyModelStrategyComparisonError(
+                    "missing_standard_track", "Standard model-track manifest is missing", {"track_id": track_id}
+                )
+            manifest = _load_json(path)
+            if not (
+                manifest.get("artifact_type") == "ReadonlyModelTrackArtifact"
+                and manifest.get("track_id") == track_id
+                and manifest.get("status") == "READY"
+                and manifest.get("framework_role") == "model_track"
+                and manifest.get("readonly_only") is True
+                and manifest.get("no_apply") is True
+                and manifest.get("runtime_effect") == "none"
+                and manifest.get("production_allowed") is False
+            ):
+                raise ReadonlyModelStrategyComparisonError(
+                    "unsafe_standard_track", "Standard model-track safety contract is invalid", {"track_id": track_id}
+                )
+            declared = manifest.get("artifacts") or {}
+            advertised = combination.get("artifacts") or {}
+            if declared != advertised or set(declared) != {"model_signal", "order_intent", "replay_result"}:
+                raise ReadonlyModelStrategyComparisonError(
+                    "track_lineage_mismatch", "Comparison lineage does not match the model-track manifest", {"track_id": track_id}
+                )
+            for artifact_type, item in declared.items():
+                artifact_path = _resolve_repo_path(str(item.get("path") or ""))
+                _require_hash(artifact_path, str(item.get("sha256") or ""), source_id=f"{track_id}_{artifact_type}")
+                artifact = _load_json(artifact_path)
+                if not (
+                    artifact.get("track_id") == track_id
+                    and artifact.get("status") == "READY"
+                    and artifact.get("production_allowed") is False
+                ):
+                    raise ReadonlyModelStrategyComparisonError(
+                        "invalid_track_artifact", "A standard model-track artifact is invalid", {"track_id": track_id, "artifact": artifact_type}
+                    )
+            if track_id == default_track_id:
+                parity_item = (manifest.get("validation_evidence") or {}).get("reference_replay_parity") or {}
+                parity_path = _resolve_repo_path(str(parity_item.get("path") or ""))
+                _require_hash(
+                    parity_path,
+                    str(parity_item.get("sha256") or ""),
+                    source_id=f"{track_id}_reference_replay_parity",
+                )
+                parity = _load_json(parity_path)
+                if parity.get("status") != "PASS" or not all((parity.get("checks") or {}).values()):
+                    raise ReadonlyModelStrategyComparisonError(
+                        "reference_replay_parity_failed",
+                        "The default model-track replay does not match the independent reference",
+                        {"track_id": track_id},
+                    )
+            seen.add(track_id)
+        except ReadonlyModelStrategyComparisonError as exc:
+            if track_id == default_track_id:
+                raise
+            unavailable[track_id] = {"status": "challenger_unavailable", "reason": exc.status}
+    if default_track_id not in seen:
         raise ReadonlyModelStrategyComparisonError(
-            "lineage_binding_failed", "Validator or independent review is not bound to the catalogued B19R2R manifest"
+            "missing_baseline_track", "The standard comparison catalog must contain a valid Model A track"
         )
-    safety = manifest.get("safety") or {}
-    if not (
-        manifest.get("historical_replay") is True
-        and manifest.get("prospective_pit_anchor") is False
-        and safety.get("prospective_ledger_append") is False
-        and safety.get("latest_or_provider_write") is False
-        and safety.get("baseline_or_production_change") is False
-        and safety.get("production_allowed") is False
-    ):
-        raise ReadonlyModelStrategyComparisonError(
-            "unsafe_source_manifest", "B19R2R source manifest does not preserve the readonly historical boundary"
-        )
-    if not (
-        (review.get("disposition") or {}).get("baseline_admission_allowed") is False
-        and (review.get("disposition") or {}).get("production_activation_allowed") is False
-    ):
-        raise ReadonlyModelStrategyComparisonError(
-            "unsafe_review_disposition", "Independent review does not prohibit baseline admission and production activation"
-        )
-    if legacy_review.get("ok") is not True or legacy_review.get("endpoint_get_only") is not True:
-        raise ReadonlyModelStrategyComparisonError("legacy_review_not_passed", "Legacy strategy safety review is not PASS")
-    return catalog, pointer, source_paths
+    return unavailable
 
 
 def _read_csv_rows(path: Path) -> list[dict[str, str]]:
@@ -222,8 +345,8 @@ def _gate_diagnostics(rows: list[dict[str, str]]) -> dict[str, Any]:
 
     failed = [str(row.get("gate")) for row in rows if row.get("status") == "FAIL"]
     return {
-        "joint_status": "FAIL_ALL_JOINT_CONFIRMATION_GATES_AS_HISTORICAL_DIAGNOSTIC",
-        "admission_effect": "NONE_RETROSPECTIVE_DIAGNOSTIC_ONLY",
+        "joint_status": "NOT_EVALUATED_FOR_CURRENT_BOUNDARY" if not rows else "FAIL_ALL_JOINT_CONFIRMATION_GATES_AS_HISTORICAL_DIAGNOSTIC",
+        "admission_effect": "NONE_NOT_EVALUATED" if not rows else "NONE_RETROSPECTIVE_DIAGNOSTIC_ONLY",
         "bootstrap_95pct_lower_bound": item("confirmation_paired_moving_block_bootstrap_95pct_lower_bound"),
         "negative_twii20_regime_return_delta": item("negative_twii20_regime_return_delta"),
         "concentration": {
@@ -256,6 +379,9 @@ def _metric_result(
         "model_id": model["model_id"],
         "model_display_name": model["display_name"],
         "model_role": model["role"],
+        "framework_role": model.get("framework_role", "model_track"),
+        "governance_status": model.get("governance_status", model.get("role")),
+        "workflow_policy": model.get("workflow_policy"),
         "strategy_id": strategy["strategy_id"],
         "strategy_display_name": strategy["display_name"],
         "window_id": window["window_id"],
@@ -286,6 +412,7 @@ def _metric_result(
         "prospective_pit_anchor": False,
         "no_apply": True,
         "runtime_effect": "none",
+        "artifacts": combination.get("artifacts") or {},
     }
 
 
@@ -293,7 +420,7 @@ def load_readonly_model_strategy_comparison(
     *, model_id: str | None = None, strategy_id: str | None = None, window_id: str | None = None
 ) -> dict[str, Any]:
     """Return one audited static selection and its same-window comparison peers."""
-    catalog, pointer, sources = _load_catalog()
+    catalog, pointer, sources, availability = _load_catalog()
     default = catalog.get("default_selection") or {}
     selected_model_id = model_id or str(default.get("model_id") or "")
     selected_strategy_id = strategy_id or str(default.get("strategy_id") or "")
@@ -302,6 +429,13 @@ def load_readonly_model_strategy_comparison(
     models = {str(item.get("model_id")): item for item in catalog.get("models", [])}
     strategies = {str(item.get("strategy_id")): item for item in catalog.get("strategies", [])}
     windows = {str(item.get("window_id")): item for item in catalog.get("windows", [])}
+    unavailable_tracks = availability.get("unavailable_tracks") or {}
+    if selected_model_id in unavailable_tracks:
+        raise ReadonlyModelStrategyComparisonError(
+            "challenger_unavailable",
+            "The selected research challenger is temporarily unavailable; Model A remains available",
+            {"model_id": selected_model_id, **unavailable_tracks[selected_model_id]},
+        )
     if selected_model_id not in models:
         raise ReadonlyModelStrategyComparisonError("unknown_model", "Model is not present in the audited comparison catalog", {"model_id": selected_model_id})
     if selected_strategy_id not in strategies:
@@ -322,10 +456,13 @@ def load_readonly_model_strategy_comparison(
         )
 
     combinations = list(catalog.get("combinations") or [])
+    available_combinations = [
+        item for item in combinations if item.get("model_id") not in unavailable_tracks
+    ]
     selected_combination = next(
         (
             item
-            for item in combinations
+            for item in available_combinations
             if item.get("model_id") == selected_model_id
             and item.get("strategy_id") == selected_strategy_id
             and item.get("window_id") == selected_window_id
@@ -345,7 +482,7 @@ def load_readonly_model_strategy_comparison(
     gate_rows = _read_csv_rows(sources["gate_diagnostics"])
     peers = [
         item
-        for item in combinations
+        for item in available_combinations
         if item.get("strategy_id") == selected_strategy_id
         and item.get("window_id") == selected_window_id
         and item.get("comparison_selectable") is True
@@ -356,18 +493,35 @@ def load_readonly_model_strategy_comparison(
     ]
     result = next(item for item in comparison if item["combination_id"] == selected_combination["combination_id"])
     by_model = {item["model_id"]: item for item in comparison}
-    a_result = by_model.get("model_a_only")
-    ab_result = by_model.get("model_a_plus_b_b19r2r")
-    delta = None
-    if a_result and ab_result:
-        delta = {
-            "net_return_b_minus_a": ab_result["metrics"]["net_return"] - a_result["metrics"]["net_return"],
-            "max_drawdown_b_minus_a": ab_result["metrics"]["max_drawdown"] - a_result["metrics"]["max_drawdown"],
-            "turnover_ratio_b_over_a": _ratio(ab_result["metrics"]["turnover"], a_result["metrics"]["turnover"]),
-            "fee_tax_ratio_b_over_a": _ratio(ab_result["metrics"]["fee_tax"], a_result["metrics"]["fee_tax"]),
-            "joint_historical_gate": "FAIL_ALL_JOINT_CONFIRMATION_GATES_AS_HISTORICAL_DIAGNOSTIC",
-            "admission_effect": "NONE_RETROSPECTIVE_DIAGNOSTIC_ONLY",
-        }
+    default_model_id = str(default.get("model_id") or "")
+    default_result = by_model.get(default_model_id)
+    diagnostics = _gate_diagnostics(gate_rows)
+    deltas_from_default: dict[str, dict[str, Any]] = {}
+    if default_result:
+        for peer in comparison:
+            if peer["model_id"] == default_model_id:
+                continue
+            peer_delta = {
+                "model_id": peer["model_id"],
+                "default_model_id": default_model_id,
+                "net_return_minus_default": peer["metrics"]["net_return"] - default_result["metrics"]["net_return"],
+                "max_drawdown_minus_default": peer["metrics"]["max_drawdown"] - default_result["metrics"]["max_drawdown"],
+                "turnover_ratio_over_default": _ratio(peer["metrics"]["turnover"], default_result["metrics"]["turnover"]),
+                "fee_tax_ratio_over_default": _ratio(peer["metrics"]["fee_tax"], default_result["metrics"]["fee_tax"]),
+                "joint_historical_gate": diagnostics["joint_status"],
+                "admission_effect": diagnostics["admission_effect"],
+            }
+            if default_model_id == "model_a_only" and peer["model_id"] == "model_a_plus_b_b19r2r":
+                peer_delta.update({
+                    "net_return_b_minus_a": peer_delta["net_return_minus_default"],
+                    "max_drawdown_b_minus_a": peer_delta["max_drawdown_minus_default"],
+                    "turnover_ratio_b_over_a": peer_delta["turnover_ratio_over_default"],
+                    "fee_tax_ratio_b_over_a": peer_delta["fee_tax_ratio_over_default"],
+                })
+            deltas_from_default[peer["model_id"]] = peer_delta
+    delta = deltas_from_default.get(selected_model_id)
+    if delta is None and selected_model_id == default_model_id and len(deltas_from_default) == 1:
+        delta = next(iter(deltas_from_default.values()))
 
     return {
         "ok": True,
@@ -376,10 +530,11 @@ def load_readonly_model_strategy_comparison(
         "no_apply": True,
         "runtime_effect": "none",
         "catalog": {
-            "models": catalog.get("models", []),
+            "models": [item for item in catalog.get("models", []) if item.get("model_id") not in unavailable_tracks],
             "strategies": catalog.get("strategies", []),
             "windows": catalog.get("windows", []),
-            "combinations": combinations,
+            "combinations": available_combinations,
+            "virtual_account_policy": catalog.get("virtual_account_policy") or {},
         },
         "selected": {
             "model_id": selected_model_id,
@@ -388,7 +543,12 @@ def load_readonly_model_strategy_comparison(
             "combination_id": selected_combination["combination_id"],
         },
         "result": result,
-        "comparison": {"results": comparison, "delta": delta, "diagnostics": _gate_diagnostics(gate_rows)},
+        "comparison": {
+            "results": comparison,
+            "delta": delta,
+            "deltas_from_default": deltas_from_default,
+            "diagnostics": diagnostics,
+        },
         "status": {
             "selection_changes_display_only": True,
             "can_apply": False,
@@ -396,7 +556,9 @@ def load_readonly_model_strategy_comparison(
             "production_activation_allowed": False,
             "prospective_confirmation_passed": False,
             "historical_artifact_validator": "PASS",
-            "independent_review": "PASS_WITH_FINDINGS",
+            "independent_review": "PENDING_REVIEW" if catalog.get("schema_version") in {"readonly_model_strategy_comparison_catalog_v2", "readonly_model_strategy_comparison_catalog_v3"} else "PASS_WITH_FINDINGS",
+            "degraded": bool(unavailable_tracks) or bool(availability.get("fallback_from_v2")),
+            "unavailable_tracks": unavailable_tracks,
         },
         "safety": {
             "http_method": "GET_ONLY",
@@ -410,9 +572,12 @@ def load_readonly_model_strategy_comparison(
             "broker_or_order_write": False,
         },
         "sources": {
-            "catalog_pointer": _rel(LATEST_PATH),
+            "catalog_pointer": availability["catalog_pointer"],
             "catalog": str(pointer["catalog_path"]),
             "catalog_sha256": pointer["catalog_sha256"],
             "verified_source_count": len(sources),
+            "standard_track_artifacts": catalog.get("schema_version") in {"readonly_model_strategy_comparison_catalog_v2", "readonly_model_strategy_comparison_catalog_v3"},
+            "fallback_from_v2": bool(availability.get("fallback_from_v2")),
+            "fallback_reason": availability.get("fallback_reason"),
         },
     }

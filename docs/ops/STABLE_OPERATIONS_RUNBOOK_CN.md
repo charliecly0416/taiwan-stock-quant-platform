@@ -83,6 +83,23 @@ sudo logrotate --debug /path/to/rendered-quantdinger-logrotate
 
 ## 部署后验收
 
+历史 A/A+B 标准双轨不是日更任务。冻结输入或实现更新后，先在新的只读 workspace 运行并校验；不得覆盖旧 v1 或历史研究证据：
+
+```bash
+PYTHONPATH=. python scripts/run_tw_stock_workflow.py \
+  --spec configs/workflows/readonly_dual_model_track_comparison.yaml \
+  --mode readonly \
+  --asof 2026-09-01 \
+  --decision-cutoff 2026-09-20T00:00:00+00:00 \
+  --permission artifact.read \
+  --permission readonly.comparison.write \
+  --workspace data_tw/artifacts/readonly_model_strategy_comparison/v9
+
+PYTHONPATH=. python scripts/validate_tw_readonly_dual_model_tracks.py
+```
+
+成功条件是 A required、A-only catalog required、A+B nonblocking 和 paired comparison 四个节点均为 `SUCCEEDED`，两轨 validator 为 `PASS`，Model A 的 `independent_replay_parity.json` 为 `PASS`。A+B 失败而 A 成功时 workflow 总体仍可成功，并发布新的 A-only catalog；不得把旧 paired 结果伪装成当前结果。虚拟账户默认与允许列表由 `configs/readonly_model_tracks.yaml` 管理，当前只能是 Model A。Paper decision 的 `model_track_id` 必须在 `virtual_account_policy.allowed_track_ids` 中，并与该 track 的 canonical `model_id` 一致；修改 allowlist 前必须先完成模型准入审查和模拟账户专项回归。
+
 先在备用端口启动候选 backend，并执行只读验收：
 
 ```bash

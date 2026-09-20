@@ -140,6 +140,7 @@ export function applyTwStockPaperPortfolioDecision (data = {}) {
       paper_account_id: data.paper_account_id || data.paperAccountId,
       paper_account_epoch: data.paper_account_epoch || data.paperAccountEpoch,
       decision_id: data.decision_id || data.decisionId,
+      model_track_id: data.model_track_id || data.modelTrackId,
       paper_order_intent_artifact_path: data.paper_order_intent_artifact_path || data.paperOrderIntentArtifactPath,
       decision_artifact_id: data.decision_artifact_id || data.decisionArtifactId,
       input_checksum: data.input_checksum || data.inputChecksum,

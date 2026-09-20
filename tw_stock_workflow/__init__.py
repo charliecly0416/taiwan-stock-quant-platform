@@ -2,6 +2,13 @@
 
 from .artifacts import ArtifactRef, ArtifactResolver, ResearchHistoryAdapter
 from .engine import StageResult, WorkflowEngine, WorkflowRunResult
+from .dual_track import (
+    ReadonlyModelTrackComparison,
+    ReadonlyModelTrackExecution,
+    build_comparison_bundle,
+    build_track_bundle,
+    validate_track_bundle,
+)
 from .modules import (
     CachedOutputValidator,
     Module,
@@ -27,6 +34,8 @@ __all__ = [
     "ResearchHistoryObservation",
     "ReadonlyReplayWindowAdapter",
     "ReadonlyReplayWindowObservation",
+    "ReadonlyModelTrackComparison",
+    "ReadonlyModelTrackExecution",
     "ReplayCandidateExecution",
     "ReplayCandidateInputAdapter",
     "RunRegistry",
@@ -35,4 +44,7 @@ __all__ = [
     "WorkflowNode",
     "WorkflowRunResult",
     "WorkflowSpec",
+    "build_comparison_bundle",
+    "build_track_bundle",
+    "validate_track_bundle",
 ]

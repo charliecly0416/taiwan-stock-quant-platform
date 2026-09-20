@@ -243,6 +243,36 @@ m2_registry:
       production_allowed: false
       diagnostic_only: true
       owner_or_stage: model_b19r2r_research_shadow
+    model_signal.readonly_historical_track_adapter:
+      artifact_type: model_signal
+      schema_version: m1.0.0
+      contract_doc: docs/tw_modular_contracts/MODEL_SIGNAL_CONTRACT_CN.md
+      validator: scripts/validate_tw_modular_m_contracts.py
+      validator_contract: model_signal
+      golden_sample: tests/fixtures/tw_modular_contracts/model_signal/pass_readonly_historical_track_adapter
+      capabilities:
+      - model_adapter_required
+      - core_signal_v1
+      - readonly_historical_model_track
+      - shared_strategy_and_replay
+      dependencies:
+      - feature_artifact.alpha_m2_template
+      allowed_consumers:
+      - strategy_rule
+      - replay_execution
+      - readonly_comparison
+      - review_report
+      forbidden_consumers:
+      - frontend_default
+      - default_candidate
+      - provider_latest
+      - accepted_latest_switch
+      - paper_portfolio
+      - broker
+      - order
+      production_allowed: false
+      diagnostic_only: false
+      owner_or_stage: readonly_model_track_framework
     portfolio_state.owner_independent_replay_m2_template:
       artifact_type: portfolio_state
       schema_version: m1.0.0
