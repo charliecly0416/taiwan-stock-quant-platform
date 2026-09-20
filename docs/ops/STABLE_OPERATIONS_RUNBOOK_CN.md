@@ -91,6 +91,21 @@ data_tw/ops/unified_tasks/{task_type}/{run_id}/
 
 排错顺序是 `normalized_request.json`、`plan.json`、`result.json`，再看 `stdout.txt` 和 `stderr.txt`。实际日更的详细 job 和 pending 证据仍在 `data_tw/ops/daily_auto_update/`，统一任务记录不能替代日更 job artifact。
 
+查看最近任务状态：
+
+```bash
+python scripts/run_tw_task.py --status
+python scripts/run_tw_task.py --status daily_update --limit 5
+```
+
+该命令是只读查询，适合排查任务是否执行、结束状态和结果目录；它不会触发补抓、模型推理或 latest 写入。例行升级前先运行：
+
+```bash
+make check-project
+```
+
+健康检查只验证配置、任务计划、workflow 结构和脚本索引，不替代真实日更、数据 freshness 或部署验收。
+
 日更任务配置把单阶段超时与整条任务超时分开。当前分别为 1800 秒和 14400 秒；不要把二者改成同一个值。相同任务 identity 由目录锁串行执行，回测和 workflow 的成功记录可复用，日更仍会进入原 orchestrator 继续处理 pending。
 
 ## 日志轮转

@@ -6,7 +6,7 @@ FRONTEND_PORT ?= 8000
 BACKEND_URL ?= http://127.0.0.1:$(BACKEND_PORT)
 
 .DEFAULT_GOAL := help
-.PHONY: help start test verify demo
+.PHONY: help start test verify check-project demo
 
 help:
 	@printf '%s\n' \
@@ -15,6 +15,7 @@ help:
 		'  make start   Start the local backend and frontend (requires DB, .env, and local assets)' \
 		'  make test    Run fast self-contained backend and frontend checks' \
 		'  make verify  Run full local release gates (requires frozen/runtime/golden assets)' \
+		'  make check-project  Run read-only config, workflow, task, and script checks' \
 		'  make demo    Run the fresh-checkout fixture UI (requires dependencies and Playwright)' \
 		'' \
 		'Common overrides:' \
@@ -59,7 +60,7 @@ test:
 	@cd frontend && node tests/unit/tw-stock-monitor-static-check.mjs
 	@cd frontend && node tests/unit/tw-stock-monitor-workflow-check.mjs
 
-verify: test
+verify: test check-project
 	@PYTHONPATH=.:backend "$(PYTHON)" backend/scripts/verify_tw_stock_research_stack.py
 	@"$(PYTHON)" scripts/validate_arch1_baseline_descriptor.py --json
 	@"$(PYTHON)" scripts/validate_tw_modular_m_contracts.py --run-golden --json
@@ -68,6 +69,9 @@ verify: test
 	@cd frontend && node tests/unit/tw-stock-monitor-qlib-ops-check.mjs
 	@cd frontend && node tests/unit/tw-stock-cross-analysis-check.mjs
 	@cd frontend && corepack pnpm build
+
+check-project:
+	@PYTHONPATH=. "$(PYTHON)" scripts/check_tw_project.py --json
 
 demo:
 	@cd frontend && corepack pnpm test:product-fixture

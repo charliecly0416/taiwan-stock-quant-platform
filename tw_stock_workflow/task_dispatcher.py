@@ -677,6 +677,82 @@ class TaskDispatcher:
             self._write_json(result_path, record)
             return record
 
+    def recent_status(
+        self, task_type: str | None = None, *, limit: int = 10
+    ) -> dict[str, Any]:
+        """Return recent task records without executing or mutating a task.
+
+        Result files are atomically replaced by ``dispatch``. Reading them directly
+        keeps this status path independent from task executors and safe to use from
+        a health check or an operator shell.
+        """
+        if limit < 1 or limit > 100:
+            raise TaskRequestError("status limit must be between 1 and 100")
+        if task_type is not None:
+            self._entry(task_type)
+            task_types = [task_type]
+        else:
+            task_types = sorted(
+                str(value) for value in (self.registry.get("tasks") or {})
+            )
+
+        records: list[dict[str, Any]] = []
+        for current_type in task_types:
+            task_root = self.run_root / current_type
+            if not task_root.is_dir():
+                continue
+            for result_path in task_root.glob("*/result.json"):
+                try:
+                    record = _load_document(result_path)
+                except TaskRequestError:
+                    records.append(
+                        {
+                            "task_type": current_type,
+                            "run_id": result_path.parent.name,
+                            "status": "INVALID_RECORD",
+                            "result_path": str(result_path),
+                        }
+                    )
+                    continue
+                if record.get("schema_version") != TASK_RUN_SCHEMA:
+                    records.append(
+                        {
+                            "task_type": current_type,
+                            "run_id": result_path.parent.name,
+                            "status": "INVALID_RECORD",
+                            "result_path": str(result_path),
+                        }
+                    )
+                    continue
+                records.append(
+                    {
+                        "task_type": record.get("task_type", current_type),
+                        "run_id": record.get("run_id", result_path.parent.name),
+                        "executor_id": record.get("executor_id"),
+                        "status": record.get("status", "UNKNOWN"),
+                        "ok": record.get("ok") is True,
+                        "started_at": record.get("started_at"),
+                        "finished_at": record.get("finished_at"),
+                        "run_dir": record.get("run_dir", str(result_path.parent)),
+                        "result_path": str(result_path),
+                    }
+                )
+
+        records.sort(
+            key=lambda item: (
+                str(item.get("finished_at") or item.get("started_at") or ""),
+                str(item.get("run_id") or ""),
+            ),
+            reverse=True,
+        )
+        return {
+            "schema_version": "tw.task.status.v1",
+            "task_type": task_type or "all",
+            "run_root": str(self.run_root),
+            "count": min(len(records), limit),
+            "runs": records[:limit],
+        }
+
 
 def load_task_request(path: Path) -> dict[str, Any]:
     return _load_document(path)

@@ -470,3 +470,50 @@ def test_workflow_executor_delegates_to_existing_engine(tmp_path: Path) -> None:
     assert calls[0]["spec_path"] == spec
     assert calls[0]["context"].mode == "readonly"
     assert calls[0]["context"].permissions == frozenset({"artifact.read"})
+
+
+def test_recent_status_reads_atomic_run_records_without_reexecuting(
+    tmp_path: Path,
+) -> None:
+    repo, registry = daily_repo(tmp_path)
+
+    def fake_runner(command, **kwargs):
+        payload = {"status": "daily_ready"}
+        kwargs["stdout_path"].parent.mkdir(parents=True, exist_ok=True)
+        kwargs["stdout_path"].write_text(json.dumps(payload), encoding="utf-8")
+        kwargs["stderr_path"].write_text("", encoding="utf-8")
+        return {
+            "ok": True,
+            "returncode": 0,
+            "stdout_path": str(kwargs["stdout_path"]),
+            "stderr_path": str(kwargs["stderr_path"]),
+            "stdout": json.dumps(payload),
+            "stderr_tail": "",
+        }
+
+    dispatcher = TaskDispatcher(
+        repo,
+        registry_path=registry,
+        run_root=tmp_path / "runs",
+        command_runner=fake_runner,
+        now_taipei=lambda: datetime(2026, 9, 21, 8, 0, 0),
+    )
+    completed = dispatcher.dispatch(daily_request())
+
+    status = dispatcher.recent_status("daily_update")
+
+    assert status["schema_version"] == "tw.task.status.v1"
+    assert status["count"] == 1
+    assert status["runs"][0]["run_id"] == completed["run_id"]
+    assert status["runs"][0]["status"] == "SUCCEEDED"
+    assert dispatcher.recent_status("daily_update", limit=1)["count"] == 1
+
+
+def test_recent_status_rejects_unknown_task_or_invalid_limit(tmp_path: Path) -> None:
+    repo, registry = daily_repo(tmp_path)
+    dispatcher = TaskDispatcher(repo, registry_path=registry, run_root=tmp_path / "runs")
+
+    with pytest.raises(TaskRequestError, match="unregistered task_type"):
+        dispatcher.recent_status("missing")
+    with pytest.raises(TaskRequestError, match="between 1 and 100"):
+        dispatcher.recent_status(limit=0)

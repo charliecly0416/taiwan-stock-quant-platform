@@ -61,6 +61,15 @@ data_tw/ops/unified_tasks/{task_type}/{run_id}/
 
 同一 identity 的检查、执行和结果写入由任务目录文件锁串行化，JSON 通过临时文件原子替换。日更的 `stage_timeout_seconds` 只传给原 orchestrator 的单个子阶段，`overall_timeout_seconds` 单独约束完整任务；外层超时时终止整个进程组，避免子进程继续写 artifact。
 
+统一入口也提供只读状态查询：
+
+```bash
+python scripts/run_tw_task.py --status
+python scripts/run_tw_task.py --status daily_update --limit 5
+```
+
+状态查询只读取已原子写入的 `result.json`，不会重跑任务或触碰业务数据。
+
 ## 5. 安全边界
 
 - 不接受任意命令、脚本路径或 import path。
@@ -69,6 +78,7 @@ data_tw/ops/unified_tasks/{task_type}/{run_id}/
 - B19R2R 保持 `production_allowed=false`、`no_apply=true`。
 - 统一入口不修改 baseline、虚拟账户 allowlist 或前端默认项。
 - `--validate-only` 只返回执行计划，不调用任何任务。
+- `--status` 只读取统一任务记录，不执行任务。
 
 ## 6. 验收
 

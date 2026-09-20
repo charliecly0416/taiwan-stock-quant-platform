@@ -23,6 +23,14 @@ git status --short
 
 ## 2. 模块优先的开发方式
 
+接手代码后先运行一次只读项目检查：
+
+```bash
+make check-project
+```
+
+它会检查配置语法、任务示例、workflow DAG 和脚本生命周期索引，不会抓数据、训练模型或修改产品指针。脚本目录的分类规则见 `scripts/README_CN.md`；新增根目录脚本时，应先判断它是稳定入口、validator、公共辅助模块还是研究工具，并同步更新 `configs/script_lifecycle_registry.yaml`。
+
 ```text
 确定模块
   -> 阅读合同
@@ -80,6 +88,15 @@ TaskRequest -> configs/tw_task_registry.yaml -> registered executor/workflow
 | `readonly_model_comparison` | A/A+B 历史比较 | 现有 WorkflowEngine DAG |
 
 实现与扩展规则见 `tw_modular_contracts/TW_UNIFIED_TASK_ENTRY_PLAN_CN.md`。
+
+查看最近运行记录时使用同一个入口：
+
+```bash
+python scripts/run_tw_task.py --status
+python scripts/run_tw_task.py --status daily_update --limit 5
+```
+
+状态查询只读取 `data_tw/ops/unified_tasks/` 下的原子结果文件，不会重跑任务。
 
 ## 3. 当前模型规则
 

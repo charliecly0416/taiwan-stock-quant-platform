@@ -1,0 +1,60 @@
+schema_version: tw.script.lifecycle.v1
+root: scripts
+default_lifecycle: archive_pending
+rules:
+  - lifecycle: stable_entrypoint
+    purpose: Production task, daily orchestration, service, or workflow entrypoint.
+    patterns:
+      - run_tw_task.py
+      - run_daily_tw_stock_auto_update.py
+      - run_daily_env.sh
+      - ensure_tw_stock_services.sh
+      - run_tw_stock_workflow.py
+      - check_tw_project.py
+      - watch_tw_stock_services.sh
+      - generate-secret-key.sh
+      - serve_frontend_static_proxy.py
+  - lifecycle: archived
+    purpose: Completed historical research retained for audit and reproducibility.
+    patterns:
+      - archive/**
+  - lifecycle: validation
+    purpose: Contract, readiness, deployment, and regression validators.
+    patterns:
+      - validate_*.py
+      - verify_*.py
+      - test_*.py
+      - run_tw_modular_contract_regression.py
+      - run_tw_modular_order_intent*.py
+      - run_tw_stock_product_fixture_acceptance.sh
+  - lifecycle: reusable_support
+    purpose: Imported helpers and current daily/runtime support modules.
+    patterns:
+      - contracts/**
+      - tw_*.py
+      - model_*.py
+  - lifecycle: research_or_migration
+    purpose: Historical experiment, evidence builder, migration, or one-off research tool.
+    patterns:
+      - build_*.py
+      - capture_*.py
+      - audit_*.py
+      - acquire_*.py
+      - compare_*.py
+      - evaluate_*.py
+      - bootstrap_*.py
+      - replay_*.py
+      - admit_*.py
+      - fetch_*.py
+      - finmind_*.py
+      - freeze_*.py
+      - materialize_*.py
+      - modelb_*.py
+      - probe_*.py
+      - publish_*.py
+      - pull_*.py
+      - research_*.py
+      - review_*.py
+      - run_*.py
+      - synthetic_*.py
+      - train_*.py

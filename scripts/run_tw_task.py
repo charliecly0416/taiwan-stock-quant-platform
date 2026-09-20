@@ -20,9 +20,27 @@ from tw_stock_workflow.task_dispatcher import (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Validate or execute a registered Taiwan stock task"
+        description="Validate, execute, or inspect a registered Taiwan stock task"
     )
-    parser.add_argument("--request", type=Path, required=True)
+    action = parser.add_mutually_exclusive_group(required=True)
+    action.add_argument(
+        "--request",
+        type=Path,
+        help="Task request YAML/JSON to validate or execute.",
+    )
+    action.add_argument(
+        "--status",
+        nargs="?",
+        const="all",
+        metavar="TASK_TYPE",
+        help="Show recent task runs; omit TASK_TYPE to show all registered tasks.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Maximum status records to print (1-100).",
+    )
     parser.add_argument(
         "--validate-only",
         action="store_true",
@@ -34,20 +52,28 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
-        request_path = (
-            args.request.resolve()
-            if args.request.is_absolute()
-            else (ROOT / args.request).resolve()
-        )
         dispatcher = TaskDispatcher(
             ROOT,
         )
-        request = load_task_request(request_path)
-        result = (
-            {**dispatcher.plan(request).to_dict(), "status": "VALIDATED"}
-            if args.validate_only
-            else dispatcher.dispatch(request)
-        )
+        if args.status is not None:
+            if args.validate_only:
+                raise TaskRequestError("--validate-only requires --request")
+            result = dispatcher.recent_status(
+                None if args.status == "all" else args.status,
+                limit=args.limit,
+            )
+        else:
+            request_path = (
+                args.request.resolve()
+                if args.request.is_absolute()
+                else (ROOT / args.request).resolve()
+            )
+            request = load_task_request(request_path)
+            result = (
+                {**dispatcher.plan(request).to_dict(), "status": "VALIDATED"}
+                if args.validate_only
+                else dispatcher.dispatch(request)
+            )
     except TaskRequestError as exc:
         result = {
             "schema_version": "tw.task.error.v1",
@@ -58,7 +84,9 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 2
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result.get("status") in {"VALIDATED", "SUCCEEDED"} else 2
+    successful = result.get("status") in {"VALIDATED", "SUCCEEDED"}
+    successful = successful or result.get("schema_version") == "tw.task.status.v1"
+    return 0 if successful else 2
 
 
 if __name__ == "__main__":
