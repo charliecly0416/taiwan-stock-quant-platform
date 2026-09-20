@@ -44,7 +44,7 @@ flowchart LR
 
 每一层只读取上游的标准 artifact。registry 决定模块可以服务哪些 consumer，validator 与 checksum 负责阻止缺字段、错日期或被篡改的结果继续向下游传播。
 
-这张图描述目标接口和当前产品关系，不表示所有生产步骤都已迁移到统一 kernel。`tw_stock_workflow/` 已承载通用 resolver、DAG、观察 sidecar 和部分纯模块；现有日更、策略、回放与模拟账户正按合同增量迁移。当前实现状态见[模块地图与 artifact 流程](docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md)。
+这张图描述目标接口和当前产品关系，不表示所有生产步骤都已迁移到统一 kernel。`tw_stock_workflow/` 已承载通用 resolver、DAG、观察 sidecar 和部分纯模块；现有日更、策略、回放与模拟账户正按合同增量迁移。想直观看懂系统，应先阅读[模块地图中的 2026-09-01 真实数据全链示例](docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md#31-先跟一条真实数据走完2026-09-01)，再查看同一文档中的完整模块表和实现状态。
 
 ## 常用命令
 

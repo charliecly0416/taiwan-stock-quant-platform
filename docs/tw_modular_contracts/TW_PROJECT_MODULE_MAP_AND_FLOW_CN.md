@@ -6,7 +6,7 @@
 
 建议首次接手按以下顺序：
 
-1. 先读本文第 1 至 3 节，建立当前产品和 artifact 心智模型。
+1. 先读本文第 1 至 3 节，再跟着第 3.1 节的真实交易日走完整条链。
 2. 再看第 4 至 7 节，找到代码并理解模块实现与数据结构。
 3. 用第 8 节理解日更、Model B、回放和模拟账户四条链。
 4. 实际排错时直接使用第 11 节的追溯步骤。
@@ -95,6 +95,309 @@ current signal_asof
 ```
 
 旧 Phase YZ 或 paper decision 的日期不同，只能显示为历史状态，不能参与今日总览或当前模拟应用。
+
+### 3.1 先跟一条真实数据走完：2026-09-01
+
+这一节不先讲抽象名词，而是直接跟着仓库里已经生成的一组真实只读产物走一遍。示例信号日是 `2026-09-01`，按 `next_open` 规则在下一个交易日 `2026-09-02` 模拟执行。Model A 与 A+B 使用同一策略、同一执行规则和同一展示接口，因此可以看清模型排名不同怎样一路传到最终页面。
+
+先明确证据边界：这是一条已经冻结的 **retrospective historical replay**，用于讲解和比较，不是 2026-09-01 当天 cron 留下的 untouched prospective 证据。输入来自冻结 provider、模型和特征物化，产物都声明 `readonly_only=true`、`production_allowed=false`；比较页面也声明 `no_apply=true`。因此下面的“成交”都是回放成交，不是真实订单。
+
+#### 3.1.1 先看全链和四个控制文件
+
+```mermaid
+flowchart LR
+    P[冻结行情/provider<br/>2026-09-01] --> FA[Model A 输入<br/>raw score + full rank]
+    P --> FB[A+B 的 78F<br/>PIT-safe features]
+    FA --> MA[model_a_passthrough_v1]
+    FA --> MB[b19r2r_lambdarank_78f_v1]
+    FB --> MB
+    MA --> SA[ModelSignal A]
+    MB --> SB[ModelSignal A+B]
+    SA --> ST[同一 StrategyRule]
+    SB --> ST
+    ST --> IA[OrderIntent A]
+    ST --> IB[OrderIntent A+B]
+    IA --> RA[next_open Replay A]
+    IB --> RB[next_open Replay A+B]
+    RA --> C[checksum catalog]
+    RB --> C
+    C --> API[GET-only API]
+    API --> UI[模型与策略对比面板]
+```
+
+这次运行由四类配置共同约束，而不是由某个脚本自行决定全部行为：
+
+| 控制点 | 文件 | 这次示例中的作用 |
+| --- | --- | --- |
+| 当前产品基线 | `configs/active_baseline_descriptor.yaml` | 确认默认仍是 Model A，策略是 `top50_exit_one_worst_sell`，执行价是 `next_open` |
+| 模型轨道 | `configs/readonly_model_tracks.yaml` | 把 A 绑定到 `model_a_passthrough_v1`，把 A+B 绑定到 `b19r2r_lambdarank_78f_v1`；只允许 A 进入虚拟账户 allowlist |
+| 工作流 DAG | `configs/workflows/readonly_dual_model_track_comparison.yaml` | A 是 required，A+B 是 nonblocking，最后汇合成 comparison catalog |
+| 策略依赖 | `configs/strategy_dependencies/top50_exit_one_worst_sell.yaml` | 要求 `candidate_rank/buy_score/full_qlib_rank`，限制每日最多一买一卖，目标持仓 10 支 |
+
+本次不可变输出根目录是：
+
+```text
+data_tw/artifacts/readonly_model_strategy_comparison/v9/
+```
+
+目录中的 `manifest.json` 负责说明身份和上游来源，CSV 放实际数据，`validation_report.json` 放校验结果，catalog 再用 SHA256 把三段产物绑定起来。
+
+#### 3.1.2 第一步：来源数据变成模型可读输入
+
+冻结输入的上游 provider 是：
+
+```text
+qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/option_c_150_qlib_bin
+```
+
+物化状态和来源 checksum 记录在：
+
+```text
+data_tw/experiments/project_runtime_convergence/
+  modelb_b19r2r_pretraining_materialization_20260916/
+  B19R2R_INPUT_MATERIALIZATION_STATE.json
+```
+
+Model A 读取 `MODEL_A_FULL_CROSS_SECTION.parquet`。其中两支股票在 `2026-09-01` 的真实输入是：
+
+| date | instrument | model_a_raw_score | full_qlib_rank | signal_asof | available_at |
+| --- | --- | ---: | ---: | --- | --- |
+| 2026-09-01 | TW1326 | 0.122763 | 2 | 2026-09-01 | 2026-09-01 |
+| 2026-09-01 | TW4971 | 0.050550 | 13 | 2026-09-01 | 2026-09-01 |
+
+A+B 还读取 `FEATURE_ARTIFACT_78_RAW.parquet`。下面只截取 78 个特征中的少量字段：
+
+| date | instrument | qlib_score_raw | qlib_rank | qlib_score_percentile_by_date | rank_change_1d | feature_raw_complete_78 |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| 2026-09-01 | TW1326 | 0.122763 | 2 | 0.993333 | -70 | true |
+| 2026-09-01 | TW4971 | 0.050550 | 13 | 0.920000 | -51 | true |
+
+这一层的规范重点不是“必须有 78 个特征”，而是：
+
+- `date + instrument` 唯一；
+- `available_at <= signal_asof`，防止未来数据泄漏；
+- 特征可以被模型消费，不能被策略或前端直接读取；
+- future return、训练 label、真实成交和 PnL 不得进入推理特征。
+
+数据从哪里来、删过哪些异常交易日、每个文件的 checksum 是什么，都能从 materialization state 和 `PIT_AUDIT.csv` 继续追溯。模型轨道的读取和 PIT 检查实现在 `tw_stock_workflow/dual_track.py::_load_frames` 与 `_adapt_b19r2r`。
+
+#### 3.1.3 第二步：不同模型统一输出 ModelSignalArtifact
+
+Model A 的 adapter 只是把冻结 qlib 输出映射到标准字段：
+
+```text
+candidate_rank <- full_qlib_rank
+buy_score      <- model_a_raw_score
+raw_score      <- model_a_raw_score
+```
+
+因此 `TW1326` 在 Model A 的真实标准信号是：
+
+```json
+{
+  "date": "2026-09-01",
+  "instrument": "TW1326",
+  "model_name": "e4_frozen_qlib_2018_2022",
+  "model_family": "qlib",
+  "candidate_rank": 2,
+  "buy_score": 0.12276265219402299,
+  "score_rank": 2,
+  "full_qlib_rank": 2,
+  "signal_asof": "2026-09-01",
+  "available_at": "2026-09-01"
+}
+```
+
+真实文件：
+
+```text
+data_tw/artifacts/readonly_model_strategy_comparison/v9/artifacts/
+  model_a_only/model_signal/signals.csv
+```
+
+A+B 的 adapter 先保留 Model A 原始 Top50 边界，再让冻结 LightGBM LambdaRank 使用 78F 重排 `buy_score`。例如 `TW4971` 的 qlib 边界排名仍是 13，但重排后买入排名变成第 3：
+
+```json
+{
+  "date": "2026-09-01",
+  "instrument": "TW4971",
+  "model_name": "modelb_b19r2r_lambdarank_exact50_78f_v2",
+  "model_family": "ltr",
+  "candidate_rank": 13,
+  "buy_score": 0.6064252446857941,
+  "score_rank": 3,
+  "full_qlib_rank": 13,
+  "signal_asof": "2026-09-01",
+  "available_at": "2026-09-01"
+}
+```
+
+真实文件：
+
+```text
+data_tw/artifacts/readonly_model_strategy_comparison/v9/artifacts/
+  model_a_plus_b_b19r2r/model_signal/signals.csv
+```
+
+对应代码是：
+
+| 功能 | 代码入口 |
+| --- | --- |
+| Model A 标准映射 | `tw_stock_workflow/dual_track.py::_adapt_model_a` |
+| A+B 的 78F 检查、加载模型和重排 | `tw_stock_workflow/dual_track.py::_adapt_b19r2r` |
+| adapter 身份与 canonical model 绑定 | `tw_stock_workflow/dual_track.py::_resolve_track_adapter` |
+| 写 ModelSignal 文件和 manifest | `tw_stock_workflow/dual_track.py::_materialize_signal_artifact` |
+
+这一步体现了统一 ModelTrack 的意义：A+B 内部有两个模型，A 内部只有一个模型，但模块外部都只看到同一种 `ModelSignalArtifact`。合同见 `MODEL_SIGNAL_CONTRACT_CN.md`。策略从这里开始不再知道 LightGBM、qlib 参数文件或 78F 的存在。
+
+#### 3.1.4 第三步：同一策略把排名变成意图
+
+策略输入是“标准信号 + 当时的模拟组合状态 + 策略配置”。它不读取行情开盘价，也不决定成交数量。
+
+Model A 在 `2026-09-01` 的关键判断是：当前持有的 `TW3006` 已跌到 `candidate_rank=84`，应卖出；未持有的 `TW1326` 排名靠前，应补入。输出是：
+
+| signal_date | instrument | intent_action | candidate_rank | buy_rank | current_holding_flag | not_order |
+| --- | --- | --- | ---: | ---: | --- | --- |
+| 2026-09-01 | TW3006 | sell | 84 | -1 | true | true |
+| 2026-09-01 | TW1326 | buy | 2 | 2 | false | true |
+
+A+B 的组合当时尚未满 10 支，因此它不需要先卖出，直接选择重排后靠前且未持有的 `TW4971`：
+
+| signal_date | instrument | intent_action | candidate_rank | buy_rank | current_holding_flag | not_order |
+| --- | --- | --- | ---: | ---: | --- | --- |
+| 2026-09-01 | TW4971 | buy | 13 | 3 | false | true |
+
+真实输出分别位于：
+
+```text
+.../v9/artifacts/model_a_only/order_intent/order_intents.csv
+.../v9/artifacts/model_a_plus_b_b19r2r/order_intent/order_intents.csv
+```
+
+规则实现是 `tw_stock_strategy/top50_exit_one_worst_sell.py::decide_for_model`，轨道编排和产物写入在 `tw_stock_workflow/dual_track.py::_materialize_decision_and_replay`。`not_order=true` 很关键：OrderIntent 只表示策略想做什么，禁止出现 `execution_price`、成交数量、现金、费用、净值或券商订单号。合同见 `ORDER_INTENT_CONTRACT_CN.md`。
+
+#### 3.1.5 第四步：回放在下一交易日模拟执行
+
+回放模块才允许读取执行价格。价格网格证明两支股票的下一交易日和开收盘价是：
+
+| signal date | instrument | next trade date | next open | next close | execution grid complete |
+| --- | --- | --- | ---: | ---: | --- |
+| 2026-09-01 | TW1326 | 2026-09-02 | 74.5 | 72.800003 | true |
+| 2026-09-01 | TW4971 | 2026-09-02 | 654.0 | 669.0 | true |
+
+Model A 的意图在 `2026-09-02` 被模拟为两条 action：
+
+| instrument | action | quantity | execution_price | fee_and_tax | cash_after | status |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| TW3006 | sell | 370 | 276.0 | 451.8810 | 518467.7781 | EXECUTED |
+| TW1326 | buy | 1380 | 74.5 | 146.50425 | 415511.2738 | EXECUTED |
+
+A+B 的意图被模拟为：
+
+| instrument | action | quantity | execution_price | fee_and_tax | cash_after | status |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| TW4971 | buy | 150 | 654.0 | 139.7925 | 520024.2693 | EXECUTED |
+
+现在才出现 `quantity`、`execution_price`、手续费、税费和 `cash_after`。这说明模块边界有效：策略没有提前偷看下一日价格，回放也没有反过来改变模型排名。
+
+当日执行后的净值记录是：
+
+| track | execution date | cash | market value | equity | daily return | drawdown |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Model A | 2026-09-02 | 415511.27 | 581094.00 | 996605.28 | -0.6752% | -2.2938% |
+| Model A+B | 2026-09-02 | 520024.27 | 542438.21 | 1062462.48 | 0.7501% | 0.0000% |
+
+真实输出是各 track 的 `replay_result/actions.csv` 和 `daily_nav.csv`；执行代码仍由 `_materialize_decision_and_replay` 调用冻结且经过 parity 检查的回放语义。合同见 `REPLAY_RESULT_CONTRACT_CN.md`。
+
+#### 3.1.6 第五步：从逐日结果汇总成可展示 catalog
+
+前端展示的收益不是只看 9 月 1 日一天，而是读取同一 14 个交易日窗口的汇总。`catalogs/paired/comparison.csv` 中的真实结果是：
+
+| track | final equity | net return | max drawdown | turnover | fee + tax |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Model A | 996605.28 | -0.3395% | -2.2938% | 1.4944 | 3499.72 |
+| Model A+B | 1062462.48 | 6.2462% | -1.3392% | 1.7575 | 4427.48 |
+
+`tw_stock_workflow/dual_track.py::build_comparison_bundle` 把每条轨道的三个标准 manifest 放进 catalog，并记录 SHA256：
+
+```text
+ModelSignalArtifact -> OrderIntentArtifact -> ReplayResultArtifact
+```
+
+catalog 同时记录：
+
+- Model A 是 `active_baseline`、`workflow_policy=required`；
+- A+B 是 `research_candidate`、`workflow_policy=nonblocking`；
+- 当前虚拟账户 allowlist 只有 `model_a_only`；
+- 两者在比较页都 `no_apply=true`。
+
+因此“历史回放中 A+B 收益更高”和“A+B 已进入 baseline”是两件不同的事。前者是这份数据的结果，后者仍未获得准入。
+
+#### 3.1.7 第六步：GET-only API 把 catalog 转成页面 DTO
+
+页面选择 Model A、默认策略和这个窗口时，请求是：
+
+```http
+GET /api/tw-stock/readonly/model-strategy-comparison
+  ?model_id=model_a_only
+  &strategy_id=top50_exit_one_worst_sell
+  &window_id=b19r2r_retrospective_complete_20260813_20260901
+```
+
+路由 `backend/app/routes/readonly_model_strategy_comparison.py` 只接受 GET。服务 `backend/app/services/readonly_model_strategy_comparison.py::load_readonly_model_strategy_comparison` 先验证 latest pointer、catalog 和各 source checksum，再返回适合页面使用的数据。真实响应的核心部分是：
+
+```json
+{
+  "selected": {
+    "model_id": "model_a_only",
+    "strategy_id": "top50_exit_one_worst_sell",
+    "window_id": "b19r2r_retrospective_complete_20260813_20260901"
+  },
+  "result": {
+    "framework_role": "model_track",
+    "governance_status": "active_baseline",
+    "metrics": {
+      "net_return": -0.003394721942222456,
+      "max_drawdown": -0.02293822433302306,
+      "fee_tax": 3499.721331871033
+    },
+    "no_apply": true,
+    "runtime_effect": "none"
+  },
+  "status": {
+    "selection_changes_display_only": true,
+    "can_apply": false,
+    "historical_artifact_validator": "PASS"
+  }
+}
+```
+
+前端调用入口是 `frontend/src/api/tw-stock-readonly.js::getTwStockReadonlyModelStrategyComparison`。`ReadonlyModelStrategyComparisonPanel.vue` 根据 catalog 动态生成模型、策略和窗口下拉框，再显示净收益、回撤、费用、换手和研究结论。切换下拉框只会再次 GET 已有 artifact，不会现场训练、回放、修改 baseline 或写入模拟账户。
+
+#### 3.1.8 自己怎样只读复查这条链
+
+下面四条命令分别查看信号、意图、模拟成交和最终比较；它们只读本地文件：
+
+```bash
+rg '^2026-09-01,TW1326,' \
+  data_tw/artifacts/readonly_model_strategy_comparison/v9/artifacts/model_a_only/model_signal/signals.csv
+
+rg ',2026-09-01,TW1326,' \
+  data_tw/artifacts/readonly_model_strategy_comparison/v9/artifacts/model_a_only/order_intent/order_intents.csv
+
+rg '^2026-09-01,2026-09-02,TW1326,' \
+  data_tw/artifacts/readonly_model_strategy_comparison/v9/artifacts/model_a_only/replay_result/actions.csv
+
+cat data_tw/artifacts/readonly_model_strategy_comparison/v9/catalogs/paired/comparison.csv
+```
+
+再运行聚焦 validator，确认两条轨道的 manifest、checksum、PIT、字段边界和禁止动作仍然通过：
+
+```bash
+PYTHONPATH=. python scripts/validate_tw_readonly_dual_model_tracks.py
+```
+
+如果本机没有 `data_tw/artifacts/.../v9`，表示只拿到了源码，没有供应本地运行证据；不能用手写 JSON 假装这条 artifact 链存在。此时仍可阅读上述嵌入示例和合同，但要运行完整比较必须先按运维手册供应受控数据资产。
 
 ## 4. 模块输入输出总表
 

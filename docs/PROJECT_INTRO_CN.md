@@ -76,7 +76,7 @@ flowchart LR
 
 普通用户侧栏只显示台股研究、台股模拟账户和个人中心。模型比较属于台股研究页中的只读工具，不会把研究选项变成运行配置。旧 Phase YZ 或模拟决策只有在 `signal_asof` 与当前策略日期一致时才参与今日总览；异日数据只显示为历史状态，并阻止模拟应用。
 
-仓库中的 `tw_stock_workflow/` 已提供 artifact resolver、DAG、非阻断依赖和标准历史双轨模块。历史比较已经使用统一管线；日更和模拟账户仍处于增量迁移阶段，尚未全部改由 kernel 执行。详细成熟度见 `tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`。
+仓库中的 `tw_stock_workflow/` 已提供 artifact resolver、DAG、非阻断依赖和标准历史双轨模块。历史比较已经使用统一管线；日更和模拟账户仍处于增量迁移阶段，尚未全部改由 kernel 执行。新开发者应先阅读[2026-09-01 真实数据全链示例](tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md#31-先跟一条真实数据走完2026-09-01)，用实际输入、CSV 行、代码入口和前端结果建立直觉，再继续阅读该文档的模块地图与成熟度说明。
 
 ## 5. 日更与故障隔离
 
