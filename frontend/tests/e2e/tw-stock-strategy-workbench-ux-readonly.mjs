@@ -50,18 +50,18 @@ function currentStrategyContextPayload () {
     ok: true,
     status: 'ready',
     context: {
-    signal_asof: '2026-06-18',
-    target_date: '2026-06-19',
-    default_model_id: 'e4_frozen_qlib_2018_2022',
-    display_model_id: 'e4_frozen_qlib_2018_2022',
-    strategy_rule: 'top50_exit_one_worst_sell',
-    ranking_source: 'qlib_model_a',
-    candidate_boundary: 'qlib_top50',
-    qlib_top50_count: 50,
-    qlib_top150_count: 150,
-    ltr_top50_count: 50,
-    ltr_top_symbol: '2330',
-    top_ltr_symbol: '2330',
+      signal_asof: '2026-06-18',
+      target_date: '2026-06-19',
+      default_model_id: 'e4_frozen_qlib_2018_2022',
+      display_model_id: 'e4_frozen_qlib_2018_2022',
+      strategy_rule: 'top50_exit_one_worst_sell',
+      ranking_source: 'qlib_model_a',
+      candidate_boundary: 'qlib_top50',
+      qlib_top50_count: 50,
+      qlib_top150_count: 150,
+      ltr_top50_count: 50,
+      ltr_top_symbol: '2330',
+      top_ltr_symbol: '2330'
     },
     rankings: { qlib_top50: [{ instrument: 'TW2330', score_rank: 1 }], qlib_top150: [] },
     trading: tradingFlags()
@@ -72,8 +72,8 @@ function phaseYZStatusPayload () {
   return {
     ok: true,
     state: 'pending_execution_price',
-    signal_asof: '2026-06-18',
-    target_next_trading_day: '2026-06-19',
+    signal_asof: '2026-06-17',
+    target_next_trading_day: '2026-06-18',
     execution_price_mode: 'next_open',
     execution_price_status: 'execution_price_pending',
     paper_apply_allowed: false,
@@ -215,7 +215,7 @@ function paperLatestDecision () {
   return {
     ok: true,
     status: 'ok',
-    asof: '2026-06-18',
+    asof: '2026-06-17',
     model_id: 'e4_frozen_qlib_2023_2025_ltr',
     strategy_rule: 'top50_exit_one_worst_sell',
     decision_id: paperDecisionId,
@@ -453,7 +453,7 @@ await page.route('**/api/tw-stock/tradingagents-readonly-analysis/latest**', rou
   claim_support_audit: { ok: true, claim_count: 1 }
 }))
 await page.route('**/api/tw-stock/readonly-replay-window-index**', route => fulfillJson(route, replayIndexPayload()))
-await page.route('**/api/tw-stock/readonly-replay-window**', route => fulfillJson(route, replayWindowPayload()))
+await page.route(/\/api\/tw-stock\/readonly-replay-window(?:\?.*)?$/, route => fulfillJson(route, replayWindowPayload()))
 await page.route('**/api/tw-stock/readonly/model-strategy-comparison**', route => {
   assert.equal(route.request().method().toUpperCase(), 'GET')
   return fulfillJson(route, modelStrategyComparisonPayload(route.request().url()))
@@ -549,7 +549,7 @@ async function viewportAudit (name, width, height) {
   await page.waitForTimeout(500)
   const metrics = await page.evaluate(() => {
     const text = document.body.innerText
-    const required = ['数据链路状态', '查看数据链路详情', 'provider/raw latest 已到 2026-06-21', 'qlib accepted latest 仍为 2026-06-18', '策略总览', '模型与策略对比', '8.08%', '研究候选，联合门槛未通过', '都不能在本页直接应用', '候选名单', '历史模拟', '模拟账户状态', '解释原因', '策略解释助手', '不构成交易建议', '不连接券商', '不产生真实交易委托']
+    const required = ['数据链路状态', '查看数据链路详情', 'provider/raw latest 已到 2026-06-21', 'qlib accepted latest 仍为 2026-06-18', '策略总览', '目标交易日：2026-06-19', '已作为历史状态隔离', '模型与策略对比', '8.08%', '研究候选，联合门槛未通过', '都不能在本页直接应用', '怎么理解这次对比', '继续作为研究候选，不替换 Model A', '候选名单', '历史模拟', '模拟账户状态', '解释原因', '策略解释助手', '不构成交易建议', '不连接券商', '不产生真实交易委托']
     const forbiddenMain = ['统一策略上下文', 'YZ Clean E4 产品化', 'clean registry', 'execution_price_mode: next_open', '只展示 Model A / Model B', 'paper_order_intent_artifact_path', 'ReplayWindowPolicy', 'final equity', 'turnover_proxy_by_notional_over_avg_equity', '生成模拟草稿']
     const visibleText = Array.from(document.querySelectorAll('body *')).filter(el => {
       const style = window.getComputedStyle(el)
@@ -560,6 +560,17 @@ async function viewportAudit (name, width, height) {
     const openTechPanelCount = Array.from(document.querySelectorAll('.ant-collapse-item-active')).length
     const buttonOverflow = Array.from(document.querySelectorAll('button')).filter(el => el.scrollWidth > el.clientWidth + 2).map(el => el.innerText.trim()).filter(Boolean)
     const cardOverflow = Array.from(document.querySelectorAll('.ant-card, .paper-portfolio-panel, .readonly-strategy-snapshot, .readonly-replay-window, .readonly-comparison, .tw-stock-agent-panel')).filter(el => el.scrollWidth > el.clientWidth + 2).map(el => (el.getAttribute('data-testid') || el.className || '').toString())
+    const styleEvidence = selector => {
+      const el = document.querySelector(selector)
+      if (!el) return null
+      const style = window.getComputedStyle(el)
+      return {
+        display: style.display,
+        paddingTop: style.paddingTop,
+        borderTopStyle: style.borderTopStyle,
+        borderTopWidth: style.borderTopWidth
+      }
+    }
     return {
       width: window.innerWidth,
       height: window.innerHeight,
@@ -572,14 +583,16 @@ async function viewportAudit (name, width, height) {
       open_tech_panel_count: openTechPanelCount,
       freshness_details_collapsed: !document.querySelector('[data-testid="data-freshness-technical-details"]').open,
       button_overflow: buttonOverflow,
-      card_overflow: cardOverflow
+      card_overflow: cardOverflow,
+      candidate_row_style: styleEvidence('.readonly-candidate-row'),
+      replay_metric_style: styleEvidence('.readonly-replay-window .readonly-snapshot-metric')
     }
   })
   await page.screenshot({ path: path.join(artifactDir, `${name}.png`), fullPage: true })
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.waitForTimeout(200)
   await page.screenshot({ path: path.join(artifactDir, `${name}-first-screen.png`) })
-  for (const [label, selector] of [['comparison', '[data-testid="readonly-model-strategy-comparison-panel"]'], ['candidates', '[data-testid="readonly-strategy-snapshot-panel"]'], ['agent', '#daov-section-agent']]) {
+  for (const [label, selector] of [['comparison', '[data-testid="readonly-model-strategy-comparison-panel"]'], ['candidates', '[data-testid="readonly-strategy-snapshot-panel"]'], ['replay', '[data-testid="readonly-replay-window-panel"]'], ['agent', '#daov-section-agent']]) {
     await page.locator(selector).screenshot({ path: path.join(artifactDir, `${name}-${label}.png`) })
   }
   return metrics
@@ -626,6 +639,7 @@ const audit = {
   overflow_passed: Object.values(viewportResults).every(row => row.overflowX === false),
   drawer_default_closed_passed: Object.values(viewportResults).every(row => row.open_drawer_count === 0),
   button_overflow_passed: Object.values(viewportResults).every(row => row.button_overflow.length === 0),
+  component_styles_passed: Object.values(viewportResults).every(row => row.candidate_row_style && row.candidate_row_style.display === 'grid' && row.candidate_row_style.paddingTop !== '0px' && row.candidate_row_style.borderTopStyle !== 'none' && row.replay_metric_style && row.replay_metric_style.paddingTop !== '0px' && row.replay_metric_style.borderTopStyle !== 'none'),
   card_overflow_diagnostic: Object.fromEntries(Object.entries(viewportResults).map(([key, row]) => [key, row.card_overflow])),
   technical_details_default_collapsed: Object.values(viewportResults).every(row => row.open_tech_panel_count === 0)
 }
@@ -654,6 +668,7 @@ assert.equal(audit.forbidden_visible_passed, true, JSON.stringify(viewportResult
 assert.equal(audit.overflow_passed, true, JSON.stringify(viewportResults, null, 2))
 assert.equal(audit.drawer_default_closed_passed, true, JSON.stringify(viewportResults, null, 2))
 assert.equal(audit.button_overflow_passed, true, JSON.stringify(viewportResults, null, 2))
+assert.equal(audit.component_styles_passed, true, JSON.stringify(viewportResults, null, 2))
 assert.equal(audit.technical_details_default_collapsed, true, JSON.stringify(viewportResults, null, 2))
 assert.ok(Object.values(viewportResults).every(item => item.freshness_details_collapsed))
 

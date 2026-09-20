@@ -206,6 +206,13 @@
         :message="phaseYZProductizationError"
       />
       <a-alert
+        v-if="phaseYZProductizationStaleMessage"
+        class="workbench-overview-alert"
+        type="warning"
+        show-icon
+        :message="phaseYZProductizationStaleMessage"
+      />
+      <a-alert
         v-if="currentStrategyContextMismatchText"
         class="workbench-overview-alert"
         type="info"
@@ -286,6 +293,7 @@
     <section class="monitor-anchor-section">
       <paper-portfolio-panel
         :phase-yz-status="phaseYZProductizationPayload"
+        :active-signal-as-of="currentContextSignalAsOf"
         @ask-agent="askAgentFromWorkbench"
       />
     </section>
@@ -2121,31 +2129,47 @@ export default {
       return `回放净收益 ${this.readonlyReplayWindowNetReturnText}；可选策略历史模拟 ${optionalReturn}。`
     },
     phaseYZProductizationPending () {
-      const payload = this.phaseYZProductizationPayload || {}
+      const payload = this.activePhaseYZProductizationPayload || {}
       return payload.execution_price_status === 'execution_price_unavailable' || payload.paper_apply_allowed === false
     },
+    phaseYZProductizationAligned () {
+      const phaseDate = this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.signal_asof
+      return !!phaseDate && this.currentContextSignalAsOf !== '-' && phaseDate === this.currentContextSignalAsOf
+    },
+    activePhaseYZProductizationPayload () {
+      return this.phaseYZProductizationAligned ? this.phaseYZProductizationPayload : null
+    },
+    phaseYZProductizationStaleMessage () {
+      const phaseDate = this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.signal_asof
+      if (!phaseDate || this.currentContextSignalAsOf === '-' || this.phaseYZProductizationAligned) return ''
+      return `模拟状态来自 ${phaseDate}，与当前信号 ${this.currentContextSignalAsOf} 不属于同一日期；已作为历史状态隔离，不参与今日总览，也不能应用。`
+    },
     phaseYZProductizationTagColor () { return this.phaseYZProductizationPending ? 'orange' : 'green' },
-    phaseYZProductizationStateText () { return this.phaseYZProductizationPending ? 'execution_price_unavailable' : 'ready' },
+    phaseYZProductizationStateText () {
+      if (this.phaseYZProductizationPayload && !this.phaseYZProductizationAligned) return 'historical_date_mismatch'
+      return this.phaseYZProductizationPending ? 'execution_price_unavailable' : 'ready'
+    },
     phaseYZPaperApplyDisabled () {
-      const payload = this.phaseYZProductizationPayload || {}
+      const payload = this.activePhaseYZProductizationPayload || {}
       return payload.paper_apply_allowed !== true
     },
     phaseYZSignalAsOf () { return (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.signal_asof) || '-' },
-    phaseYZExecutionPriceMode () { return (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.execution_price_mode) || 'next_open' },
-    phaseYZExecutionPriceMessage () { return (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.execution_price_message) || '成交口径：次一交易日开盘价。行情暂不可用，等待下一轮数据更新。' },
+    phaseYZExecutionPriceMode () { return (this.activePhaseYZProductizationPayload && this.activePhaseYZProductizationPayload.execution_price_mode) || '-' },
+    phaseYZExecutionPriceMessage () { return (this.activePhaseYZProductizationPayload && this.activePhaseYZProductizationPayload.execution_price_message) || '成交口径：次一交易日开盘价。行情暂不可用，等待下一轮数据更新。' },
     phaseYZTargetNextTradingDay () {
-      const readiness = (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.execution_price_readiness) || {}
-      return readiness.target_next_trading_day || '-'
+      const payload = this.activePhaseYZProductizationPayload || {}
+      const readiness = payload.execution_price_readiness || {}
+      return readiness.target_next_trading_day || payload.target_next_trading_day || '-'
     },
     phaseYZModelNames () {
-      const models = (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.models) || []
+      const models = (this.activePhaseYZProductizationPayload && this.activePhaseYZProductizationPayload.models) || []
       return (models[0] && models[0].model_id) || 'e4_frozen_qlib_2018_2022 (Model A)'
     },
     phaseYZStrategyNames () {
-      const strategies = (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.production_strategies) || []
+      const strategies = (this.activePhaseYZProductizationPayload && this.activePhaseYZProductizationPayload.production_strategies) || []
       return strategies.map(item => item.strategy_rule_id).join(' / ') || 'top50_exit_one_worst_sell'
     },
-    phaseYZSelectedStrategy () { return (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.selected_strategy_rule_id) || 'top50_exit_one_worst_sell' },
+    phaseYZSelectedStrategy () { return (this.activePhaseYZProductizationPayload && this.activePhaseYZProductizationPayload.selected_strategy_rule_id) || 'top50_exit_one_worst_sell' },
     phaseYZPaperApplyText () { return this.phaseYZPaperApplyDisabled ? '等待 next_open 成交价' : '可应用到模拟账户' },
     phaseYZBlockedReasonText () { return (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.paper_apply_blocked_reason) || '-' },
     workbenchOverviewStatusText () {
@@ -2164,11 +2188,12 @@ export default {
     workbenchOverviewStatusMessage () {
       if (this.currentStrategyContextError) return this.currentStrategyContextError
       if (this.phaseYZProductizationError) return this.phaseYZProductizationError
+      if (this.phaseYZProductizationStaleMessage) return `今日总览按当前信号日期 ${this.currentContextSignalAsOf} 展示。`
       if (this.phaseYZPaperApplyDisabled) return '模拟链路仍在等待目标交易日开盘价；本页面只读，不写入模拟账户。'
       return `只读策略信息已就绪，snapshot asof ${this.freshnessSnapshotDateText}；本页面不写入模拟账户。`
     },
     workbenchBaseModelId () {
-      const models = (this.phaseYZProductizationPayload && this.phaseYZProductizationPayload.models) || []
+      const models = (this.activePhaseYZProductizationPayload && this.activePhaseYZProductizationPayload.models) || []
       return (models[0] && models[0].model_id) || this.currentStrategyContext.default_model_id || '-'
     },
     workbenchTreatmentModelId () {
@@ -6683,9 +6708,7 @@ export default {
   .cross-analysis-summary,
   .cross-detail-grid,
   .rank-tech-grid,
-  .portfolio-replay-grid,
-  .readonly-candidate-layout,
-  .readonly-replay-track {
+  .portfolio-replay-grid {
     grid-template-columns: 1fr;
   }
 
@@ -6702,293 +6725,6 @@ export default {
     font-size: 18px;
   }
 
-  .readonly-candidate-row {
-    grid-template-columns: 44px minmax(0, 1fr);
-  }
-
-  .readonly-candidate-status {
-    grid-column: 2;
-    justify-self: start;
-  }
-
-  .readonly-replay-window,
-  .paper-portfolio-panel {
-    max-width: 100%;
-  }
-}
-
-
-.current-strategy-context-card,
-.readonly-strategy-snapshot,
-.readonly-replay-window {
-  margin-top: 16px;
-}
-
-.current-context-toolbar,
-.current-context-grid {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.current-context-toolbar {
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-  color: #475467;
-  font-size: 12px;
-}
-
-.current-context-alert {
-  margin-bottom: 10px;
-}
-
-.current-context-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-}
-
-.current-context-grid > div {
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid #e8edf3;
-  border-radius: 8px;
-  background: #fbfdff;
-}
-
-.current-context-grid span,
-.current-context-grid small {
-  display: block;
-  color: #667085;
-  font-size: 12px;
-}
-
-.current-context-grid strong {
-  display: block;
-  margin: 3px 0;
-  color: #111827;
-  font-size: 16px;
-  overflow-wrap: anywhere;
-}
-
-.readonly-snapshot-toolbar,
-.readonly-window-toolbar,
-.readonly-section-head,
-.readonly-candidate-row,
-.readonly-source-grid {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.readonly-window-toolbar {
-  margin-bottom: 10px;
-}
-
-.readonly-snapshot-toolbar {
-  justify-content: space-between;
-  margin-bottom: 10px;
-  color: #475467;
-  font-size: 12px;
-}
-
-.readonly-snapshot-title-block {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.readonly-snapshot-title-block strong {
-  color: #111827;
-  font-size: 13px;
-}
-
-.readonly-snapshot-title-block span {
-  color: #667085;
-}
-
-.readonly-snapshot-alert {
-  margin-bottom: 12px;
-}
-
-.readonly-snapshot-content {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.readonly-snapshot-grid,
-.readonly-source-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-}
-
-.readonly-snapshot-metric,
-.readonly-source-grid span,
-.readonly-candidate-section {
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid #e8edf3;
-  border-radius: 8px;
-  background: #fbfdff;
-  overflow-wrap: anywhere;
-}
-
-.readonly-snapshot-metric.primary {
-  border-color: #91caff;
-  background: #f0f7ff;
-}
-
-.readonly-snapshot-metric strong,
-.readonly-snapshot-metric small,
-.readonly-snapshot-metric span {
-  display: block;
-}
-
-.readonly-snapshot-metric strong {
-  margin-top: 4px;
-  color: #111827;
-  font-size: 16px;
-  line-height: 1.35;
-}
-
-.readonly-snapshot-metric span,
-.readonly-source-grid strong,
-.readonly-candidate-row strong,
-.readonly-section-head strong {
-  color: #111827;
-  font-weight: 600;
-}
-
-.readonly-snapshot-metric small,
-.readonly-source-grid span,
-.readonly-candidate-row span,
-.readonly-snapshot-empty {
-  color: #667085;
-  font-size: 12px;
-}
-
-.readonly-candidate-layout {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.readonly-candidate-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.readonly-section-head {
-  justify-content: space-between;
-}
-
-.readonly-section-head > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.readonly-section-head small {
-  color: #667085;
-  font-size: 12px;
-}
-
-.readonly-candidate-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.readonly-candidate-row {
-  display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid #eef2f7;
-  border-radius: 6px;
-  background: #fff;
-}
-
-.readonly-candidate-rank {
-  color: #1d4ed8;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.6;
-}
-
-.readonly-candidate-main,
-.readonly-candidate-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.readonly-candidate-main strong {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-  font-size: 14px;
-}
-
-.readonly-candidate-symbol {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 15px;
-}
-
-.readonly-candidate-name {
-  color: #344054;
-  font-size: 13px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-.readonly-candidate-status {
-  margin-right: 0;
-}
-
-.readonly-candidate-meta {
-  text-align: right;
-}
-
-.readonly-candidate-row.compact {
-  justify-content: flex-start;
-}
-
-.readonly-window-note {
-  color: #475467;
-  font-size: 12px;
-}
-
-.readonly-replay-track {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.readonly-replay-track span {
-  min-width: 0;
-  padding: 7px 10px;
-  border: 1px solid #dbeafe;
-  border-radius: 6px;
-  background: #f8fbff;
-  color: #1e3a8a;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.readonly-snapshot-empty {
-  padding: 10px 0;
 }
 
 .rank-tech-replay-card {

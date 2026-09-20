@@ -44,6 +44,13 @@
       message="只影响模拟账户，不接入券商，不产生真实交易委托。"
     />
     <a-alert v-if="error" class="paper-alert" type="warning" show-icon :message="error" />
+    <a-alert
+      v-if="dateContextMismatch"
+      class="paper-alert"
+      type="warning"
+      show-icon
+      :message="dateContextMismatchText"
+    />
 
     <div v-if="loading" class="paper-empty">正在读取模拟账户状态...</div>
     <div v-else-if="!decisionReady" class="paper-empty" data-testid="paper-no-decision">{{ emptyText }}</div>
@@ -200,6 +207,10 @@ export default {
     phaseYzStatus: {
       type: Object,
       default: null
+    },
+    activeSignalAsOf: {
+      type: String,
+      default: ''
     }
   },
   data () {
@@ -237,14 +248,29 @@ export default {
     skippedPreviewActions () { return this.actions.filter(item => item.action_type === 'paper_skip' || item.applicability !== 'applicable') },
     alreadyApplied () { return this.applyRuns.some(item => item.decision_id === this.decision.decision_id || (item.result && item.result.decision_id === this.decision.decision_id)) },
     staleEpoch () { return this.decisionReady && Number(this.account.paper_account_epoch || this.decision.paper_account_epoch) !== Number(this.decision.paper_account_epoch) },
+    decisionDateMismatch () {
+      return this.hasComparableDate(this.activeSignalAsOf) && this.hasComparableDate(this.decision.asof) && this.decision.asof !== this.activeSignalAsOf
+    },
+    phaseYZDateMismatch () {
+      const phaseDate = this.phaseYzStatus && this.phaseYzStatus.signal_asof
+      return this.hasComparableDate(this.activeSignalAsOf) && this.hasComparableDate(phaseDate) && phaseDate !== this.activeSignalAsOf
+    },
+    dateContextMismatch () { return this.decisionDateMismatch || this.phaseYZDateMismatch },
+    dateContextMismatchText () {
+      const dates = []
+      if (this.decisionDateMismatch) dates.push(`模拟决策 ${this.decision.asof}`)
+      if (this.phaseYZDateMismatch) dates.push(`模拟状态 ${this.phaseYzStatus.signal_asof}`)
+      return `${dates.join('、')} 与当前信号 ${this.activeSignalAsOf} 不属于同一日期，已作为历史状态隔离，不能应用。`
+    },
     phaseYZPaperBlocked () { return this.phaseYzStatus && this.phaseYzStatus.paper_apply_allowed === false },
     phaseYZPaperBlockMessage () {
       return this.userFacingBlockReason(this.phaseYzStatus && (this.phaseYzStatus.paper_apply_blocked_reason || this.phaseYzStatus.execution_price_status))
     },
     currentDecisionDate () { return this.decision.asof || '-' },
-    applyBlocked () { return this.phaseYZPaperBlocked || this.staleEpoch || !this.decisionReady || this.alreadyApplied },
+    applyBlocked () { return this.dateContextMismatch || this.phaseYZPaperBlocked || this.staleEpoch || !this.decisionReady || this.alreadyApplied },
     canApplyText () {
       if (!this.decisionReady) return '暂无策略'
+      if (this.dateContextMismatch) return '历史状态'
       if (this.phaseYZPaperBlocked) return '暂不能应用'
       if (this.staleEpoch) return '需刷新确认'
       if (this.alreadyApplied) return '今日已应用'
@@ -252,6 +278,7 @@ export default {
     },
     applyBlockReasonText () {
       if (!this.decisionReady) return '暂无可应用到模拟账户的策略。'
+      if (this.dateContextMismatch) return this.dateContextMismatchText
       if (this.phaseYZPaperBlocked) return this.phaseYZPaperBlockMessage
       if (this.staleEpoch) return '模拟账户已变化，请刷新后重新确认。'
       if (this.alreadyApplied) return '今天已应用到模拟账户。'
@@ -267,12 +294,13 @@ export default {
         { label: 'strategy_rule', value: this.decision.strategy_rule },
         { label: 'paper_order_intent_artifact_path', value: this.decision.paper_order_intent_artifact_path },
         { label: 'input_checksum', value: this.decision.input_checksum },
+        { label: 'active_signal_asof', value: this.activeSignalAsOf },
         { label: 'initial_cash', value: this.formatMoney(this.initialCash) },
         { label: 'apply_id', value: this.applyResult && this.applyResult.apply_id },
         { label: 'raw_block_reason', value: this.phaseYzStatus && (this.phaseYzStatus.paper_apply_blocked_reason || this.phaseYzStatus.execution_price_status) }
       ].map(row => ({ label: row.label, value: row.value === null || row.value === undefined || row.value === '' ? '-' : row.value }))
     },
-    applyDisabled () { return !this.decisionReady || this.phaseYZPaperBlocked || this.alreadyApplied || this.staleEpoch || this.applying || this.resetting },
+    applyDisabled () { return !this.decisionReady || this.dateContextMismatch || this.phaseYZPaperBlocked || this.alreadyApplied || this.staleEpoch || this.applying || this.resetting },
     resetDisabled () { return !this.account.account_uid || this.applying || this.resetting },
     resultExecutions () { return (this.applyResult && this.applyResult.paper_executions) || [] },
     resultSkipped () { return (this.applyResult && this.applyResult.skipped_actions) || [] },
@@ -281,6 +309,7 @@ export default {
       if (this.loading) return '读取中'
       if (this.error) return '需复核'
       if (!this.decisionReady) return '暂无策略'
+      if (this.dateContextMismatch) return '历史状态'
       if (this.phaseYZPaperBlocked) return '等待开盘价'
       if (this.alreadyApplied) return '今日已应用'
       if (this.staleEpoch) return '需刷新确认'
@@ -303,6 +332,9 @@ export default {
     this.loadAll()
   },
   methods: {
+    hasComparableDate (value) {
+      return !!value && value !== '-'
+    },
     unwrap (response) {
       if (response && Object.prototype.hasOwnProperty.call(response, 'code') && Object.prototype.hasOwnProperty.call(response, 'data')) return response.data
       if (response && response.data && Object.prototype.hasOwnProperty.call(response.data, 'data')) return response.data.data

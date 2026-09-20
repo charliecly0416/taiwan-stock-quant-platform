@@ -8,8 +8,13 @@ const assert = (condition, message) => {
 }
 
 const hiddenDashboardRoutes = [
+  'AIAssetAnalysis',
+  'IndicatorCommunity',
+  'IndicatorIDE',
+  'StrategyLive',
   'TradingBot',
-  'BrokerAccounts'
+  'BrokerAccounts',
+  'Billing'
 ]
 
 function routeBlockByName (name) {
@@ -29,12 +34,9 @@ for (const name of hiddenDashboardRoutes) {
 
 
 const visibleDashboardRoutes = [
-  'AIAssetAnalysis',
-  'IndicatorCommunity',
-  'IndicatorIDE',
-  'StrategyLive',
   'TWStockMonitor',
-  'TWStockSimAccount'
+  'TWStockSimAccount',
+  'Profile'
 ]
 
 for (const name of visibleDashboardRoutes) {

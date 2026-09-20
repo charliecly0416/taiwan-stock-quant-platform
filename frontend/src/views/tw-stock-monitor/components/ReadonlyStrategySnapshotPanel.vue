@@ -121,8 +121,10 @@ export default {
   },
   computed: {
     snapshot () { return (this.payload && this.payload.snapshot) || {} },
-    rankingLabel () {
-      return String(this.snapshot.ranking_source || '').includes('ltr') ? 'Model A+B 重排后的' : 'Model A 排序的'
+    isReranked () {
+      const source = String(this.snapshot.ranking_source || '').toLowerCase()
+      const modelId = String(this.snapshot.model_id || '').toLowerCase()
+      return source.includes('ltr') || modelId.includes('ltr')
     },
     manifest () { return (this.payload && this.payload.manifest) || {} },
     validation () { return (this.payload && this.payload.validation) || {} },
@@ -212,8 +214,9 @@ export default {
     },
     rankingLabel () {
       const source = this.snapshot.ranking_source || ''
-      if (source === 'ltr_rerank_within_qlib_top50') return 'Qlib Top50 内 LTR 重排'
-      return source || '-'
+      if (this.isReranked) return 'Model A+B 重排后的'
+      if (source === 'qlib_rank_controlled_signal') return 'Model A 排序的'
+      return source ? `${source} 的` : '当前模型排序的'
     },
     strategyLabel () {
       const rule = this.snapshot.strategy_rule || ''
@@ -268,11 +271,17 @@ export default {
     },
     candidateMetaText (item) {
       if (!item) return '-'
-      const parts = [
-        item.score_rank || item.ltr_rank ? `LTR #${this.rankText(item.score_rank || item.ltr_rank)}` : '',
-        item.candidate_rank ? `Qlib Top50 #${this.rankText(item.candidate_rank)}` : '',
-        item.full_qlib_rank ? `全市场 #${this.rankText(item.full_qlib_rank)}` : ''
-      ].filter(Boolean)
+      const scoreRank = item.score_rank || item.ltr_rank || item.candidate_rank
+      const parts = this.isReranked
+        ? [
+            scoreRank ? `A+B #${this.rankText(scoreRank)}` : '',
+            item.candidate_rank ? `Model A Top50 #${this.rankText(item.candidate_rank)}` : '',
+            item.full_qlib_rank ? `全市场 #${this.rankText(item.full_qlib_rank)}` : ''
+          ]
+        : [
+            scoreRank ? `Model A #${this.rankText(scoreRank)}` : '',
+            item.full_qlib_rank ? `全市场 #${this.rankText(item.full_qlib_rank)}` : ''
+          ]
       return parts.length ? parts.join(' · ') : '-'
     },
     exitMetaText (item) {
@@ -294,3 +303,185 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+.readonly-strategy-snapshot {
+  margin-top: 16px;
+}
+
+.readonly-strategy-snapshot /deep/ .ant-card-head-title {
+  overflow: visible;
+  white-space: normal;
+}
+
+.card-title-line,
+.readonly-tags,
+.readonly-snapshot-toolbar,
+.readonly-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.card-title-line,
+.readonly-snapshot-toolbar,
+.readonly-section-head {
+  justify-content: space-between;
+}
+
+.readonly-snapshot-toolbar {
+  margin-bottom: 10px;
+  color: #475467;
+  font-size: 12px;
+}
+
+.readonly-snapshot-title-block,
+.readonly-section-head > div,
+.readonly-candidate-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.readonly-snapshot-title-block strong,
+.readonly-section-head strong,
+.readonly-candidate-main strong {
+  color: #111827;
+}
+
+.readonly-snapshot-title-block span,
+.readonly-section-head small,
+.readonly-candidate-main > span,
+.readonly-snapshot-metric small,
+.readonly-snapshot-empty {
+  color: #667085;
+  font-size: 12px;
+}
+
+.readonly-snapshot-alert {
+  margin-bottom: 12px;
+}
+
+.readonly-snapshot-content,
+.readonly-candidate-section,
+.readonly-candidate-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.readonly-snapshot-content,
+.readonly-candidate-layout {
+  gap: 12px;
+}
+
+.readonly-candidate-section,
+.readonly-candidate-list {
+  gap: 8px;
+}
+
+.readonly-candidate-layout,
+.readonly-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.readonly-snapshot-grid {
+  gap: 10px;
+}
+
+.readonly-snapshot-metric,
+.readonly-candidate-section {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  background: #fbfdff;
+  overflow-wrap: anywhere;
+}
+
+.readonly-snapshot-metric span,
+.readonly-snapshot-metric strong,
+.readonly-snapshot-metric small {
+  display: block;
+}
+
+.readonly-snapshot-metric strong {
+  margin-top: 4px;
+  color: #111827;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.readonly-snapshot-metric span {
+  color: #111827;
+  font-weight: 600;
+}
+
+.readonly-candidate-row {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #eef2f7;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.readonly-candidate-rank,
+.readonly-candidate-symbol {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.readonly-candidate-rank {
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.readonly-candidate-main strong {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.readonly-candidate-symbol {
+  font-size: 15px;
+}
+
+.readonly-candidate-name {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.readonly-candidate-status {
+  margin-right: 0;
+}
+
+.readonly-snapshot-empty {
+  padding: 10px 0;
+}
+
+@media (max-width: 640px) {
+  .readonly-candidate-layout,
+  .readonly-snapshot-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .readonly-candidate-row {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .readonly-candidate-status {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+</style>

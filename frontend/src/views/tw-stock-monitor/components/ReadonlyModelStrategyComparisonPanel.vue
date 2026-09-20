@@ -136,6 +136,14 @@
           </div>
         </div>
 
+        <div class="comparison-conclusion" data-testid="readonly-model-comparison-conclusion">
+          <a-icon type="read" />
+          <div>
+            <strong>怎么理解这次对比</strong>
+            <span>{{ plainLanguageConclusion }}</span>
+          </div>
+        </div>
+
         <div v-if="legacyStrategyCount" class="comparison-legacy-note">
           另有 {{ legacyStrategyCount }} 个旧版研究策略仅保留血缘记录，当前模型组合不可选。
         </div>
@@ -237,6 +245,31 @@ export default {
         this.buildComparisonItem('baseline'),
         this.buildComparisonItem('challenger')
       ]
+    },
+    failedDiagnosticLabels () {
+      return [
+        ['稳定性', this.bootstrapDiagnostic],
+        ['弱市表现', this.weakMarketDiagnostic],
+        ['收益集中度', this.top5ConcentrationDiagnostic]
+      ].filter(([, item]) => String(this.diagnosticStatus(item)).toUpperCase() === 'FAIL').map(([label]) => label)
+    },
+    plainLanguageConclusion () {
+      const baselineValue = this.comparisonItems[0].metrics.netReturn
+      const challengerValue = this.comparisonItems[1].metrics.netReturn
+      const baselineReturn = Number(baselineValue)
+      const challengerReturn = Number(challengerValue)
+      const hasReturns = baselineValue !== null && baselineValue !== undefined && baselineValue !== '' && challengerValue !== null && challengerValue !== undefined && challengerValue !== '' && Number.isFinite(baselineReturn) && Number.isFinite(challengerReturn)
+      const returnFinding = !hasReturns
+        ? '当前历史收益数据不足，暂时不能判断 A+B 是否优于 Model A'
+        : challengerReturn > baselineReturn
+          ? 'A+B 在这段历史回放中的净收益高于 Model A'
+          : challengerReturn < baselineReturn
+            ? 'A+B 在这段历史回放中的净收益低于 Model A'
+            : 'A+B 与 Model A 在这段历史回放中的净收益相同'
+      if (this.failedDiagnosticLabels.length) {
+        return `${returnFinding}，但${this.failedDiagnosticLabels.join('、')}未通过，因此继续作为研究候选，不替换 Model A。`
+      }
+      return `${returnFinding}；现有诊断没有失败项，仍需完成准入审查后才能决定是否替换 Model A。`
     },
     runtimeEffect () {
       const safety = (this.payload && this.payload.safety) || {}
@@ -607,6 +640,37 @@ export default {
 
 .comparison-diagnostics strong {
   color: #101828;
+  overflow-wrap: anywhere;
+}
+
+.comparison-conclusion {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 11px 12px;
+  border-left: 4px solid #175cd3;
+  background: #f8fbff;
+  color: #344054;
+}
+
+.comparison-conclusion .anticon {
+  margin-top: 3px;
+  color: #175cd3;
+}
+
+.comparison-conclusion div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.comparison-conclusion strong {
+  color: #101828;
+}
+
+.comparison-conclusion span {
   overflow-wrap: anywhere;
 }
 

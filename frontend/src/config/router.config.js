@@ -9,7 +9,7 @@ export const asyncRouterMap = [
     meta: { title: 'menu.home' },
     redirect: '/tw-stock-monitor',
     children: [
-      // 1. AI资产分析（首页）
+      // AI 资产分析保留深链接，当前产品侧栏聚焦台股研究主线。
       // keepAlive: true so the heavy market-data fetches (sentiment / indices /
       // heatmap / calendar / opportunities / watchlist prices) only run on the
       // first visit. The component handles its own "data is stale" refresh in
@@ -19,27 +19,31 @@ export const asyncRouterMap = [
         path: '/ai-asset-analysis',
         name: 'AIAssetAnalysis',
         component: () => import('@/views/ai-asset-analysis'),
+        hidden: true,
         meta: { title: 'menu.dashboard.aiAssetAnalysis', keepAlive: true, icon: 'appstore', permission: ['dashboard'] }
       },
-      // 2. 指标市场（浏览/购买指标，排在图表页之上）
+      // 指标市场保留深链接。
       {
         path: '/indicator-community',
         name: 'IndicatorCommunity',
         component: () => import('@/views/indicator-community'),
+        hidden: true,
         meta: { title: 'menu.dashboard.community', keepAlive: false, icon: 'shop', permission: ['dashboard'] }
       },
-      // 3. 指标 IDE（图表 + 代码编辑 + 回测一体化）
+      // 指标 IDE 保留深链接。
       {
         path: '/indicator-ide',
         name: 'IndicatorIDE',
         component: () => import('@/views/indicator-ide'),
+        hidden: true,
         meta: { title: 'menu.dashboard.indicatorIde', keepAlive: true, icon: 'code', permission: ['dashboard'] }
       },
-      // 4. 策略与实盘（指标信号策略：创建 / 管理 / 与实盘联动；不含 Python 脚本策略）
+      // 旧策略页保留深链接。
       {
         path: '/strategy-live',
         name: 'StrategyLive',
         component: () => import('@/views/trading-assistant'),
+        hidden: true,
         meta: {
           title: 'menu.dashboard.tradingAssistant',
           keepAlive: true,
@@ -94,8 +98,8 @@ export const asyncRouterMap = [
         hidden: true,
         meta: { title: 'menu.dashboard.brokerAccounts', keepAlive: true, icon: 'bank', permission: ['dashboard'] }
       },
-      // 暂时隐藏实盘运维/券商连接类入口，保留路由供深链接和后续复用。
-      // 侧栏保留研究、指标、策略设计和台股模拟验证入口。
+      // 非台股主线入口保留路由供深链接和后续复用。
+      // 普通用户侧栏只保留台股研究、台股模拟账户和个人中心。
       // 台股趋势监控（研究提醒 / 人工复盘，不连接 broker，不下单）
       {
         path: '/tw-stock-monitor',
@@ -165,11 +169,12 @@ export const asyncRouterMap = [
         component: () => import('@/views/profile'),
         meta: { title: 'menu.myProfile', keepAlive: false, icon: 'user', permission: ['dashboard'] }
       },
-      // 会员/充值
+      // 会员/充值保留深链接
       {
         path: '/billing',
         name: 'Billing',
         component: () => import('@/views/billing'),
+        hidden: true,
         meta: { title: 'menu.billing', keepAlive: false, icon: 'wallet', permission: ['dashboard'] }
       },
       // 用户管理 (admin only)

@@ -29,6 +29,11 @@ assert.ok(monitor.includes('e4_frozen_qlib_2018_2022'), 'Model A missing from cl
 assert.ok(monitor.includes('Model B/LTR') || monitor.includes('model_b'), 'Model B reference boundary missing')
 assert.ok(monitor.includes('top50_exit_one_worst_sell'), 'clean strategy missing')
 assert.ok(monitor.includes(':phase-yz-status="phaseYZProductizationPayload"'), 'PaperPortfolioPanel must receive YZ3 state')
+assert.ok(monitor.includes(':active-signal-as-of="currentContextSignalAsOf"'), 'PaperPortfolioPanel must receive the active signal date')
+assert.ok(monitor.includes('phaseYZProductizationAligned'), 'YZ3 state must be date-aligned before current overview use')
+assert.ok(monitor.includes('activePhaseYZProductizationPayload'), 'missing aligned YZ3 payload boundary')
+assert.ok(monitor.includes('historical_date_mismatch'), 'missing historical date mismatch state')
+assert.ok(monitor.includes('已作为历史状态隔离'), 'missing user-facing historical state explanation')
 
 assert.ok(!monitor.includes("model_id: 'e4_frozen_qlib_2023_2025_ltr'"), 'readonly replay form must not default to old model')
 assert.ok(monitor.includes("model_id: 'e4_frozen_qlib_2018_2022'"), 'readonly replay form must default to clean E4 model')
@@ -38,10 +43,12 @@ assert.ok(monitor.includes('await this.loadReadonlyReplayWindow()'), 'index load
 assert.ok(monitor.includes('loadPhaseYZProductizationStatus()'), 'YZ3 status loader missing')
 
 assert.ok(panel.includes('phaseYzStatus'), 'PaperPortfolioPanel missing phaseYzStatus prop')
+assert.ok(panel.includes('activeSignalAsOf'), 'PaperPortfolioPanel missing activeSignalAsOf prop')
+assert.ok(panel.includes('dateContextMismatch'), 'PaperPortfolioPanel missing date isolation gate')
 assert.ok(panel.includes('phaseYZPaperBlocked'), 'PaperPortfolioPanel missing execution price block computed')
 assert.ok(panel.includes('paper_apply_allowed === false'), 'PaperPortfolioPanel must block when paper_apply_allowed is false')
 assert.ok(panel.includes('phaseYZPaperBlocked'), 'paper blocked state missing')
-assert.ok(panel.includes('!this.decisionReady || this.phaseYZPaperBlocked'), 'applyDisabled must include YZ block before apply')
+assert.ok(panel.includes('!this.decisionReady || this.dateContextMismatch || this.phaseYZPaperBlocked'), 'applyDisabled must include date and YZ gates before apply')
 assert.ok(panel.includes('等待开盘价'), 'blocked apply button text missing')
 
 const cardStart = monitor.indexOf('data-testid="strategy-workbench-overview-card"')

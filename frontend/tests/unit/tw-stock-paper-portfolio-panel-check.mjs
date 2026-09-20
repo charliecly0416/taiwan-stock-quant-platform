@@ -14,12 +14,17 @@ const panel = read('src/views/tw-stock-monitor/components/PaperPortfolioPanel.vu
 assert.ok(monitor.includes("import PaperPortfolioPanel from './components/PaperPortfolioPanel.vue'"), 'monitor must import PaperPortfolioPanel')
 assert.ok(monitor.includes('<paper-portfolio-panel'), 'monitor must render PaperPortfolioPanel')
 assert.ok(monitor.includes(':phase-yz-status="phaseYZProductizationPayload"'), 'monitor must pass YZ3 status into PaperPortfolioPanel')
+assert.ok(monitor.includes(':active-signal-as-of="currentContextSignalAsOf"'), 'monitor must pass current signal date into PaperPortfolioPanel')
 assert.ok(panel.includes('data-testid="paper-portfolio-panel"'), 'panel test id missing')
 assert.ok(panel.includes('应用到模拟账户'), 'apply text must include 模拟')
 assert.ok(panel.includes('重置模拟账户'), 'reset text must include 模拟账户')
 assert.ok(panel.includes('此操作只会写入模拟账户，不会产生真实交易委托。'), 'apply confirmation safety text missing')
 assert.ok(panel.includes('旧状态会归档'), 'reset archive text missing')
 assert.ok(panel.includes('paper_order_intent_artifact_path'), 'apply payload must use artifact path')
+assert.ok(panel.includes('decisionDateMismatch'), 'decision date mismatch guard missing')
+assert.ok(panel.includes('phaseYZDateMismatch'), 'phase YZ date mismatch guard missing')
+assert.ok(panel.includes('dateContextMismatch'), 'combined date mismatch guard missing')
+assert.ok(panel.includes('已作为历史状态隔离，不能应用'), 'historical state explanation missing')
 assert.ok(!panel.includes('paper_order_intent:'), 'frontend must not submit raw paper_order_intent payload')
 
 const helpers = [

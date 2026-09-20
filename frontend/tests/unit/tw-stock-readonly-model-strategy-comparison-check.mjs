@@ -70,9 +70,12 @@ assert.match(loader, /getTwStockReadonlyModelStrategyComparison\(query\)/)
 assert.match(page, /<readonly-model-strategy-comparison-panel/)
 assert.match(page, /this\.loadReadonlyModelStrategyComparison\(\)/)
 
-for (const text of ['模型与策略对比', 'Model A 与 Model A+B', '都不能在本页直接应用', '当前基线', '研究候选，联合门槛未通过', '不会写入模拟账户', '净收益', '最大回撤', '费用 / 换手', '收益集中度', '弱市表现', 'Bootstrap 稳定性下界', 'A+B Top5 收益集中度', 'no_apply']) {
+for (const text of ['模型与策略对比', 'Model A 与 Model A+B', '都不能在本页直接应用', '当前基线', '研究候选，联合门槛未通过', '不会写入模拟账户', '净收益', '最大回撤', '费用 / 换手', '收益集中度', '弱市表现', 'Bootstrap 稳定性下界', 'A+B Top5 收益集中度', '怎么理解这次对比', '继续作为研究候选，不替换 Model A', 'no_apply']) {
   assert.ok(component.includes(text), `missing comparison UI text: ${text}`)
 }
+assert.match(component, /plainLanguageConclusion \(\)/)
+assert.match(component, /failedDiagnosticLabels \(\)/)
+assert.match(component, /data-testid="readonly-model-comparison-conclusion"/)
 
 assert.doesNotMatch(component, /\$emit\(['"]apply['"]/)
 assert.doesNotMatch(component, /<a-button[^>]*>[^<]*(应用|下单|交易)/)
