@@ -39,8 +39,23 @@ def test_accepted_full_incomplete_reaches_shadow_without_publishing_or_pending(t
     # runner remains responsible for its reduced candidate scope and PIT gate.
     evidence = {"ok": False, "status": "FULL_ORTHOGONAL_REFRESH_INCOMPLETE", "protected_latest_unchanged": {"all_protected_paths_unchanged": True}}
     monkeypatch.setattr(module, "build_full_orthogonal_refresh_evidence", lambda **kw: evidence)
-    shadow_calls = []
-    monkeypatch.setattr(module, "run_b19r2r_for_accepted_day_nonblocking", lambda **kw: shadow_calls.append(kw) or {"shadow_ok": shadow_ok, "status": "READY" if shadow_ok else "BLOCKED_MARGIN"})
+    track_calls = []
+    monkeypatch.setattr(module, "build_real_same_run_handoff", lambda **kw: {"ok": True})
+    monkeypatch.setattr(
+        module,
+        "run_daily_model_track_batch",
+        lambda **kw: track_calls.append(kw) or {
+            "ok": True,
+            "tracks": {
+                "model_a_only": {"ok": True, "status": "READY"},
+                "model_a_plus_b_b19r2r": {
+                    "ok": shadow_ok,
+                    "attempted": True,
+                    "status": "READY" if shadow_ok else "BLOCKED_MARGIN",
+                },
+            },
+        },
+    )
     final_jobs = []
     monkeypatch.setattr(module, "finalize_job", lambda job, **kw: final_jobs.append(dict(job)))
 
@@ -59,63 +74,101 @@ def test_accepted_full_incomplete_reaches_shadow_without_publishing_or_pending(t
     monkeypatch.setattr(sys, "argv", argv)
     assert module.main() == (0 if shadow_enabled else 2)
     if not shadow_enabled:
-        assert shadow_calls == []
+        assert track_calls == []
         assert pending_calls[0][1]["reason"] == "full_orthogonal_refresh_incomplete"
         return
     assert pending_calls == []
-    assert len(shadow_calls) == 1
-    assert shadow_calls[0]["symbols"] == ["2330", "7769"]
+    assert len(track_calls) == 1
+    assert track_calls[0]["include_prior_jobs"] is True
     assert final_jobs[0]["full_orthogonal_refresh"]["ok"] is False
     assert final_jobs[0]["accepted_day_shadow_only"] is True
+    assert final_jobs[0]["daily_model_tracks"]["tracks"]["model_a_only"]["ok"] is True
     assert final_jobs[0]["latest_after"] == "2026-09-18"
     assert "pending_asof_set" not in final_jobs[0]
 
 
-def test_accepted_day_missing_snapshot_is_a_shadow_blocker(tmp_path, monkeypatch):
+def test_daily_model_tracks_resolve_provider_and_normalized_from_same_origin(tmp_path, monkeypatch):
     module = load_daily()
-    artifact = tmp_path / "a"
-    artifact.mkdir()
-    artifact.joinpath("manifest.json").write_text(json.dumps({"source_acquisition_run_id": "same_logical_capture"}))
-    pointer = tmp_path / "latest.json"
-    pointer.write_text(json.dumps({"asof": "2026-09-18", "canonical_artifact_dir": str(artifact)}))
-    monkeypatch.setattr(module, "CONTROLLED_MODEL_SIGNAL_LATEST", pointer)
-    monkeypatch.setattr(module, "OPS_ROOT", tmp_path / "ops")
-    result = module.run_b19r2r_for_accepted_day_nonblocking(job={"job_id": "full_today", "acquisition_logical_run_id": "same_logical_capture"}, job_dir=tmp_path, asof="2026-09-18", symbols=["2330"])
-    assert result["status"] == "BLOCKED_ACCEPTED_DAY_INPUT"
-    assert result["warning"] == "PUBLISHED_MODEL_A_PROVIDER_SNAPSHOT_MISSING"
-    assert result["mainline_blocking"] is False
-    assert result["pending_asof_set"] is False
-
-
-def test_accepted_day_reuses_exact_model_a_origin_snapshot(tmp_path, monkeypatch):
-    module = load_daily()
-    artifact = tmp_path / "a"
-    artifact.mkdir()
-    artifact.joinpath("manifest.json").write_text(json.dumps({"source_acquisition_run_id": "same_logical_capture"}))
-    pointer = tmp_path / "latest.json"
-    pointer.write_text(json.dumps({"asof": "2026-09-18", "canonical_artifact_dir": str(artifact)}))
     ops = tmp_path / "ops"
-    previous = ops / "a_today"
-    previous.mkdir(parents=True)
+    qlib = tmp_path / "qlib"
+    refresh_id = "option_c_yahoo_scrapling_refresh_today"
     publish_id = "option_c_yahoo_scrapling_publish_today"
-    previous.joinpath("job.json").write_text(json.dumps({"job_id": "a_today", "asof": "2026-09-18", "latest_after": "2026-09-18", "acquisition_logical_run_id": "same_logical_capture", "publish_job_id": publish_id, "model_signal_gate": {"ok": True, "summary": {"model_a_signal_path": str(artifact)}}}))
-    snapshot = tmp_path / "qlib/data_tw/experiments/option_c_ops" / publish_id / "tmp/formal_provider_rebuild"
-    snapshot.mkdir(parents=True)
-    monkeypatch.setattr(module, "CONTROLLED_MODEL_SIGNAL_LATEST", pointer)
+    normalized = qlib / "data_tw/experiments/option_c_ops" / refresh_id / "candidate_normalized"
+    provider = qlib / "data_tw/experiments/option_c_ops" / publish_id / "tmp/formal_provider_rebuild"
+    normalized.mkdir(parents=True)
+    provider.mkdir(parents=True)
+    origin = ops / "origin" / "job.json"
+    origin.parent.mkdir(parents=True)
+    origin.write_text(json.dumps({
+        "job_id": "origin",
+        "asof": "2026-09-18",
+        "latest_after": "2026-09-18",
+        "acquisition_logical_run_id": "source-1",
+        "refresh_job_id": refresh_id,
+        "publish_job_id": publish_id,
+    }))
     monkeypatch.setattr(module, "OPS_ROOT", ops)
-    monkeypatch.setattr(module, "QLIB", tmp_path / "qlib")
-    monkeypatch.setattr(module, "build_real_same_run_handoff", lambda **kw: {"ok": False})
+    monkeypatch.setattr(module, "QLIB", qlib)
+
+    result = module.discover_daily_model_track_sources(
+        job={"job_id": "full", "acquisition_logical_run_id": "source-1"},
+        asof="2026-09-18",
+        include_prior_jobs=True,
+    )
+
+    assert result["ok"] is True
+    assert result["origin_job_id"] == "origin"
+    assert Path(result["qlib_provider"]) == provider
+    assert Path(result["qlib_normalized"]) == normalized
+
+
+def test_daily_model_track_batch_keeps_twii_failure_nonblocking(tmp_path, monkeypatch):
+    module = load_daily()
+    provider = tmp_path / "provider"
+    normalized = tmp_path / "normalized"
+    provider.mkdir()
+    normalized.mkdir()
+    job_dir = tmp_path / "job"
+    job_dir.mkdir()
+    (job_dir / "same_run_handoff_validation.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(module, "discover_daily_model_track_sources", lambda **kw: {
+        "ok": True,
+        "status": "READY",
+        "qlib_provider": str(provider),
+        "qlib_normalized": str(normalized),
+    })
+    monkeypatch.setattr(module, "capture_b19_twii_snapshot", lambda **kw: {
+        "ok": False,
+        "status": "BLOCKED_TWII_CAPTURE",
+        "twii_csv": "",
+        "twii_manifest": "",
+    })
     calls = []
-    monkeypatch.setattr(module, "run_b19r2r_daily_shadow_nonblocking", lambda **kw: calls.append(kw) or {"shadow_ok": True})
-    job = {"job_id": "full_today", "acquisition_logical_run_id": "same_logical_capture"}
-    result = module.run_b19r2r_for_accepted_day_nonblocking(job=job, job_dir=tmp_path, asof="2026-09-18", symbols=["2330"])
-    assert result["reused_model_a_job_id"] == "a_today"
-    assert calls[0]["provider_snapshot"] == snapshot
-    assert calls[0]["source_acquisition_run_id"] == "same_logical_capture"
-    assert calls[0]["model_signal_gate"]["summary"]["model_a_signal_path"] == str(artifact)
-    calls.clear()
-    job["acquisition_logical_run_id"] = "different_capture"
-    blocked = module.run_b19r2r_for_accepted_day_nonblocking(job=job, job_dir=tmp_path, asof="2026-09-18", symbols=["2330"])
-    assert blocked["warning"] == "PUBLISHED_MODEL_A_ACQUISITION_RUN_MISMATCH"
-    assert blocked["mainline_blocking"] is False
-    assert calls == []
+
+    def score_model_a(request):
+        calls.append(request["track_id"])
+        return {
+            "ok": True,
+            "status": "SCORED_ASOF_TARGET",
+            "model_signal_artifact": str(tmp_path / request["track_id"]),
+        }
+
+    monkeypatch.setattr(module, "build_model_track_services", lambda **kw: {
+        "model_a_scorer": score_model_a,
+        "b19r2r_reranker": lambda request: pytest.fail("B must not run without TWII"),
+    })
+    result = module.run_daily_model_track_batch(
+        job={"job_id": "full", "acquisition_logical_run_id": "source-1"},
+        job_dir=job_dir,
+        asof="2026-09-18",
+        include_prior_jobs=False,
+        timeout_seconds=30,
+    )
+
+    assert result["ok"] is True
+    assert result["status"] == "READY_WITH_NONBLOCKING_FAILURES"
+    assert calls == ["model_a_only"]
+    assert result["tracks"]["model_a_only"]["ok"] is True
+    assert result["tracks"]["model_a_plus_b_b19r2r"]["missing_dependencies"] == [
+        "twii_snapshot"
+    ]

@@ -67,6 +67,32 @@ python scripts/tw_stock_ops_backup.py drill \
 
 日更 cron 不应声明 `DATABASE_URL`。本机通过 `scripts/run_daily_env.sh` 从 0600、非 symlink 的 `backend/.env` 加载环境；wrapper 在权限过宽或缺少连接串时拒绝启动。修改 cron 后同时检查 live crontab 与 `data_tw/ops/daily_auto_update/tw-daily-auto-update.installed.cron`，后者也必须保持 0600。
 
+## 统一任务入口
+
+新调度和人工执行优先使用 `scripts/run_tw_task.py`。先只校验配置和执行计划：
+
+```bash
+python scripts/run_tw_task.py \
+  --request configs/tasks/daily_update.yaml \
+  --validate-only
+
+python scripts/run_tw_task.py \
+  --request configs/tasks/readonly_backtest_example.yaml \
+  --validate-only
+```
+
+去掉 `--validate-only` 才会实际执行。日更任务仍由原 orchestrator 决定 pending、provider/latest gate 和重试；统一入口不会扩大这些权限，也不会缓存同日调用，因此后续 cron 班次仍可继续补抓。回测只写任务隔离目录且 `product_index_admission=false`。
+
+统一运行记录位于：
+
+```text
+data_tw/ops/unified_tasks/{task_type}/{run_id}/
+```
+
+排错顺序是 `normalized_request.json`、`plan.json`、`result.json`，再看 `stdout.txt` 和 `stderr.txt`。实际日更的详细 job 和 pending 证据仍在 `data_tw/ops/daily_auto_update/`，统一任务记录不能替代日更 job artifact。
+
+日更任务配置把单阶段超时与整条任务超时分开。当前分别为 1800 秒和 14400 秒；不要把二者改成同一个值。相同任务 identity 由目录锁串行执行，回测和 workflow 的成功记录可复用，日更仍会进入原 orchestrator 继续处理 pending。
+
 ## 日志轮转
 
 仓库提供 `docs/ops/quantdinger-logrotate.example`。部署时将 `/path/to/taiwan-stock-quant-platform` 和 `su` 行的部署用户/用户组替换为实际值，再由管理员安装到 `/etc/logrotate.d/`。仓库改动不会自动修改系统配置。
@@ -83,7 +109,7 @@ sudo logrotate --debug /path/to/rendered-quantdinger-logrotate
 
 ## 部署后验收
 
-历史 A/A+B 标准双轨不是日更任务。冻结输入或实现更新后，先在新的只读 workspace 运行并校验；不得覆盖旧 v1 或历史研究证据：
+full lane 已把 A/A+B 作为同级日更 ModelTrack 运行；下面的命令仍是独立的历史回放验收，不会触发日更、抓数或 latest 写入。冻结输入或实现更新后，在新的只读 workspace 运行并校验，不得覆盖旧 v1 或历史研究证据：
 
 ```bash
 PYTHONPATH=. python scripts/run_tw_stock_workflow.py \
@@ -137,4 +163,4 @@ curl -fsS http://127.0.0.1:5000/api/tw-stock/quant/ops/readonly-status | jq '.da
 3. 选择外部持久卷执行一次完整备份和 archive integrity drill；另在隔离环境完成一次真实恢复演练。
 4. 保留合法 full-scope B19 shadow 的真实运行证据；BLOCKED 不影响 A 主链，但必须保留受控错误码并修复运行原因。
 
-本机 2026-09-18 已完成 5001 候选和 5000 正式实例验收；数据库凭据轮换后，正式实例再次通过验收并保持单 worker、四线程 Gunicorn，最终证据见 `tmp/deployment_acceptance_live_5000_final.json`。替代备份包含 4816 个 artifact 文件和 PostgreSQL dump，已通过归档完整性检查；临时 PostgreSQL 16 集群的 57 表隔离恢复同时绑定了源 dump SHA256，证据见 `tmp/isolated_database_restore_drill_after_credential_rotation.json`。含旧明文凭据的备份已删除。live crontab 已与 0600 的 installed cron 逐字节同步，两条任务均使用 `scripts/run_daily_env.sh`，且不含明文连接串。
+本机 2026-09-18 已完成 5001 候选和 5000 正式实例验收；数据库凭据轮换后，正式实例再次通过验收并保持单 worker、四线程 Gunicorn，最终证据见 `tmp/deployment_acceptance_live_5000_final.json`。替代备份包含 4816 个 artifact 文件和 PostgreSQL dump，已通过归档完整性检查；临时 PostgreSQL 16 集群的 57 表隔离恢复同时绑定了源 dump SHA256，证据见 `tmp/isolated_database_restore_drill_after_credential_rotation.json`。含旧明文凭据的备份已删除。live crontab 已与 0600 的 installed cron 逐字节同步，base/full 两条日更任务均通过 `scripts/run_daily_env.sh` 调用统一入口 `scripts/run_tw_task.py`，且不含明文连接串；旧 cron 快照备份在 `data_tw/ops/daily_auto_update/cron_backups/`。

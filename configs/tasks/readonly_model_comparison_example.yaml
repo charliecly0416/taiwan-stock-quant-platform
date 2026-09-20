@@ -1,0 +1,6 @@
+schema_version: tw.task.request.v1
+task_type: readonly_model_comparison
+request_id: historical_dual_model_comparison_example
+parameters:
+  asof: '2026-09-01'
+  decision_cutoff: '2026-09-01T10:00:00+00:00'

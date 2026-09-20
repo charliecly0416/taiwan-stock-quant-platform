@@ -1,0 +1,9 @@
+schema_version: tw.task.request.v1
+task_type: readonly_backtest
+request_id: model_a_2026_ytd_example
+parameters:
+  model_track_id: model_a_only
+  strategy_rule: top50_exit_one_worst_sell
+  start_date: '2026-01-01'
+  end_date: '2026-05-07'
+  timeout_seconds: 1200

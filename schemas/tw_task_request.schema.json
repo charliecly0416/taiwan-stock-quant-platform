@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tw_task_request.schema.json",
+  "title": "Taiwan stock unified task request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_type", "parameters"],
+  "properties": {
+    "schema_version": {
+      "const": "tw.task.request.v1"
+    },
+    "task_type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]*$"
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+    },
+    "parameters": {
+      "type": "object"
+    }
+  }
+}

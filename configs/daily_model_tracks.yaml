@@ -1,0 +1,33 @@
+schema_version: tw.daily_model_tracks.v1
+dependency_mode: independent
+default_max_workers: 2
+model_a_scorer:
+  model_id: e4_frozen_qlib_2018_2022
+tracks:
+  model_a_only:
+    runtime_adapter_id: daily_model_a_v1
+    model_id: e4_frozen_qlib_2018_2022
+    required_dependencies:
+      - qlib_provider
+      - qlib_normalized
+      - source_acquisition
+      - decision_cutoff
+    internal_stages:
+      - model_a_score
+    consumes_track_outputs: []
+  model_a_plus_b_b19r2r:
+    runtime_adapter_id: daily_model_a_plus_b_b19r2r_v1
+    model_id: modelb_b19r2r_lambdarank_exact50_78f_v2
+    required_dependencies:
+      - qlib_provider
+      - qlib_normalized
+      - source_acquisition
+      - decision_cutoff
+      - orthogonal_handoff
+      - provider_snapshot
+      - next_session_open
+      - twii_snapshot
+    internal_stages:
+      - model_a_score
+      - b19r2r_rerank
+    consumes_track_outputs: []

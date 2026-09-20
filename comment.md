@@ -1,35 +1,50 @@
-你是本项目后续统筹和审查者。请先阅读文档建立当前项目主线认知，不要立即改代码，也不要触发任何真实数据抓取、provider publish、accepted latest 切换、monitor 写入、broker/order/quick-trade。
+# Stage 2 最终返回文件与下一步（r2）
 
-第一步请按顺序阅读：
+GPU工作已完成并停止。24次真实2100秒窗口：C1九次整体未通过主门禁（steady三次通过，recovery/burst各三次失败）；C2九次主门禁和六次诊断通过，选定C2。C3已冻结但未性能运行。local_only recovery的offline为115/120，仅比114门槛多一条。三个off诊断没有启动期间API接受，不能声称验证了此路径。
 
-1. docs/tw_modular_contracts/TW_CURRENT_PROJECT_DOC_ENTRY_AND_ARCHIVE_POLICY_CN.md
-2. docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md
-3. docs/tw_modular_contracts/TW_MODULAR_PIPELINE_FUTURE_DEVELOPMENT_GUIDE_CN.md
-4. docs/tw_modular_contracts/TW_DEVELOPER_TEST_AND_EXPERIMENT_PLAYBOOK_CN.md
-5. docs/tw_modular_contracts/TW_CURRENT_STRATEGY_CONTEXT_API_FIELD_DICTIONARY_CN.md
-6. docs/tw_modular_contracts/TW_DAILY_AUTO_UPDATE_RUNBOOK_CN.md
-7. docs/tw_modular_daily_update_productization/PHASEYZ_STRICT_E4_PRODUCTIZATION_FINAL_SUMMARY_CN.md
-8. docs/tw_modular_daily_update_productization/PHASEX_PAPER_PORTFOLIO_STRATEGY_AND_SIMULATION_APP_FINAL_SUMMARY_CN.md
+本轮没有进入N5、PPO、Qwen训练、locked_test性能或论文修改。等待原环境独立验收和下一工作单。本说明取代旧r1交付指令，不修改主科学归档。
 
-重点理解：
+## 需要转交的两个私有包
 
-- 当前产品化链路只保留两个重要模型：`e4_frozen_qlib_2018_2022` 和 `e4_frozen_qlib_2018_2022_orthogonal_ltr_2023_2025`。
-- 当前默认候选是严格 E4 LTR，默认策略规则是 `top50_exit_one_worst_sell`，但系统仍保持 readonly/productization 边界。
-- 项目已经按数据源、数据落盘、特征、模型信号、策略规则、OrderIntent、回放结果、readonly artifact、API、前端、日更编排、模拟账户等模块解耦。
-- 后续新增模型/策略必须走模块合同、registry、validator、golden sample 和 reviewer checklist，不允许回到一个实验一个大脚本。
-- 历史阶段文档已经归档到 `docs/archive/phase_history/README_CN.md`。日常开发优先读当前合同、指南、runbook、最终总结和 checklist；只有追溯历史争议时才查归档。
-- 如果做审查，必须先判断执行报告是否偏离主线，再决定是否放行下一步；发现偏离、未来函数、训练/测试混用、数据口径不一致、默认策略被擅自切换时要停下来沟通。
+文件都在 `/lustre/home/2401213359/`：
 
-建议先跑只读验证，确认当前基线可用：
+| 文件 | 字节数 | SHA256 |
+|---|---:|---|
+| stage2_formal_return_20260919_r1.zip | 194799248 | 47c2b026dbefbbc93a111438023dc92d7dcc876c9089946aaf29217eb0af2f32 |
+| stage2_return_closeout_20260919_r2.zip | 12535948 | 415b51244fad02e2e8d3c252cc26c08a581b2aaa4dff100b819e61b96e7b7ec8 |
 
-```bash
-python -m pytest backend/tests/test_phase_yz0_clean_registry.py backend/tests/test_phase_yz1_strict_e4_model_adapters.py backend/tests/test_phase_yz2_orthogonal_package.py backend/tests/test_phase_yz3_productization_status.py backend/tests/test_tw_stock_readonly_strategy_snapshot_api.py backend/tests/test_tw_stock_readonly_replay_window_api.py backend/tests/test_tw_ltr_readonly_explanation_api.py -q
+主包含科学RAW、全部失败、冻结输入/代码SHA、环境与停机证据、manifest/SHA256SUMS和详细中文handoff。补充r2包含主包外层记录、归档最终独立审查、I/O异常及成功补验、重定位复算、v2公开Git bundle与独立审查/发布说明。两个包都含私有证据，不能整包上传公开GitHub。
 
-cd frontend
-corepack pnpm build
-node tests/unit/tw-stock-monitor-static-check.mjs
-node tests/unit/tw-stock-readonly-strategy-snapshot-check.mjs
-node tests/unit/tw-stock-readonly-replay-window-check.mjs
+先读补充包 `RECEIVING_CODEX_zh.md`，再读主包 `docs/maxopt_stage2_execution_20260919/RETURN_HANDOFF_zh.md`。按handoff第8节在接收环境只读核验，不重新运行GPU campaign/runner，不再次生成唯一修订。文件系统读取阻塞导致的初次限制已由一次有限CPU补验解除，失败和退出记录都保留。
+
+同时转交本清单、`stage2_return_transfer_20260919_SHA256SUMS`，以及包外最终记录：
+
+- `stage2_formal_return_20260919_r1_archive.json` 与 `stage2_formal_return_20260919_r1_archive_review_r2.json`（已收在补充包中）。
+- `stage2_return_closeout_20260919_r2_archive.json`。
+- `stage2_return_closeout_20260919_r2_review.json` 与 `stage2_return_closeout_20260919_r2_review_zh.md`（补充包生成后的独立审查，包外保存）。
+
+## 公开交付与实际传输状态
+
+**只使用v2公开快照；不要推送旧 `gpu-stage2-return-20260919` 分支或旧bundle。** 旧审查只覆盖四文件增量，其祖先含未纳入公开审查的本地N4c资料，旧bundle也依赖未证实接收端持有的前置提交。旧推送因网络不可达失败，没有远端写入。旧尝试和r1补充HOLD审查在最终补充 `history/DO_NOT_PUBLISH_*` 中保留。
+
+当前有效版本：
+
+- 分支 `gpu-stage2-return-20260919-v2`。
+- root commit `3fc2b5923e7c4809aba7633532285df2dd4b3cf1`，无父提交；完整树仅三份已审源码和一份聚合README。
+- `stage2_public_return_20260919_v2.bundle`：7647字节，SHA256 `fb24010e032545acf2629b44111adfabcbc427921e44e38e605cf794273667aa`。无prerequisite，独立空目录clone和9项CPU单测通过。bundle和完整树审查报告已在补充包内。
+- GitHub：SSH/HTTPS网络均不可达，v2尚未推送。目标 `github.com/6zzhh6/llm-scheduling`。
+- 私有传输：LOCAL_READY_NOT_SENT，未提供scp接收host/user/目录，未执行scp。请将两个私有包与上述外层清单交给原环境；若希望GPU端直接发送，需要提供准确scp目标及可用连接。
+
+在联网原仓库，核实origin后执行（PowerShell也适用）：
+
+```powershell
+git bundle verify "<补充解压目录>/stage2_public_return_20260919_v2.bundle"
+git fetch "<补充解压目录>/stage2_public_return_20260919_v2.bundle" refs/heads/gpu-stage2-return-20260919-v2:refs/heads/gpu-stage2-return-20260919-v2
+git push origin refs/heads/gpu-stage2-return-20260919-v2:refs/heads/gpu-stage2-return-20260919-v2
 ```
 
-核心原则：先读文档建图，再做只读验证，最后才进入新模型/新策略开发。任何新开发都要保持模块输入输出清晰、可验证、可审查、可回滚。
+该分支是独立公开快照，不直接合并主线；若目标分支已存在，先核对commit，不force。接收端Python须支持冻结代码，建议python3 3.10+；本轮CPU复验为3.12.12，GPU执行环境为qwenguard_vllm。主包内较早的“未commit”及旧传输说明是归档时快照，最终状态以本说明及v2 transport.json为准。
+
+## 最短转交prompt
+
+> 请接收stage2_formal_return_20260919_r1.zip、stage2_return_closeout_20260919_r2.zip及包外最终审查/校验清单，先核SHA，再读补充RECEIVING_CODEX_zh.md及主包RETURN_HANDOFF_zh.md。GPU端完成24次真实窗口，C1整体失败，C2九次主门禁和六诊断通过，GPU已停止；local_only recovery offline115/120仅一条余量。请独立验收迁移确认、唯一修订、所有RAW/失败、选择/成本和停止边界；不得重新启动GPU、N5/训练或直接替换论文。初次I/O异常已有限补验解决，旧材料全部保留。公开交付只能用无前置提交的v2 bundle和gpu-stage2-return-20260919-v2分支，禁止推旧分支。公网与scp尚未完成，可在联网环境按说明发布已审v2四文件快照。独立验收后再给下一阶段工作单。

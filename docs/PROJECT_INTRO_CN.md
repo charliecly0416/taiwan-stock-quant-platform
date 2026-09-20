@@ -46,8 +46,10 @@ B19R2R 使用 LightGBM LambdaRank 和 78 个 PIT-safe 特征。当前比较选�
 ```mermaid
 flowchart LR
     D[行情与来源证据] --> F[PIT-safe 特征]
-    F --> A[Model A]
-    A --> B[Model A+B]
+    F --> A[Model A track]
+    F --> AB[Model A+B track]
+    AB --> AI[内部独立运行 Model A]
+    AI --> B[内部 B19R2R 重排]
     A --> SA[ModelSignal A]
     B --> SB[ModelSignal A+B]
     SA --> RA[同一 StrategyRule]
@@ -76,16 +78,30 @@ flowchart LR
 
 普通用户侧栏只显示台股研究、台股模拟账户和个人中心。模型比较属于台股研究页中的只读工具，不会把研究选项变成运行配置。旧 Phase YZ 或模拟决策只有在 `signal_asof` 与当前策略日期一致时才参与今日总览；异日数据只显示为历史状态，并阻止模拟应用。
 
-仓库中的 `tw_stock_workflow/` 已提供 artifact resolver、DAG、非阻断依赖和标准历史双轨模块。历史比较已经使用统一管线；日更和模拟账户仍处于增量迁移阶段，尚未全部改由 kernel 执行。新开发者应先阅读[2026-09-01 真实数据全链示例](tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md#31-先跟一条真实数据走完2026-09-01)，用实际输入、CSV 行、代码入口和前端结果建立直觉，再继续阅读该文档的模块地图与成熟度说明。
+仓库中的 `tw_stock_workflow/` 已提供 artifact resolver、DAG、非阻断依赖和标准历史双轨模块；日更 full lane 也已通过 `configs/daily_model_tracks.yaml` 和 `scripts/tw_daily_model_tracks.py` 使用统一 ModelTrack 输入输出合同。模拟账户仍处于增量迁移阶段，尚未全部改由 kernel 执行。新开发者应先阅读[2026-09-01 真实数据全链示例](tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md#31-先跟一条真实数据走完2026-09-01)，用实际输入、CSV 行、代码入口和前端结果建立直觉，再继续阅读该文档的模块地图与成熟度说明。
+
+系统对调用方提供统一任务入口 `scripts/run_tw_task.py`。调用方提交 `task_type + parameters`，`configs/tw_task_registry.yaml` 负责选择受控 executor、参数 schema 和固定依赖：日更委托现有稳定日更入口，回测委托标准 ReplayResult builder，已注册 YAML DAG 委托 `WorkflowEngine`。任务请求不能传脚本路径或 shell 命令，因此统一入口只负责连接现有模块，不会形成第二套模型、策略或回放实现。
+
+```yaml
+schema_version: tw.task.request.v1
+task_type: readonly_backtest
+parameters:
+  model_track_id: model_a_only
+  strategy_rule: top50_exit_one_worst_sell
+  start_date: '2026-01-01'
+  end_date: '2026-05-07'
+```
+
+当前可选范围仍以 registry 和 replay policy 为准。A+B 已是日更和历史比较 ModelTrack，但尚未进入通用 replay policy，所以统一回测入口会明确拒绝该组合，而不会临时拼接私有实验数据。
 
 ## 5. 日更与故障隔离
 
 本机有两类日更任务：
 
 - 两小时 daily lane 维护 Model A 主链状态。
-- 工作日台北时间 22:45 的 full lane 补充正交来源并尝试 B19R2R 影子。
+- 工作日台北时间 22:45 的 full lane 补充正交来源，固定同一份 provider、normalized、handoff、TWII 和 cutoff，然后并发运行 Model A 与 A+B 两条独立轨道。
 
-Model A 主链与 B19 影子分开判定。B19 `BLOCKED` 且 `mainline_blocking=false` 时，Model A 仍可保持 ready，主链 pending 也不应被污染。周末和台湾市场休市日保持上一个有效交易日是正常行为。
+两条轨道统一输出 `ModelSignalArtifact`，但按配置分开判定。A 是 required active baseline；A+B 是 nonblocking research candidate。A+B `BLOCKED` 时，Model A 仍可保持 ready，主链 pending 不会被污染。周末和台湾市场休市日保持上一个有效交易日是正常行为。
 
 `GET /api/health` 只表示进程存活。`GET /api/ready` 还会只读检查 PostgreSQL、registry、Model A、策略快照、Agent prompt 和运行时安全边界。它不访问行情 provider，也不运行模型。
 

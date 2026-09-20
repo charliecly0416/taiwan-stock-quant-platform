@@ -105,7 +105,9 @@ def test_published_model_a_reuse_requires_same_logical_acquisition_and_cutoff(tm
     write_json(model_a_dir / "manifest.json", {
         "artifact_type": "ModelSignalArtifact", "model_id": shadow.MODEL_A_ID,
         "asof": asof, "status": "READY", "row_count": 150,
-        "source_acquisition_run_id": run_id, "created_at": f"{asof}T08:00:00+00:00",
+        "source_acquisition_run_id": run_id,
+        "created_at": f"{asof}T14:46:00+00:00",
+        "decision_cutoff": f"{asof}T14:45:00+00:00",
     })
     write_json(model_a_dir / "validator_report.json", {"ok": True})
     instruments = [f"TW{1000 + index}" for index in range(1, 151)]
@@ -127,6 +129,41 @@ def test_published_model_a_reuse_requires_same_logical_acquisition_and_cutoff(tm
         with pytest.raises(shadow.ShadowError) as error:
             shadow.validate_model_a(model_a_dir, asof, source_id, decision_cutoff)
         assert error.value.code == "B19R2R_BLOCKED_MODELA_CONTRACT"
+
+
+def test_twii_snapshot_requires_same_acquisition_run(tmp_path: Path) -> None:
+    asof = "2026-09-18"
+    csv_path = tmp_path / "TWII_NORMALIZED.csv"
+    csv_path.write_text("date,close\n2026-09-18,25000\n", encoding="utf-8")
+    manifest_path = tmp_path / "TWII_CAPTURE_MANIFEST.json"
+    write_json(manifest_path, {
+        "schema_version": "modelb_b19r2r.yahoo_twii_dual_interval_capture.v2",
+        "target_asof": asof,
+        "acquisition_run_id": "different-source-run",
+        "source_id": "yahoo.finance.chart.^TWII.dual_interval.v2",
+        "provider": "Yahoo Finance",
+        "pit_status": "PASS",
+        "validator_status": "PASS",
+        "production_allowed": False,
+        "available_at": f"{asof}T06:00:00+00:00",
+        "artifacts": {"normalized_csv": {"sha256": shadow.sha256(csv_path)}},
+        "implementation": {
+            "path": str(shadow.TWII_CAPTURE_SCRIPT),
+            "sha256": shadow.sha256(shadow.TWII_CAPTURE_SCRIPT),
+        },
+    })
+
+    with pytest.raises(shadow.ShadowError) as error:
+        shadow._validate_yahoo_twii(
+            manifest_path,
+            csv_path,
+            asof,
+            "expected-source-run",
+            shadow.parse_time(f"{asof}T14:45:00+00:00"),
+            shadow.parse_time("2026-09-21T01:00:00+00:00"),
+        )
+
+    assert error.value.code == "B19R2R_BLOCKED_TWII_CONTRACT"
 
 
 def test_ready_fixture_emits_valid_no_apply_artifact_without_pointer_change(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

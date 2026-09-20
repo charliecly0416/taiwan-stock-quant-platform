@@ -447,6 +447,7 @@ flowchart TB
 | --- | --- |
 | baseline、模型和产品 artifact 身份 | `configs/active_baseline_descriptor.yaml`、`configs/tw_modular_registry.yaml`、`configs/tw_product_artifact_registry.yaml` |
 | 每日编排与状态 | `scripts/run_daily_tw_stock_auto_update.py`、`backend/app/services/tw_stock_readonly_ops_status.py` |
+| 日更模型轨道与 scorer 桥接 | `configs/readonly_model_tracks.yaml`（治理）、`configs/daily_model_tracks.yaml`（运行）、`scripts/tw_daily_model_tracks.py`、`scripts/tw_daily_model_track_services.py` |
 | 特征和历史数据索引 | `configs/feature_registry.yaml`、`data_tw/catalog/research_data_history/index.json`、产品 registry 的 `rebuild_sources` |
 | 当前 Model A 上下文 | `backend/app/services/tw_stock_current_strategy_context.py` |
 | 纯策略计算 | `tw_stock_strategy/top50_exit_one_worst_sell.py` |
@@ -482,7 +483,7 @@ Model A 使用冻结 qlib 模型产生受控推理截面的分数和排名，再
 - `buy_score`：候选池内的买入优先级。
 - `full_qlib_rank`：持仓跌出 Top50 后比较谁最弱。
 
-B19R2R 读取 Model A 原始 Top50 和同日 78 个 PIT-safe 特征，只重排 `buy_score`。当前完整窗口只有 `TW7769` 因正交来源不完整被排除且不补位；adapter 保留 Model A 的 `full_qlib_rank`，`TW6919` 正常重新评分。它输出研究 track，失败不阻断 Model A。
+B19R2R 读取 Model A 原始 Top50 和同日 78 个 PIT-safe 特征，只重排 `buy_score`。在日更 full lane 中，A+B adapter 会在自己的目录重新运行一次 Model A，再把该私有结果交给 B19R2R；它不读取 `model_a_only` 的结果。两条轨道共享同一份 immutable provider、normalized、source run 和 decision cutoff，但各自输出独立 `ModelSignalArtifact`。当前完整窗口只有 `TW7769` 因正交来源不完整被排除且不补位；adapter 保留 Model A 的 `full_qlib_rank`，`TW6919` 正常重新评分。它输出研究 track，失败不阻断 Model A。
 
 ### 5.3 组合状态与策略
 
@@ -649,15 +650,19 @@ Git 不保存 live 行情、冻结模型和本机数据库。Git 保存合同、
 
 ## 8. 四条真实数据流
 
-### 8.1 每日 Model A 主链
+### 8.1 每日完整数据模型 fan-out
 
 ```mermaid
 flowchart LR
     D[行情与来源证据] --> N[标准化与可得性检查]
-    N --> F[PIT-safe 特征]
-    F --> A[冻结 Model A]
-    A --> S[ModelSignalArtifact]
-    S --> R[默认 StrategyRule]
+    N --> Q[固定 source bundle 与 cutoff]
+    Q --> A[Model A track]
+    Q --> AB[Model A+B track]
+    AB --> AI[内部 Model A]
+    AI --> B[B19R2R]
+    A --> SA[ModelSignal A]
+    B --> SB[ModelSignal A+B]
+    SA --> R[默认 StrategyRule]
     R --> V[ReadonlyStrategySnapshot]
     V --> C[current-strategy-context API]
     V --> G[DailyAgentPromptArtifact]
@@ -665,20 +670,21 @@ flowchart LR
     G --> U
 ```
 
-当前编排入口是 `scripts/run_daily_tw_stock_auto_update.py`。它负责调度、重试、状态记录和 publish gate。任何阶段失败时保留 previous latest，不能用半成品覆盖当前可用结果。
+面向调用方的统一入口是 `scripts/run_tw_task.py`，日更请求由 `configs/tw_task_registry.yaml` 校验后委托 `scripts/run_daily_tw_stock_auto_update.py`。后者仍是日更内部 orchestrator，负责数据准备、重试、状态记录和 publish gate，再调用 `scripts/tw_daily_model_tracks.py` 按配置 fan-out。A required 失败时保留 previous latest；A+B nonblocking 失败只记录研究状态，不能用半成品覆盖当前可用结果。
 
-### 8.2 B19R2R 日更非阻断影子链
+### 8.2 A+B 轨道内部
 
 ```mermaid
 flowchart LR
-    A[Model A 同日 exact Top50] --> B[B19R2R]
+    D[与 A 轨相同的 source bundle] --> A[A+B 私有 Model A]
+    A --> B[B19R2R]
     F[同日 78 个 PIT-safe 特征] --> B
     B --> S[Research shadow artifact]
     S --> P[Prospective ledger / 后续结算]
     S --> C[只读 comparison]
 ```
 
-这条链是日更 `SHADOW`。B19 缺数据或失败时记录 `BLOCKED`，只要 `mainline_blocking=false`，Model A 主链继续运行。它与下一节已经标准化的历史双轨不同；canonical daily PortfolioState 和 paper adapter 尚未迁移，因此不能把历史链完成误写成日更或虚拟账户已经完成。
+这条链在编排层是与 A 同级的 ModelTrack，在治理层仍是 `research_candidate`。B19 缺数据或失败时记录 `BLOCKED`，只要其 `workflow_policy=nonblocking`，Model A 继续运行。canonical daily PortfolioState 和 paper adapter 尚未迁移，因此不能把日更信号生成误写成 A+B 已获虚拟账户准入。
 
 ### 8.3 历史回放与模型比较链
 
@@ -732,6 +738,34 @@ GET /api/tw-stock/quant/ops/readonly-status
 ## 10. Workflow Kernel 现在做到哪里
 
 `tw_stock_workflow/` 已提供 artifact resolver、模块注册、DAG、required/optional/nonblocking 依赖、幂等 run evidence 和若干纯模块。它用于逐步收敛历史脚本之间的连接方式。
+
+其上新增了统一任务层，但两者职责不同：
+
+```text
+TaskRequest
+  -> TaskRegistry
+  -> TaskDispatcher
+       -> 日更 executor -> 现有日更 orchestrator
+       -> 回测 executor -> 标准 artifact builder
+       -> workflow executor -> WorkflowEngine -> registered modules
+```
+
+任务层解决“用户从哪里调用、参数如何校验、选择哪条流程”；workflow kernel 解决“DAG 中节点如何依赖、失败和复用”。模型、策略和 replay engine 仍保持各自的 artifact 合同，不把业务代码搬进 dispatcher。
+
+一个只读回测请求的数据流是：
+
+```text
+model_track_id
+  -> readonly_model_tracks.yaml 映射 canonical model_id
+  -> tw_replay_window_policy.yaml 检查窗口和训练集重叠
+strategy_rule
+  -> tw_modular_registry.yaml 检查产品只读准入
+  -> ModelSignalArtifact -> StrategyRule -> OrderIntentArtifact
+  -> PriceStore / next_open -> ReplayResultArtifact
+  -> task isolated run directory
+```
+
+当前 A+B 尚未进入通用 replay policy，因此可以用于已冻结的历史比较 workflow，却不能通过任意窗口回测请求。要开放它，需要先补标准历史信号覆盖、policy entry 和 validator，而不是修改 dispatcher 绕过门禁。
 
 当前必须如实区分：
 

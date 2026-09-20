@@ -16,7 +16,7 @@
 - 受控人工重试曾产生 `READY_RESEARCH_SHADOW`，但不能写成 scheduled 成功。
 - 2026-09-19 是周六，latest 保持 2026-09-18 属于正常状态。
 
-阅读架构时先区分三类状态：`CURRENT` 是当前真实产品，`SHADOW` 是不阻断 Model A 的观察链，`CONTRACT` 是尚未全面接入 runtime 的合同或模板。`tw_stock_workflow/` 已具备通用内核和若干模块，但日更、策略、回放、模拟账户仍在增量迁移，不能根据类名或 registry entry 宣称生产链已全部切换。
+阅读架构时先区分三类状态：`CURRENT` 是当前真实产品，`SHADOW` 是不阻断 Model A 的观察链，`CONTRACT` 是尚未全面接入 runtime 的合同或模板。`tw_stock_workflow/` 已具备通用内核和若干模块；`scripts/run_tw_task.py` 与 `configs/tw_task_registry.yaml` 是面向调用方的统一任务入口。日更 executor 仍委托现有 orchestrator，策略、回放和模拟账户也仍在增量迁移，不能根据统一入口、类名或 registry entry 宣称生产链已全部切换到 kernel。
 
 ## 2. 阅读顺序
 

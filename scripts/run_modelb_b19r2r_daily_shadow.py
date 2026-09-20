@@ -288,13 +288,21 @@ def validate_hsa_children(handoff_path: Path, asof: str, source_run_id: str, cut
     return selected
 
 
-def _validate_yahoo_twii(manifest_path: Path, csv_path: Path, asof: str, cutoff: datetime, next_open: datetime) -> Path:
+def _validate_yahoo_twii(
+    manifest_path: Path,
+    csv_path: Path,
+    asof: str,
+    source_run_id: str,
+    cutoff: datetime,
+    next_open: datetime,
+) -> Path:
     manifest = read_json(manifest_path)
     artifact = (manifest.get("artifacts") or {}).get("normalized_csv") or {}
     implementation = manifest.get("implementation") or {}
     if (
         manifest.get("schema_version") != "modelb_b19r2r.yahoo_twii_dual_interval_capture.v2"
         or manifest.get("target_asof") != asof
+        or manifest.get("acquisition_run_id") != source_run_id
         or manifest.get("source_id") != "yahoo.finance.chart.^TWII.dual_interval.v2"
         or manifest.get("provider") != "Yahoo Finance"
         or manifest.get("pit_status") != "PASS"
@@ -327,7 +335,14 @@ def select_or_capture_yahoo_twii(
     if explicit_csv is not None or explicit_manifest is not None:
         if explicit_csv is None or explicit_manifest is None:
             raise ShadowError("B19R2R_BLOCKED_TWII_EXPLICIT_PAIR")
-        return _validate_yahoo_twii(explicit_manifest, explicit_csv, asof, cutoff, next_open)
+        return _validate_yahoo_twii(
+            explicit_manifest,
+            explicit_csv,
+            asof,
+            source_run_id,
+            cutoff,
+            next_open,
+        )
 
     handoff = read_json(handoff_path)
     for source in handoff.get("sources", []):
@@ -341,7 +356,14 @@ def select_or_capture_yahoo_twii(
         fallback = adapter.get("fallback") if isinstance(adapter.get("fallback"), dict) else {}
         manifest_value = fallback.get("manifest")
         if manifest_value:
-            return _validate_yahoo_twii(resolve_path(str(manifest_value)), normalized_paths[0], asof, cutoff, next_open)
+            return _validate_yahoo_twii(
+                resolve_path(str(manifest_value)),
+                normalized_paths[0],
+                asof,
+                source_run_id,
+                cutoff,
+                next_open,
+            )
 
     capture_dir = output_dir / "yahoo_twii"
     env = os.environ.copy()
@@ -365,12 +387,25 @@ def select_or_capture_yahoo_twii(
     (output_dir / "yahoo_twii_capture.stderr.txt").write_text(completed.stderr or "", encoding="utf-8")
     if completed.returncode != 0:
         raise ShadowError("B19R2R_BLOCKED_TWII_CAPTURE", (completed.stderr or completed.stdout)[-1000:])
-    return _validate_yahoo_twii(capture_dir / "TWII_CAPTURE_MANIFEST.json", capture_dir / "TWII_NORMALIZED.csv", asof, cutoff, next_open)
+    return _validate_yahoo_twii(
+        capture_dir / "TWII_CAPTURE_MANIFEST.json",
+        capture_dir / "TWII_NORMALIZED.csv",
+        asof,
+        source_run_id,
+        cutoff,
+        next_open,
+    )
 
 
 def validate_model_a(signal_dir: Path, asof: str, source_run_id: str, cutoff: datetime) -> tuple[pd.DataFrame, dict[str, Any]]:
     manifest = read_json(signal_dir / "manifest.json")
     validator = read_json(signal_dir / "validator_report.json")
+    manifest_cutoff = str(manifest.get("decision_cutoff") or "").strip()
+    cutoff_matches = (
+        parse_time(manifest_cutoff) == cutoff
+        if manifest_cutoff
+        else parse_time(manifest.get("created_at")) <= cutoff
+    )
     if (
         manifest.get("artifact_type") != "ModelSignalArtifact"
         or manifest.get("model_id") != MODEL_A_ID
@@ -378,7 +413,7 @@ def validate_model_a(signal_dir: Path, asof: str, source_run_id: str, cutoff: da
         or manifest.get("status") != "READY"
         or int(manifest.get("row_count") or 0) != 150
         or manifest.get("source_acquisition_run_id") != source_run_id
-        or parse_time(manifest.get("created_at")) > cutoff
+        or not cutoff_matches
         or validator.get("ok") is not True
     ):
         raise ShadowError("B19R2R_BLOCKED_MODELA_CONTRACT", str(signal_dir))

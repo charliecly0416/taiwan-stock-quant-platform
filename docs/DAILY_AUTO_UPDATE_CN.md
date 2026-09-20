@@ -1,24 +1,32 @@
 # 台股每日自动更新闭环
 
-本项目提供单一无人值守入口：
+本项目提供统一任务入口：
 
 ```bash
-python scripts/run_daily_tw_stock_auto_update.py
+scripts/run_daily_env.sh python scripts/run_tw_task.py \
+  --request configs/tasks/daily_update.yaml
 ```
+
+入口先按 `schemas/tw_task_request.schema.json` 校验请求，再从
+`configs/tw_task_registry.yaml` 选择固定的日更 executor。executor 最终委托
+`scripts/run_daily_tw_stock_auto_update.py` 完成既有日更逻辑。旧脚本仍可用于
+定位内部阶段问题，但日常运行和 cron 应使用统一入口。
 
 默认行为：
 
 - 自动选择 `Asia/Taipei` 当天日期作为 `asof`。
 - 先用 FinMind 更新 QuantDinger raw 台股资料库。
 - 再用 Yahoo/Scrapling 拉取 Option C 150 股票复权 OHLCV。
-- 重建并发布 qlib Option C provider。
-- 通过 dry-run + normal publish gate 更新 `accepted latest`，供后端、前端、Agent、交叉分析读取。
+- 根据环境中的显式 gate 决定是否进入 legacy qlib provider publish 与
+  `accepted latest` 切换；源码默认关闭这些写路径。
+- 生成并校验 ModelSignal、只读快照和 Agent 所需的日更产物；具体 publish
+  权限仍由原日更 orchestrator 的 gate 控制。
 - 全程研究用途，不连接券商，不生成订单，不写仓位。
 
 
 ## 是否需要手动运行
 
-脚本本身已经放在项目里，但自动执行需要安装一次系统计划任务。
+任务入口已经放在项目里，但自动执行需要安装一次系统计划任务。
 
 - 我们可以把 cron/systemd 模板写进项目配置文件。
 - 你或部署脚本需要在实际运行机器上安装一次计划任务，例如 `crontab docs/tw-daily-auto-update.cron.example`。
@@ -30,7 +38,9 @@ python scripts/run_daily_tw_stock_auto_update.py
 docs/tw-daily-auto-update.cron.example
 ```
 
-使用前把模板里的 `PROJECT_ROOT=/path/to/taiwan-stock-quant-platform` 改成真实路径。
+使用前把模板里的 `PROJECT_ROOT` 和 `PYTHON` 改成真实路径。模板显式使用
+`CRON_TZ=Asia/Taipei`，并通过 `scripts/run_daily_env.sh` 安全加载
+`backend/.env`。
 
 ## 跨午夜 pending asof
 
@@ -46,20 +56,31 @@ data_tw/ops/daily_auto_update/pending_asof.json
 
 建议每天台北时间 16:30 以后执行。Yahoo/FinMind 偶尔会延迟，如果返回 `fresh_data_wait`，下一次定时任务会自动重试。
 
-cron 示例，每 2 小时尝试，跨午夜继续重试 pending 日期：
+cron 示例，每 2 小时运行轻量 base lane，跨午夜继续重试 pending 日期；
+工作日 22:45 运行一次 full lane：
 
 ```cron
-30 16,18,20,22 * * 1-5 cd /path/to/taiwan-stock-quant-platform && flock -n data_tw/ops/daily_auto_update.lock python scripts/run_daily_tw_stock_auto_update.py >> data_tw/ops/daily_auto_update/cron.log 2>&1
-30 0,2,4 * * 2-6 cd /path/to/taiwan-stock-quant-platform && flock -n data_tw/ops/daily_auto_update.lock python scripts/run_daily_tw_stock_auto_update.py >> data_tw/ops/daily_auto_update/cron.log 2>&1
+CRON_TZ=Asia/Taipei
+30 16,18,20 * * 1-5 cd /path/to/taiwan-stock-quant-platform && flock -n data_tw/ops/daily_auto_update.lock scripts/run_daily_env.sh /path/to/python scripts/run_tw_task.py --request configs/tasks/daily_update_base.yaml >> data_tw/ops/daily_auto_update/cron.log 2>&1
+30 0,2,4 * * 2-6 cd /path/to/taiwan-stock-quant-platform && flock -n data_tw/ops/daily_auto_update.lock scripts/run_daily_env.sh /path/to/python scripts/run_tw_task.py --request configs/tasks/daily_update_base.yaml >> data_tw/ops/daily_auto_update/cron.log 2>&1
+45 22 * * 1-5 cd /path/to/taiwan-stock-quant-platform && flock data_tw/ops/daily_auto_update.lock scripts/run_daily_env.sh /path/to/python scripts/run_tw_task.py --request configs/tasks/daily_update.yaml >> data_tw/ops/daily_auto_update/cron.log 2>&1
 ```
+
+full lane 使用等待锁，base lane 使用非等待锁；因此唯一的 full 班次不会因
+前一班 base 尚未结束而静默跳过，跨午夜 base 则会在 full 正在运行时跳过。
 
 ## 常用参数
 
 ```bash
 # 指定日期补跑
-python scripts/run_daily_tw_stock_auto_update.py --asof 2026-06-02
+cp configs/tasks/daily_update.yaml /tmp/tw-daily-update.yaml
+# 把 /tmp/tw-daily-update.yaml 中 parameters.asof 改成 2026-06-02，再运行：
+scripts/run_daily_env.sh python scripts/run_tw_task.py --request /tmp/tw-daily-update.yaml
 
-# latest 已经是当天时仍强制重跑
+# 只检查配置、依赖和最终执行计划，不执行抓取或模型：
+python scripts/run_tw_task.py --request configs/tasks/daily_update.yaml --validate-only
+
+# 内部 executor 排错入口；正常运维不要绕过统一入口：
 python scripts/run_daily_tw_stock_auto_update.py --asof 2026-06-02 --force
 
 # 只更新 FinMind/QuantDinger raw，不跑 qlib

@@ -6,9 +6,9 @@
 
 当前唯一 active baseline 为 Model A；B19R2R 是独立研究影子，不自动切换模型或策略。下文的默认执行说明不代表本机已授权 cron 的全部部署参数，不应照抄示例覆盖现有 crontab。
 
-同日 Model A 已 accepted 后，非 strict 的 full 正交采集若覆盖不完整，在开启 B19 且保护路径未变化时进入独立影子分支。完整市场覆盖仍记录 FAIL；B19 自行检查 Exact-50、TW7769 排除、78F 和 PIT。此分支不得重复发布 A/provider，也不得设置或清除主链 pending。
+工作日 full lane 在完整数据准备后固定同一份 immutable provider、normalized、orthogonal handoff、TWII 和 decision cutoff，再通过配置驱动 runner 并发启动 `model_a_only` 与 `model_a_plus_b_b19r2r`。A+B 在自己的隔离目录重新运行 Model A，然后才做 B19R2R；不得读取 A 轨已经生成的 artifact。完整市场覆盖仍如实记录，B19 自行检查 Exact-50、TW7769 排除、78F 和 PIT。
 
-影子只能绑定同日、同 logical acquisition run 的 A 原始不可变 publish snapshot；缺失或绑定不一致时独立 BLOCKED，不回退到可变 provider。strict 或保护路径漂移仍按阻断规则处理。
+两条轨道只能绑定同日、同 logical acquisition run 的不可变 publish snapshot 与 normalized source；缺失或绑定不一致时 fail closed，不回退到可变 provider。A 是 required，A+B 是 nonblocking；A+B 失败不得设置主线 pending，strict 或保护路径漂移仍按阻断规则处理。
 
 日更与 readonly 运维 API 的 `b19r2r_shadow` 状态为 READY、BLOCKED、NOT_ATTEMPTED 或 NOT_OBSERVED；`readiness_scope=status_observation_only` 表示运行状态观察，不表示收益评估或模型准入通过。最近 daily no-op 不应遮蔽最近 full 的影子结果。事件的 `settlement_pending` 不等于已完成自动收益结算。
 
@@ -20,11 +20,13 @@
 
 本文档说明台股产品日更自动化应如何运行、失败时如何判断、哪些动作允许、哪些动作禁止，以及如何把数据更新、模型信号、策略快照、前端展示和模拟账户只读链路串起来。
 
-当前日更主入口：
+面向 cron 和人工调用的统一入口：
 
 ```text
-scripts/run_daily_tw_stock_auto_update.py
+scripts/run_tw_task.py --request configs/tasks/daily_update.yaml
 ```
+
+日更内部 executor 仍是 `scripts/run_daily_tw_stock_auto_update.py`。统一入口只校验任务参数、选择已注册配置并委托它执行，不复制 pending、抓数、发布或 ModelTrack 逻辑。故障排查可以直接阅读原日更 job；新调度不再自行拼接它的大量命令行参数。
 
 当前产品统一前端上下文：
 
@@ -117,13 +119,19 @@ TW_DAILY_AUTO_ENABLE_LEGACY_PROVIDER_PUBLISH=true
 示例 cron：
 
 ```cron
-30 18,20,22 * * 1-5 cd /home/chuliyang/taiwan-stock-quant-platform && python scripts/run_daily_tw_stock_auto_update.py >> data_tw/ops/daily_auto_update/cron.log 2>&1
-30 0,2,4,6 * * 2-6 cd /home/chuliyang/taiwan-stock-quant-platform && python scripts/run_daily_tw_stock_auto_update.py >> data_tw/ops/daily_auto_update/cron.log 2>&1
+CRON_TZ=Asia/Taipei
+PROJECT_ROOT=/home/chuliyang/taiwan-stock-quant-platform
+PYTHON=/home/chuliyang/software/miniconda3/bin/python
+30 16,18,20 * * 1-5 cd "$PROJECT_ROOT" && flock -n data_tw/ops/daily_auto_update.lock scripts/run_daily_env.sh "$PYTHON" scripts/run_tw_task.py --request configs/tasks/daily_update_base.yaml >> data_tw/ops/daily_auto_update/cron.log 2>&1
+30 0,2,4 * * 2-6 cd "$PROJECT_ROOT" && flock -n data_tw/ops/daily_auto_update.lock scripts/run_daily_env.sh "$PYTHON" scripts/run_tw_task.py --request configs/tasks/daily_update_base.yaml >> data_tw/ops/daily_auto_update/cron.log 2>&1
+45 22 * * 1-5 cd "$PROJECT_ROOT" && flock data_tw/ops/daily_auto_update.lock scripts/run_daily_env.sh "$PYTHON" scripts/run_tw_task.py --request configs/tasks/daily_update.yaml >> data_tw/ops/daily_auto_update/cron.log 2>&1
 ```
 
 说明：
 
-- 具体时间应以部署机器时区和数据源更新习惯调整。
+- 模板显式使用 `CRON_TZ=Asia/Taipei`；若目标 cron 不支持该变量，必须按服务器时区换算后再安装。
+- `scripts/run_daily_env.sh` 从权限受控的 `backend/.env` 加载数据库与日更 gate，权限过宽、文件为 symlink 或缺少 `DATABASE_URL` 时会拒绝运行。
+- base lane 使用 `flock -n`，忙时可以跳过；唯一的 full lane 使用等待锁，不能因 20:30 base 尚未结束而静默丢失。
 - 若前一轮因为数据未齐设置了 pending asof，下一轮应优先继续处理 pending asof，而不是跳到新日期。
 - 不建议在盘中自动生成下一交易日策略。
 
@@ -266,13 +274,18 @@ TW_DAILY_AUTO_FINMIND_SCOPE=daily
 当前推荐 cron 形态：
 
 ```cron
+CRON_TZ=Asia/Taipei
 # Daily price / base freshness, every 2 hours.
-30 */2 * * * ... TW_DAILY_AUTO_FINMIND_SCOPE=daily ... scripts/run_daily_tw_stock_auto_update.py
+30 16,18,20 * * 1-5 ... flock -n ... scripts/run_daily_env.sh "$PYTHON" scripts/run_tw_task.py --request configs/tasks/daily_update_base.yaml
+30 0,2,4 * * 2-6 ... scripts/run_daily_env.sh "$PYTHON" scripts/run_tw_task.py --request configs/tasks/daily_update_base.yaml
 
 # Orthogonal full scope, once per weekday at Asia/Taipei 22:45.
 # It is staggered away from the every-2h daily job to avoid non-blocking flock collision.
-45 14 * * 1-5 ... TW_DAILY_AUTO_FINMIND_SCOPE=full TW_DAILY_AUTO_FINMIND_PROVIDER_ERROR_COOLDOWN_HOURS=12 ... scripts/run_daily_tw_stock_auto_update.py
+45 22 * * 1-5 ... flock ... TW_DAILY_AUTO_FINMIND_PROVIDER_ERROR_COOLDOWN_HOURS=12 ... scripts/run_daily_env.sh "$PYTHON" scripts/run_tw_task.py --request configs/tasks/daily_update.yaml
 ```
+
+本机历史 installed cron 使用 UTC，因此其中 `45 14` 等价于台北 `22:45`；
+那是部署快照，不是上述带 `CRON_TZ` 模板的写法。不要把两种时间口径混用。
 
 R11 后 full scope 具备 segment cache/cooldown：已成功覆盖 asof 的 segment 可复用，402/rate-limit segment 会冷却，避免高频重复打 provider。
 

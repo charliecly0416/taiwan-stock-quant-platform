@@ -17,6 +17,7 @@ from .modules import (
     ResearchHistoryObservation,
 )
 from .run_registry import RunRegistry
+from .task_dispatcher import TaskDispatcher, TaskPlan, TaskRequestError
 from .replay import ReadonlyReplayWindowAdapter, ReadonlyReplayWindowObservation
 from .replay_execution import ReplayCandidateExecution, ReplayCandidateInputAdapter
 from .spec import WorkflowNode, WorkflowSpec
@@ -39,6 +40,9 @@ __all__ = [
     "ReplayCandidateExecution",
     "ReplayCandidateInputAdapter",
     "RunRegistry",
+    "TaskDispatcher",
+    "TaskPlan",
+    "TaskRequestError",
     "StageResult",
     "WorkflowEngine",
     "WorkflowNode",

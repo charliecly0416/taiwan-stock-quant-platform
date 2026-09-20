@@ -48,6 +48,39 @@ git status --short
 
 下游不得读取上游私有 CSV 或实验目录。模型输出分数，策略输出意图，回放计算结果，前端读取 API；不要把这些职责放进同一个脚本。
 
+### 2.1 统一任务入口
+
+跨模块流程优先通过统一任务入口运行：
+
+```bash
+python scripts/run_tw_task.py \
+  --request configs/tasks/readonly_backtest_example.yaml \
+  --validate-only
+```
+
+结构分为三层：
+
+```text
+TaskRequest -> configs/tw_task_registry.yaml -> registered executor/workflow
+```
+
+- `TaskRequest` 只包含任务类型和业务参数。
+- registry 固定 executor、参数 schema、workflow spec 和依赖配置。
+- `TaskDispatcher` 负责校验、run identity、隔离目录和统一结果。
+- executor 只调用已有日更、artifact builder 或 `WorkflowEngine`，不复制业务逻辑。
+
+新增流程时，先判断能否只新增 `configs/workflows/*.yaml` 并使用 `workflow_spec_v1`。确实需要新的外部边界时，才新增一个小 executor，并同时登记参数 schema、固定 bindings 和 focused tests。请求不得接受任意脚本路径、import path 或 shell command。
+
+当前已注册：
+
+| task_type | 用途 | 实际执行 |
+| --- | --- | --- |
+| `daily_update` | 日更与模型轨道 | 现有日更 orchestrator |
+| `readonly_backtest` | 模型、策略、窗口回放 | 标准 ReplayResult candidate builder |
+| `readonly_model_comparison` | A/A+B 历史比较 | 现有 WorkflowEngine DAG |
+
+实现与扩展规则见 `tw_modular_contracts/TW_UNIFIED_TASK_ENTRY_PLAN_CN.md`。
+
 ## 3. 当前模型规则
 
 Model A 是唯一 active baseline。B19R2R 是 frozen research challenger，不能因为历史回放较好就切默认。涉及 B19 的开发必须保持：

@@ -152,11 +152,17 @@ corepack pnpm build
 
 ## 7. 每日自动更新
 
-每日无人值守入口：
+每日无人值守统一入口：
 
 ```bash
-python scripts/run_daily_tw_stock_auto_update.py
+scripts/run_daily_env.sh python scripts/run_tw_task.py \
+  --request configs/tasks/daily_update.yaml
 ```
+
+`configs/tasks/daily_update.yaml` 描述 full lane：完整 FinMind scope，并行运行
+`model_a_only` 与研究轨 `model_a_plus_b_b19r2r`。高频轻量班次使用
+`configs/tasks/daily_update_base.yaml`，只运行 required 的 Model A。两者都经
+`configs/tw_task_registry.yaml` 校验后，委托原日更 orchestrator 执行。
 
 源码默认与这台机器的已安装 cron 配置不同。源码默认会：
 
@@ -171,13 +177,17 @@ python scripts/run_daily_tw_stock_auto_update.py
 常用命令：
 
 ```bash
-# 指定日期补跑
-python scripts/run_daily_tw_stock_auto_update.py --asof 2026-06-02
+# 先验证任务，不抓数据、不运行模型
+python scripts/run_tw_task.py \
+  --request configs/tasks/daily_update.yaml \
+  --validate-only
 
-# latest 已经是当天时仍强制重跑
-python scripts/run_daily_tw_stock_auto_update.py --asof 2026-06-02 --force
+# 指定日期补跑：复制任务配置，修改 parameters.asof 后通过统一入口运行
+cp configs/tasks/daily_update.yaml /tmp/tw-daily-update.yaml
+scripts/run_daily_env.sh python scripts/run_tw_task.py \
+  --request /tmp/tw-daily-update.yaml
 
-# 只更新 FinMind/QuantDinger raw
+# 以下是内部 executor 排错命令，正常日更不要绕过统一入口
 python scripts/run_daily_tw_stock_auto_update.py --skip-qlib
 
 # --skip-finmind 不能绕过 same-run handoff；缺少抓取证据会阻断。
@@ -198,7 +208,11 @@ docs/tw-daily-auto-update.cron.example
 
 ```text
 PROJECT_ROOT=/path/to/taiwan-stock-quant-platform
+PYTHON=/path/to/python
 ```
+
+模板设置 `CRON_TZ=Asia/Taipei`，所以班次时间直接按台北时间书写；它还会
+通过 `scripts/run_daily_env.sh` 加载权限受控的 `backend/.env`。
 
 安装：
 
@@ -336,13 +350,16 @@ cat qlib_pipeline/data_tw/experiments/option_c_daily_signal/latest_signal.json
 
 ### 不想跑完整 FinMind 扩展数据
 
-使用：
+日常调度使用轻量任务配置：
 
 ```bash
-python scripts/run_daily_tw_stock_auto_update.py --finmind-scope daily
+scripts/run_daily_env.sh python scripts/run_tw_task.py \
+  --request configs/tasks/daily_update_base.yaml
 ```
 
-这样只补 daily bars，速度更快。
+它把 `finmind_scope` 固定为 `daily`，只补 daily bars，速度更快。直接传
+`python scripts/run_daily_tw_stock_auto_update.py --finmind-scope daily` 仅用于
+排查内部 executor。
 
 ## 13. 发布到 GitHub
 

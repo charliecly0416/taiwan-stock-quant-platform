@@ -48,6 +48,11 @@ from tw_daily_runtime_stages import (
 )
 from tw_daily_stage_adapters import build_named_stage_adapters, stage_contract_summary
 from tw_daily_model_a_signal_shadow import run_daily_model_a_signal_shadow
+from tw_daily_model_tracks import run_daily_model_tracks
+from tw_daily_model_track_services import (
+    build_model_track_services,
+    capture_b19_twii_snapshot,
+)
 from tw_daily_readonly_snapshot_shadow import run_daily_readonly_snapshot_shadow
 from tw_daily_workflow_readonly_shadow import run_daily_workflow_readonly_shadow
 from tw_research_data_history import materialize_daily_research_history
@@ -130,7 +135,6 @@ MBCDS3_DAILY_SHADOW_DEFAULT_ACCUMULATOR = MBCDS3_DAILY_SHADOW_ROOT / "mbcds3_dai
 MBCDS3_DAILY_SHADOW_DEFAULT_INVENTORY_NAME = "mbcds3_compatibility_inventory.csv"
 B19R2R_DAILY_SHADOW_RUNNER = ROOT / "scripts/run_modelb_b19r2r_daily_shadow.py"
 B19R2R_TWII_CAPTURE_RUNNER = ROOT / "scripts/capture_modelb_b19r2r_twii_yahoo_v2.py"
-B19R2R_DAILY_SHADOW_ROOT = ROOT / "data_tw/experiments/modelb_b19r2r_daily_shadow"
 MBCDS35_FEATURE_BUILDER = ROOT / "scripts/build_tw_mbcds2_isolated_feature_input.py"
 MBCDS35_FROZEN_SCORER = ROOT / "scripts/run_tw_mbcds35_compatibility_frozen_scorer.py"
 MBCDS35_LEDGER = ROOT / "scripts/build_tw_mbcds35_prospective_oos_ledger.py"
@@ -1966,144 +1970,6 @@ def next_session_open_for_asof(asof: str, *, calendar_path: Path = CALENDAR) -> 
     return f"{next_day.isoformat()}T01:00:00+00:00"
 
 
-def _model_a_signal_dir_from_gate(model_signal_gate: dict[str, Any]) -> Path | None:
-    """Find the validated Model A artifact directory exposed by the gate."""
-    summary = model_signal_gate.get("summary") if isinstance(model_signal_gate.get("summary"), dict) else {}
-    isolated = model_signal_gate.get("isolated_existing_artifact") if isinstance(model_signal_gate.get("isolated_existing_artifact"), dict) else {}
-    artifacts = isolated.get("artifacts") if isinstance(isolated.get("artifacts"), dict) else {}
-    candidates = [summary.get("model_a_signal_path"), artifacts.get("model_signal")]
-    for value in candidates:
-        if not str(value or "").strip():
-            continue
-        path = resolve_path(str(value))
-        if path.name in {"manifest.json", "signals.csv", "schema.json", "validator_report.json"}:
-            path = path.parent
-        if path.is_dir():
-            return path
-    return None
-
-
-def run_b19r2r_daily_shadow_nonblocking(
-    *,
-    enabled: bool,
-    asof: str,
-    job_id: str,
-    job_dir: Path,
-    model_signal_gate: dict[str, Any],
-    same_run_handoff_validation: Path,
-    source_acquisition_run_id: str,
-    provider_snapshot: Path,
-    decision_cutoff: str,
-    next_session_open: str,
-    command_runner=None,
-) -> dict[str, Any]:
-    """Run the research-only B19R2R shadow without affecting the mainline."""
-    result: dict[str, Any] = {
-        "enabled": bool(enabled),
-        "attempted": False,
-        "ok": True,
-        "shadow_ok": False,
-        "status": "DISABLED_BY_DEFAULT" if not enabled else "NOT_ATTEMPTED",
-        "mainline_blocking": False,
-        "production_allowed": False,
-        "no_apply": True,
-        "pending_asof_set": False,
-        "output_dir": rel_path(job_dir / "b19r2r_daily_shadow"),
-    }
-    if not enabled:
-        return result
-    result["attempted"] = True
-    output_dir = job_dir / "b19r2r_daily_shadow"
-    twii_capture_dir = job_dir / "b19r2r_twii_capture"
-    try:
-        if not model_signal_gate.get("ok"):
-            raise ValueError("MODEL_A_GATE_NOT_READY")
-        model_a_dir = _model_a_signal_dir_from_gate(model_signal_gate)
-        required = {
-            "model_a_signal_dir": model_a_dir,
-            "handoff_validation": same_run_handoff_validation,
-            "provider_snapshot": provider_snapshot,
-        }
-        missing = [name for name, path in required.items() if path is None or not Path(path).exists()]
-        if not source_acquisition_run_id.strip():
-            missing.append("source_acquisition_run_id")
-        if not decision_cutoff.strip():
-            missing.append("decision_cutoff")
-        if not next_session_open.strip():
-            missing.append("next_session_open")
-        if missing:
-            raise ValueError("MISSING_" + "_".join(missing).upper())
-        runner = command_runner or run_cmd
-        capture_argv = [
-            PYTHON,
-            str(B19R2R_TWII_CAPTURE_RUNNER.relative_to(ROOT)),
-            "--output",
-            rel_path(twii_capture_dir),
-        ]
-        capture_result = runner(
-            capture_argv,
-            cwd=ROOT,
-            stdout_path=job_dir / "b19r2r_twii_capture_stdout.json",
-            stderr_path=job_dir / "b19r2r_twii_capture_stderr.txt",
-            timeout=180,
-            env={
-                "B19YTWII_RESEARCH_ROOT": str(job_dir),
-                "B19YTWII_TARGET_ASOF": asof,
-                "B19YTWII_ACQUISITION_RUN_ID": source_acquisition_run_id,
-                "B19YTWII_SESSION_CLOSE_UTC": f"{asof}T05:30:00+00:00",
-                "B19YTWII_NEXT_OPEN_UTC": next_session_open,
-            },
-        )
-        result["twii_capture"] = capture_result
-        if not capture_result.get("ok"):
-            result["status"] = "B19R2R_BLOCKED_TWII_CAPTURE"
-            result["warning"] = str(capture_result.get("stderr_tail") or "twii_capture_failed")
-            result["runner_returncode"] = capture_result.get("returncode")
-            return result
-
-        # The PIT cutoff is sealed only after every input, including the
-        # just-captured TWII row, is available and before feature scoring.
-        effective_decision_cutoff = datetime.now(timezone.utc).isoformat()
-        result["requested_decision_cutoff"] = decision_cutoff
-        result["decision_cutoff"] = effective_decision_cutoff
-        argv = [
-            PYTHON,
-            str(B19R2R_DAILY_SHADOW_RUNNER.relative_to(ROOT)),
-            "--asof", asof,
-            "--output-dir", rel_path(output_dir),
-            "--model-a-signal-dir", rel_path(Path(model_a_dir)),
-            "--handoff-validation", rel_path(same_run_handoff_validation),
-            "--source-acquisition-run-id", source_acquisition_run_id,
-            "--provider-snapshot", rel_path(provider_snapshot),
-            "--decision-cutoff", effective_decision_cutoff,
-            "--next-session-open", next_session_open,
-            "--twii-csv", rel_path(twii_capture_dir / "TWII_NORMALIZED.csv"),
-            "--twii-manifest", rel_path(twii_capture_dir / "TWII_CAPTURE_MANIFEST.json"),
-            "--json",
-        ]
-        runner_result = runner(
-            argv,
-            cwd=ROOT,
-            stdout_path=job_dir / "b19r2r_daily_shadow_stdout.json",
-            stderr_path=job_dir / "b19r2r_daily_shadow_stderr.txt",
-            timeout=1200,
-        )
-        result["runner"] = runner_result
-        result["runner_returncode"] = runner_result.get("returncode")
-        payload = parse_json_stdout(runner_result)
-        if payload:
-            result["runner_payload"] = payload
-        result["shadow_ok"] = bool(runner_result.get("ok")) and bool(payload.get("ok", runner_result.get("ok")))
-        result["status"] = str(payload.get("status") or ("READY" if result["shadow_ok"] else "RUNNER_FAILED"))
-        if not result["shadow_ok"]:
-            result["warning"] = str(payload.get("status") or runner_result.get("stderr_tail") or "b19r2r_daily_shadow_failed")
-    except Exception as exc:
-        result["status"] = f"BLOCKED_{type(exc).__name__.upper()}"
-        result["warning"] = str(exc)
-        result["shadow_ok"] = False
-    return result
-
-
 def protected_latest_fingerprints(
     *,
     readonly_latest_path: Path = READONLY_SNAPSHOT_LATEST,
@@ -2142,76 +2008,162 @@ def should_run_full_orthogonal_refresh(
     )
 
 
-def run_b19r2r_for_accepted_day_nonblocking(
+def discover_daily_model_track_sources(
+    *,
+    job: dict[str, Any],
+    asof: str,
+    include_prior_jobs: bool,
+) -> dict[str, Any]:
+    """Resolve one immutable qlib provider/normalized pair for both tracks."""
+    source_run_id = str(job.get("acquisition_logical_run_id") or "")
+    candidates: list[dict[str, Any]] = [job]
+    if include_prior_jobs:
+        for path in sorted(OPS_ROOT.glob("*/job.json"), reverse=True):
+            previous = read_json(path)
+            if previous.get("asof") != asof:
+                continue
+            if previous.get("latest_after") != asof:
+                continue
+            if previous.get("acquisition_logical_run_id") != source_run_id:
+                continue
+            candidates.append(previous)
+
+    errors: list[str] = []
+    for candidate in candidates:
+        refresh_id = str(candidate.get("refresh_job_id") or "")
+        publish_id = str(candidate.get("publish_job_id") or "")
+        if not refresh_id or Path(refresh_id).name != refresh_id:
+            errors.append("refresh_job_id_missing_or_invalid")
+            continue
+        if not publish_id or Path(publish_id).name != publish_id:
+            errors.append("publish_job_id_missing_or_invalid")
+            continue
+        normalized = QLIB / "data_tw/experiments/option_c_ops" / refresh_id / "candidate_normalized"
+        provider = QLIB / "data_tw/experiments/option_c_ops" / publish_id / "tmp/formal_provider_rebuild"
+        if not normalized.is_dir() or not provider.is_dir():
+            errors.append(f"immutable_source_paths_missing:{candidate.get('job_id') or ''}")
+            continue
+        return {
+            "ok": True,
+            "status": "READY",
+            "origin_job_id": str(candidate.get("job_id") or ""),
+            "refresh_job_id": refresh_id,
+            "publish_job_id": publish_id,
+            "qlib_normalized": rel_path(normalized),
+            "qlib_provider": rel_path(provider),
+            "source_acquisition_run_id": source_run_id,
+        }
+    return {
+        "ok": False,
+        "status": "BLOCKED_IMMUTABLE_QLIB_SOURCE_NOT_FOUND",
+        "source_acquisition_run_id": source_run_id,
+        "errors": sorted(set(errors)),
+    }
+
+
+def run_daily_model_track_batch(
     *,
     job: dict[str, Any],
     job_dir: Path,
     asof: str,
-    symbols: list[str],
+    include_prior_jobs: bool,
+    timeout_seconds: int,
+    command_runner=None,
 ) -> dict[str, Any]:
-    """Reuse the published A bundle for a full-scope research-only run."""
-    try:
-        pointer = read_json(CONTROLLED_MODEL_SIGNAL_LATEST)
-        if pointer.get("signal_asof", pointer.get("asof")) != asof:
-            raise ValueError("PUBLISHED_MODEL_A_ASOF_MISMATCH")
-        artifact_dir = str(pointer.get("canonical_artifact_dir") or "")
-        model_a_dir = resolve_path(artifact_dir)
-        if not artifact_dir or not model_a_dir.is_dir():
-            raise ValueError("PUBLISHED_MODEL_A_ARTIFACT_MISSING")
-        manifest = read_json(model_a_dir / "manifest.json")
-        source_run_id = str(job.get("acquisition_logical_run_id") or "")
-        if not source_run_id or manifest.get("source_acquisition_run_id") != source_run_id:
-            raise ValueError("PUBLISHED_MODEL_A_ACQUISITION_RUN_MISMATCH")
-        # The snapshot must belong to the daily job that published this exact
-        # A artifact. Never fall back to the mutable current provider.
-        provider_snapshot = None
-        origin_job_id = None
-        for path in sorted(OPS_ROOT.glob("*/job.json"), reverse=True):
-            previous = read_json(path)
-            if previous.get("asof") != asof or previous.get("latest_after") != asof:
-                continue
-            if previous.get("acquisition_logical_run_id") != source_run_id:
-                continue
-            gate = previous.get("model_signal_gate") or {}
-            if not gate.get("ok") or _model_a_signal_dir_from_gate(gate) != model_a_dir:
-                continue
-            publish_id = str(previous.get("publish_job_id") or "")
-            if not publish_id or Path(publish_id).name != publish_id:
-                continue
-            candidate = QLIB / "data_tw/experiments/option_c_ops" / publish_id / "tmp/formal_provider_rebuild"
-            if candidate.is_dir():
-                provider_snapshot = candidate
-                origin_job_id = previous.get("job_id")
-                break
-        if provider_snapshot is None:
-            raise ValueError("PUBLISHED_MODEL_A_PROVIDER_SNAPSHOT_MISSING")
-        job["same_run_handoff"] = build_real_same_run_handoff(job=job, job_dir=job_dir, symbols=symbols)
-        cutoff = utc_now()
-        job["b19r2r_decision_cutoff"] = cutoff
-        result = run_b19r2r_daily_shadow_nonblocking(
-            enabled=True,
+    """Run configured model tracks from one source batch with no cross-track input."""
+    runner = command_runner or run_cmd
+    sources = discover_daily_model_track_sources(
+        job=job,
+        asof=asof,
+        include_prior_jobs=include_prior_jobs,
+    )
+    source_run_id = str(job.get("acquisition_logical_run_id") or "")
+    handoff_path = job_dir / "same_run_handoff_validation.json"
+    next_open = next_session_open_for_asof(asof)
+    shared_root = job_dir / "daily_model_tracks" / "_shared"
+    twii_capture: dict[str, Any] = {
+        "ok": False,
+        "status": "SKIPPED_SOURCE_NOT_READY",
+        "twii_csv": "",
+        "twii_manifest": "",
+    }
+    if sources.get("ok") and source_run_id and handoff_path.is_file():
+        twii_capture = capture_b19_twii_snapshot(
             asof=asof,
-            job_id=str(job["job_id"]),
-            job_dir=job_dir,
-            model_signal_gate={"ok": True, "summary": {"model_a_signal_path": rel_path(model_a_dir)}},
-            same_run_handoff_validation=job_dir / "same_run_handoff_validation.json",
-            source_acquisition_run_id=str(job.get("acquisition_logical_run_id") or ""),
-            provider_snapshot=provider_snapshot,
-            decision_cutoff=str(cutoff),
-            next_session_open=next_session_open_for_asof(asof),
+            source_acquisition_run_id=source_run_id,
+            next_session_open=next_open,
+            output_dir=shared_root / "b19r2r_twii_capture",
+            root=ROOT,
+            python=PYTHON,
+            capture_runner=B19R2R_TWII_CAPTURE_RUNNER,
+            command_runner=runner,
         )
-        job["b19r2r_decision_cutoff"] = str(result.get("decision_cutoff") or cutoff)
-        result["reused_model_a_job_id"] = origin_job_id
-        result["reused_provider_snapshot"] = rel_path(provider_snapshot)
-        return result
-    except Exception as exc:
-        return {
-            "enabled": True, "attempted": True, "ok": True,
-            "shadow_ok": False, "status": "BLOCKED_ACCEPTED_DAY_INPUT",
-            "warning": str(exc), "mainline_blocking": False,
-            "production_allowed": False, "no_apply": True,
-            "pending_asof_set": False,
-        }
+    # All source files, including TWII when available, now precede this one
+    # cutoff. Both independent Model A runs and B19R2R bind to this value.
+    decision_cutoff = datetime.now(timezone.utc).isoformat()
+    provider = resolve_path(str(sources.get("qlib_provider") or ""))
+    normalized = resolve_path(str(sources.get("qlib_normalized") or ""))
+    dependency_states = {
+        "qlib_provider": {
+            "ready": bool(sources.get("ok") and provider.is_dir()),
+            "path": str(provider),
+            "detail": str(sources.get("status") or ""),
+        },
+        "qlib_normalized": {
+            "ready": bool(sources.get("ok") and normalized.is_dir()),
+            "path": str(normalized),
+            "detail": str(sources.get("status") or ""),
+        },
+        "source_acquisition": {
+            "ready": bool(source_run_id),
+            "value": source_run_id,
+        },
+        "decision_cutoff": {"ready": True, "value": decision_cutoff},
+        "orthogonal_handoff": {
+            "ready": handoff_path.is_file(),
+            "path": str(handoff_path),
+        },
+        "provider_snapshot": {
+            "ready": bool(sources.get("ok") and provider.is_dir()),
+            "path": str(provider),
+        },
+        "next_session_open": {"ready": bool(next_open), "value": next_open},
+        "twii_snapshot": {
+            "ready": twii_capture.get("ok") is True,
+            "value": {
+                "twii_csv": str(twii_capture.get("twii_csv") or ""),
+                "twii_manifest": str(twii_capture.get("twii_manifest") or ""),
+            },
+            "detail": str(twii_capture.get("status") or ""),
+        },
+    }
+    services = build_model_track_services(
+        root=ROOT,
+        python=PYTHON,
+        model_a_model_id=MODELA_MODEL_ID,
+        model_a_input_builder=MODELA_INPUT_BUILD_SCRIPT,
+        model_a_score_runner=MODELA_SCORE_JOB_SCRIPT,
+        b19r2r_runner=B19R2R_DAILY_SHADOW_RUNNER,
+        command_runner=runner,
+        parse_json_stdout=parse_json_stdout,
+        timeout=timeout_seconds,
+    )
+    result = run_daily_model_tracks(
+        asof=asof,
+        batch_run_id=str(job.get("job_id") or f"daily_{asof}"),
+        output_root=job_dir / "daily_model_tracks",
+        dependency_states=dependency_states,
+        services=services,
+    )
+    result["source_bundle"] = sources
+    result["twii_capture"] = twii_capture
+    result["decision_cutoff"] = decision_cutoff
+    result["mainline_blocking"] = result.get("ok") is not True
+    result["nonblocking_track_failed"] = any(
+        track.get("workflow_policy") == "nonblocking" and track.get("ok") is not True
+        for track in (result.get("tracks") or {}).values()
+    )
+    return result
 
 
 def observed_target_scope_from_capture(capture: dict[str, Any], *, asof: str) -> set[str]:
@@ -7832,9 +7784,31 @@ def main() -> int:
                 # B's own Exact-50/TW7769/PIT gate decides readiness; do not
                 # republish A/provider or put research failures into A pending.
                 if args.enable_model_signal_gate:
-                    shadow = run_b19r2r_for_accepted_day_nonblocking(
-                        job=job, job_dir=job_dir, asof=asof, symbols=symbols,
+                    job["same_run_handoff"] = build_real_same_run_handoff(
+                        job=job,
+                        job_dir=job_dir,
+                        symbols=symbols,
                     )
+                    daily_tracks = run_daily_model_track_batch(
+                        job=job,
+                        job_dir=job_dir,
+                        asof=asof,
+                        include_prior_jobs=True,
+                        timeout_seconds=args.timeout_seconds,
+                    )
+                    job["daily_model_tracks"] = daily_tracks
+                    challenger = (daily_tracks.get("tracks") or {}).get(
+                        "model_a_plus_b_b19r2r", {}
+                    )
+                    shadow = {
+                        **challenger,
+                        "enabled": True,
+                        "shadow_ok": challenger.get("ok") is True,
+                        "mainline_blocking": False,
+                        "production_allowed": False,
+                        "no_apply": True,
+                        "pending_asof_set": False,
+                    }
                 else:
                     shadow = {
                         "enabled": True, "attempted": False, "ok": True,
@@ -7846,7 +7820,7 @@ def main() -> int:
                 job["full_orthogonal_refresh_status"] = evidence["status"]
                 job["accepted_day_shadow_only"] = True
                 job.update({
-                    "status": "accepted_day_shadow_ready" if shadow.get("shadow_ok") else "accepted_day_shadow_blocked",
+                    "status": "accepted_day_model_tracks_ready" if shadow.get("shadow_ok") else "accepted_day_model_tracks_blocked",
                     "finished_at": utc_now(),
                     "latest_after": latest_asof(),
                 })
@@ -8041,6 +8015,53 @@ def main() -> int:
             print(json.dumps(job, ensure_ascii=False, indent=2))
             return 3
 
+        # The immutable provider snapshot now exists, while accepted/latest
+        # pointers still reference the previous validated day. Run the full
+        # model fan-out here so a required-track failure cannot publish first.
+        if args.enable_b19r2r_shadow and args.enable_model_signal_gate:
+            daily_tracks = run_daily_model_track_batch(
+                job=job,
+                job_dir=job_dir,
+                asof=asof,
+                include_prior_jobs=False,
+                timeout_seconds=args.timeout_seconds,
+            )
+            job["daily_model_tracks"] = daily_tracks
+            job["b19r2r_decision_cutoff"] = str(daily_tracks.get("decision_cutoff") or "")
+            challenger = (daily_tracks.get("tracks") or {}).get(
+                "model_a_plus_b_b19r2r", {}
+            )
+            job["b19r2r_daily_shadow"] = {
+                **challenger,
+                "enabled": True,
+                "shadow_ok": challenger.get("ok") is True,
+                "mainline_blocking": False,
+                "production_allowed": False,
+                "no_apply": True,
+                "pending_asof_set": False,
+            }
+            if challenger.get("attempted") and challenger.get("ok") is not True:
+                job["b19r2r_daily_shadow_warning"] = (
+                    challenger.get("error") or challenger.get("status")
+                )
+            write_json(job_dir / "job.json", job)
+            if not daily_tracks.get("ok"):
+                set_pending_asof(
+                    asof,
+                    reason="daily_model_required_track_failed",
+                    job_id=job_id,
+                )
+                job.update({
+                    "status": "daily_model_required_track_failed",
+                    "message": "The required daily model track did not produce a valid ModelSignalArtifact.",
+                    "finished_at": utc_now(),
+                    "latest_after": latest_asof(),
+                    "pending_asof_set": asof,
+                })
+                finalize_job(job, job_dir=job_dir, asof=asof, args=args)
+                print(json.dumps(job, ensure_ascii=False, indent=2))
+                return 2
+
         try:
             accepted = publish_accepted_latest(asof)
         except Exception as exc:  # Keep the target asof retryable if the final accepted-latest stage crashes.
@@ -8133,45 +8154,19 @@ def main() -> int:
         print(json.dumps(job, ensure_ascii=False, indent=2))
         return 2
 
-    if args.enable_b19r2r_shadow:
-        # B19R2R binds to the completed Model A artifact.  Its cutoff must be
-        # captured after the Model A gate returns, otherwise a manifest created
-        # during the gate can appear newer than the cutoff and fail closed.
-        b19r2r_cutoff = utc_now()
-        job["b19r2r_decision_cutoff"] = b19r2r_cutoff
-        cutoff_value = b19r2r_cutoff
-        if isinstance(cutoff_value, datetime):
-            cutoff_value = cutoff_value.isoformat()
-        publish_job_id = str(job.get("publish_job_id") or "")
-        provider_snapshot = (
-            QLIB / "data_tw/experiments/option_c_ops" / publish_job_id / "tmp/formal_provider_rebuild"
-            if publish_job_id
-            else QLIB / "data_tw/experiments/option_c_ops" / "missing_publish_job" / "tmp/formal_provider_rebuild"
-        )
-        b19r2r_shadow = run_b19r2r_daily_shadow_nonblocking(
-            enabled=bool(args.enable_model_signal_gate and model_signal_gate.get("ok")),
-            asof=asof,
-            job_id=job_id,
-            job_dir=job_dir,
-            model_signal_gate=model_signal_gate,
-            same_run_handoff_validation=job_dir / "same_run_handoff_validation.json",
-            source_acquisition_run_id=str(job.get("acquisition_logical_run_id") or ""),
-            provider_snapshot=provider_snapshot,
-            decision_cutoff=str(cutoff_value or ""),
-            next_session_open=next_session_open_for_asof(asof),
-        )
-        job["b19r2r_decision_cutoff"] = str(
-            b19r2r_shadow.get("decision_cutoff") or b19r2r_cutoff
-        )
-        if not args.enable_model_signal_gate:
-            b19r2r_shadow.update({
-                "enabled": True,
-                "status": "BLOCKED_MODEL_A_GATE_DISABLED",
-                "warning": "B19R2R requires a successful Model A gate",
-            })
-        job["b19r2r_daily_shadow"] = b19r2r_shadow
-        if b19r2r_shadow.get("attempted") and not b19r2r_shadow.get("shadow_ok"):
-            job["b19r2r_daily_shadow_warning"] = b19r2r_shadow.get("warning") or b19r2r_shadow.get("status")
+    if args.enable_b19r2r_shadow and not args.enable_model_signal_gate:
+        job["b19r2r_daily_shadow"] = {
+            "enabled": True,
+            "attempted": False,
+            "ok": True,
+            "shadow_ok": False,
+            "status": "BLOCKED_MODEL_A_GATE_DISABLED",
+            "warning": "Daily model tracks require the model signal gate",
+            "mainline_blocking": False,
+            "production_allowed": False,
+            "no_apply": True,
+            "pending_asof_set": False,
+        }
         write_json(job_dir / "job.json", job)
 
     mbcds3_source_availability_ledger = build_mbcds3_source_availability_ledger(
