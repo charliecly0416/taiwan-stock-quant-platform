@@ -10,6 +10,10 @@ git status --short
 
 当前工作区可能包含用户和前序 agent 的大量未提交改动，也包含不受 Git 管理的生产 artifact。不要 reset、checkout、clean 或覆盖现有改动。先读根目录 `AGENTS.md`、`CODEX_HANDOFF_CN.md` 和 `tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`，再确认任务属于哪个模块。
 
+脚本目录已经做过一次可逆瘦身：历史研究和一次性脚本集中在
+`scripts/archive/historical_research/`，新开发者优先从 `scripts/run_tw_task.py`、
+`configs/tw_task_registry.yaml` 和对应模块合同开始，不要从归档目录反推当前主线。
+
 权威默认口径：
 
 - baseline：`configs/active_baseline_descriptor.yaml`。
@@ -43,7 +47,9 @@ make check-project
 
 | 任务 | 第一入口 |
 | --- | --- |
+| 后端代码总览和完整调用链 | `docs/tw_modular_contracts/TW_BACKEND_CODE_FRAMEWORK_CN.md` |
 | 数据源/标准化 | `docs/tw_modular_contracts/DATA_SOURCE_CONTRACT_CN.md` |
+| 数据模块整体边界 | `docs/tw_modular_contracts/TW_DATA_MODULE_MAP_AND_INTERFACES_CN.md` |
 | PIT 特征 | `docs/tw_modular_contracts/FEATURE_ARTIFACT_CONTRACT_CN.md` |
 | 新模型/adapter | `docs/tw_modular_contracts/MODEL_SIGNAL_CONTRACT_CN.md` |
 | 新策略 | `docs/tw_modular_contracts/STRATEGY_RULE_CONTRACT_CN.md` 和 `configs/strategy_dependencies/` |
@@ -86,6 +92,8 @@ TaskRequest -> configs/tw_task_registry.yaml -> registered executor/workflow
 | `daily_update` | 日更与模型轨道 | 现有日更 orchestrator |
 | `readonly_backtest` | 模型、策略、窗口回放 | 标准 ReplayResult candidate builder |
 | `readonly_model_comparison` | A/A+B 历史比较 | 现有 WorkflowEngine DAG |
+
+前端自定义回放使用同一个 `readonly_backtest` 任务，而不是在 GET handler 里重算：`POST /api/tw-stock/readonly-replays` 接收 `model_track_id`、`strategy_rule`、`start_date`、`end_date`，后端异步调用同一个 dispatcher；`GET /api/tw-stock/readonly-replays/{run_id}` 只读取任务状态和已生成的隔离 ReplayResult。接口只允许 replay policy 中标记为 `production_selectable` 的模型和策略，B19R2R 仍保持 research/shadow，直到单独的 replay 准入审核完成。
 
 实现与扩展规则见 `tw_modular_contracts/TW_UNIFIED_TASK_ENTRY_PLAN_CN.md`。
 

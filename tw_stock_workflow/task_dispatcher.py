@@ -164,6 +164,20 @@ def _parse_json_stdout(result: Mapping[str, Any]) -> dict[str, Any]:
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
+        decoder = json.JSONDecoder()
+        candidates: list[tuple[int, int, dict[str, Any]]] = []
+        for index, char in enumerate(raw):
+            if char != "{":
+                continue
+            try:
+                value, end = decoder.raw_decode(raw[index:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict):
+                candidates.append((index + end, index, value))
+        if candidates:
+            candidates.sort(key=lambda item: (item[0], item[1]))
+            return candidates[-1][2]
         return {}
     return payload if isinstance(payload, dict) else {}
 
@@ -549,6 +563,10 @@ class TaskDispatcher:
             env=details["environment_overrides"],
             require_payload_ok=False,
         )
+        # A zero exit code alone is insufficient: the runner must emit a
+        # structured daily result so the task record cannot claim success for
+        # an empty, truncated, or non-JSON stdout.
+        ok = ok and bool(payload.get("status"))
         return {
             "ok": ok,
             "status": "SUCCEEDED" if ok else "FAILED",

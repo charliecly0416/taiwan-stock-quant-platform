@@ -275,6 +275,7 @@
     </section>
 
     <section id="daov-section-replay" class="monitor-anchor-section">
+      <dynamic-readonly-replay-panel />
       <readonly-replay-window-panel
         :index-payload="readonlyReplayWindowIndexPayload"
         :payload="readonlyReplayWindowPayload"
@@ -1716,6 +1717,7 @@
 import moment from 'moment'
 import ReadonlyStrategySnapshotPanel from './components/ReadonlyStrategySnapshotPanel.vue'
 import ReadonlyReplayWindowPanel from './components/ReadonlyReplayWindowPanel.vue'
+import DynamicReadonlyReplayPanel from './components/DynamicReadonlyReplayPanel.vue'
 import ReadonlyModelStrategyComparisonPanel from './components/ReadonlyModelStrategyComparisonPanel.vue'
 import PaperPortfolioPanel from './components/PaperPortfolioPanel.vue'
 import ReadonlyShadowExposurePanel from './components/ReadonlyShadowExposurePanel.vue'
@@ -1764,6 +1766,7 @@ export default {
   components: {
     ReadonlyStrategySnapshotPanel,
     ReadonlyReplayWindowPanel,
+    DynamicReadonlyReplayPanel,
     ReadonlyModelStrategyComparisonPanel,
     PaperPortfolioPanel,
     ReadonlyShadowExposurePanel,

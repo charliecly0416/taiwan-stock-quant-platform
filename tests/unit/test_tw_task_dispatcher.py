@@ -349,6 +349,68 @@ def test_daily_task_records_result_but_keeps_same_day_retries(tmp_path: Path) ->
     assert Path(first["run_dir"], "result.json").is_file()
 
 
+def test_daily_task_rejects_zero_exit_without_structured_result(tmp_path: Path) -> None:
+    repo, registry = daily_repo(tmp_path)
+
+    def fake_runner(command, **kwargs):
+        kwargs["stdout_path"].parent.mkdir(parents=True, exist_ok=True)
+        kwargs["stdout_path"].write_text("", encoding="utf-8")
+        kwargs["stderr_path"].write_text("runner emitted no JSON", encoding="utf-8")
+        return {
+            "ok": True,
+            "returncode": 0,
+            "stdout_path": str(kwargs["stdout_path"]),
+            "stderr_path": str(kwargs["stderr_path"]),
+            "stdout": "",
+            "stderr_tail": "runner emitted no JSON",
+        }
+
+    dispatcher = TaskDispatcher(
+        repo,
+        registry_path=registry,
+        run_root=tmp_path / "runs",
+        command_runner=fake_runner,
+        now_taipei=lambda: datetime(2026, 9, 21, 8, 0, 0),
+    )
+
+    result = dispatcher.dispatch(daily_request())
+
+    assert result["status"] == "FAILED"
+    assert result["ok"] is False
+    assert result["execution"]["daily_result"] == {}
+
+
+def test_daily_task_reads_structured_result_after_runner_logs(tmp_path: Path) -> None:
+    repo, registry = daily_repo(tmp_path)
+
+    def fake_runner(command, **kwargs):
+        stdout = 'INFO optional dependency unavailable\n{"status": "daily_ready"}\n'
+        kwargs["stdout_path"].parent.mkdir(parents=True, exist_ok=True)
+        kwargs["stdout_path"].write_text(stdout, encoding="utf-8")
+        kwargs["stderr_path"].write_text("", encoding="utf-8")
+        return {
+            "ok": True,
+            "returncode": 0,
+            "stdout_path": str(kwargs["stdout_path"]),
+            "stderr_path": str(kwargs["stderr_path"]),
+            "stdout": stdout,
+            "stderr_tail": "",
+        }
+
+    dispatcher = TaskDispatcher(
+        repo,
+        registry_path=registry,
+        run_root=tmp_path / "runs",
+        command_runner=fake_runner,
+        now_taipei=lambda: datetime(2026, 9, 21, 8, 0, 0),
+    )
+
+    result = dispatcher.dispatch(daily_request())
+
+    assert result["status"] == "SUCCEEDED"
+    assert result["execution"]["daily_result"]["status"] == "daily_ready"
+
+
 def test_backtest_executor_uses_only_registered_bindings(tmp_path: Path) -> None:
     repo, registry = backtest_repo(tmp_path)
     calls: list[list[str]] = []

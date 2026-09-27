@@ -1,33 +1,33 @@
 # DNG7 ModelA Score Pipeline 执行报告
 
-生成时间：2026-09-18T10:39:08+00:00
+生成时间：2026-09-24T14:47:53+00:00
 
 ## 1. 结论
 
 - 执行状态：`SCORED_ASOF_TARGET`
-- run_id：`dng9_daily_auto_model_signal_gate_20260918_20260918T103846Z`
-- 目标 asof：`2026-09-18`
+- run_id：`dng9_daily_auto_model_signal_gate_20260923_20260924T144732Z`
+- 目标 asof：`2026-09-23`
 - 路径：`TRUE_LOCAL_INFERENCE`
-- 是否生成 2026-09-18 qlib Model A score：`YES`
+- 是否生成 2026-09-23 qlib Model A score：`YES`
 
 ## 2. ModelInferenceInput
 
 - validator：`PASS`
 - rows：`150`
-- path：`data_tw/canonical/model_inference_input/e4_frozen_qlib_2018_2022/dng9_daily_auto_model_signal_gate_20260918_20260918T103846Z`
+- path：`data_tw/canonical/model_inference_input/e4_frozen_qlib_2018_2022/dng9_daily_auto_model_signal_gate_20260923_20260924T144732Z`
 
 ## 3. ScoreJob
 
 - validator：`PASS`
-- qlib source run：`option_c_daily_signal_20260918_20260918T103854Z`
+- qlib source run：`option_c_daily_signal_20260923_20260924T144739Z`
 - raw_scores rows：`150`
-- path：`data_tw/artifacts/score_jobs/e4_frozen_qlib_2018_2022/dng9_daily_auto_model_signal_gate_20260918_20260918T103846Z`
+- path：`data_tw/artifacts/score_jobs/e4_frozen_qlib_2018_2022/dng9_daily_auto_model_signal_gate_20260923_20260924T144732Z`
 
 ## 4. ModelSignalArtifact
 
 - status：`READY`
 - rows：`150`
-- path：`data_tw/artifacts/signals/e4_frozen_qlib_2018_2022/dng9_daily_auto_model_signal_gate_20260918_20260918T103846Z`
+- path：`data_tw/artifacts/signals/e4_frozen_qlib_2018_2022/dng9_daily_auto_model_signal_gate_20260923_20260924T144732Z`
 
 ## 5. Forbidden Action Audit
 

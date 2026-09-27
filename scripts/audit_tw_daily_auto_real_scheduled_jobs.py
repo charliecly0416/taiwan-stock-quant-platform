@@ -16,6 +16,28 @@ FINMIND_SEGMENT_CACHE_ROOT = OPS_ROOT / "finmind_segment_cache"
 FULL_SCOPE_SEGMENTS = {"daily_price", "corporate_actions", "institutional", "margin", "monthly_revenue", "valuation"}
 
 
+def is_daily_auto_cron_entry(line: str) -> bool:
+    """Recognize both the legacy runner and the registered task dispatcher."""
+    value = str(line or "")
+    return "run_daily_tw_stock_auto_update.py" in value or (
+        "scripts/run_tw_task.py" in value
+        and "--request configs/tasks/daily_update" in value
+    )
+
+
+def cron_entry_scope(line: str) -> str:
+    """Read scope from an inline legacy env or from the task request identity."""
+    value = str(line or "")
+    match = re.search(r"TW_DAILY_AUTO_FINMIND_SCOPE=(\w+)", value)
+    if match:
+        return match.group(1)
+    if "configs/tasks/daily_update_base.yaml" in value:
+        return "daily"
+    if "configs/tasks/daily_update.yaml" in value:
+        return "full"
+    return "unspecified"
+
+
 def rel(path: Path) -> str:
     try:
         return str(path.resolve().relative_to(ROOT.resolve()))
@@ -111,7 +133,7 @@ def finmind_summary(path: Path) -> dict[str, Any]:
             row = dict(status)
             if not row.get("provider_error"):
                 stderr_path = ROOT / str(row.get("stderr_path") or "")
-                stderr = stderr_path.read_text(encoding="utf-8", errors="ignore").lower() if stderr_path.exists() else ""
+                stderr = stderr_path.read_text(encoding="utf-8", errors="ignore").lower() if stderr_path.is_file() else ""
                 if "402" in stderr or "payment required" in stderr:
                     row["provider_error"] = "provider_402_quota_or_payment_required"
                 elif "429" in stderr or "too many requests" in stderr or "rate limit" in stderr:
@@ -151,13 +173,12 @@ def cron_finmind_scopes(cron_text: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for raw in cron_text.splitlines():
         line = raw.strip()
-        if not line or line.startswith("#") or "run_daily_tw_stock_auto_update.py" not in line:
+        if not line or line.startswith("#") or not is_daily_auto_cron_entry(line):
             continue
-        match = re.search(r"TW_DAILY_AUTO_FINMIND_SCOPE=(\w+)", line)
         schedule = " ".join(line.split()[:5])
         rows.append({
             "schedule": schedule,
-            "scope": match.group(1) if match else "unspecified",
+            "scope": cron_entry_scope(line),
             "line": line,
         })
     return rows
@@ -274,6 +295,9 @@ def collect_jobs(limit: int) -> list[dict[str, Any]]:
             "mtime": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).replace(microsecond=0).isoformat(),
             "status": job.get("status"),
             "asof": job.get("asof"),
+            "finmind_scope": job.get("finmind_scope"),
+            "full_orthogonal_refresh_required": bool(job.get("full_orthogonal_refresh_required")),
+            "full_orthogonal_refresh_triggered": bool(job.get("full_orthogonal_refresh_triggered")),
             "taipei_now": job.get("taipei_now"),
             "asof_source": job.get("asof_source"),
             "finmind_update_triggered": bool(job.get("finmind_update_triggered")),
@@ -297,14 +321,29 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Readonly audit for installed TW daily auto scheduled jobs.")
     parser.add_argument("--limit", type=int, default=40)
     parser.add_argument("--out", default="")
-    parser.add_argument("--require-full-scope", action="store_true", help="Fail if installed cron is not configured with TW_DAILY_AUTO_FINMIND_SCOPE=full.")
+    parser.add_argument(
+        "--require-full-scope",
+        action="store_true",
+        help="Fail if installed cron has no full-scope daily-update entry.",
+    )
     args = parser.parse_args()
 
     cron_text = CRON_PATH.read_text(encoding="utf-8") if CRON_PATH.exists() else ""
     jobs = collect_jobs(args.limit)
     real_finmind_jobs = [row for row in jobs if row.get("finmind_update_triggered") and row.get("finmind_stdout")]
     latest_real = real_finmind_jobs[0] if real_finmind_jobs else {}
-    latest_stdout = latest_real.get("finmind_stdout") if isinstance(latest_real.get("finmind_stdout"), dict) else {}
+    full_scope_real_jobs = [
+        row for row in real_finmind_jobs
+        if str(row.get("finmind_scope") or "") == "full"
+        or bool(row.get("full_orthogonal_refresh_required"))
+        or bool(row.get("full_orthogonal_refresh_triggered"))
+    ]
+    latest_full_scope_real = full_scope_real_jobs[0] if full_scope_real_jobs else {}
+    # A later daily-scope retry must not hide the most recent full-scope
+    # attempt.  Freshness uses the latest real job; the full-scope gate uses
+    # the latest full-scope job independently.
+    scope_assessment_job = latest_full_scope_real if args.require_full_scope else latest_real
+    latest_stdout = scope_assessment_job.get("finmind_stdout") if isinstance(scope_assessment_job.get("finmind_stdout"), dict) else {}
     archive = latest_stdout.get("archive") if isinstance(latest_stdout.get("archive"), dict) else {}
     institutional = latest_stdout.get("institutional_trades") if isinstance(latest_stdout.get("institutional_trades"), dict) else {}
     margin = latest_stdout.get("margin_trading") if isinstance(latest_stdout.get("margin_trading"), dict) else {}
@@ -334,6 +373,17 @@ def main() -> int:
         latest_real_inferred_scope = "daily"
     else:
         latest_real_inferred_scope = "partial" if segment_names else "unknown"
+    latest_full_scope_inferred_scope = latest_real_inferred_scope if latest_full_scope_real else "unknown"
+    latest_overall_stdout = latest_real.get("finmind_stdout") if isinstance(latest_real.get("finmind_stdout"), dict) else {}
+    overall_segment_names = sorted((latest_overall_stdout.get("segment_status") or {}).keys()) if isinstance(latest_overall_stdout.get("segment_status"), dict) else []
+    if FULL_SCOPE_SEGMENTS.issubset(set(overall_segment_names)):
+        latest_overall_inferred_scope = "full"
+    elif overall_segment_names == ["daily_price"]:
+        latest_overall_inferred_scope = "daily"
+    elif overall_segment_names:
+        latest_overall_inferred_scope = "partial"
+    else:
+        latest_overall_inferred_scope = "unknown"
     latest_real_cache_origin_issues = latest_stdout.get("cache_origin_issues") if isinstance(latest_stdout.get("cache_origin_issues"), dict) else {}
     active_cache_origin_issues = active_segment_cache_origin_issues()
     statuses = {}
@@ -348,7 +398,16 @@ def main() -> int:
     daily_scope_schedules = [row["schedule"] for row in cron_scope_rows if row["scope"] == "daily"]
     cron_scope_schedule_collision = bool(set(full_scope_schedules) & set(daily_scope_schedules))
     ador_config = cron_ador_config(cron_scope_rows, cron_text)
-    full_scope_real_run_gate_ok = (latest_real_inferred_scope == "full" and latest_real_full_scope_segment_coverage_ok) if args.require_full_scope else True
+    full_scope_real_run_gate_ok = (
+        bool(latest_full_scope_real)
+        and latest_real_inferred_scope in {"full", "full_with_quota_aware_orthogonal_batch"}
+        and latest_real_full_scope_segment_coverage_ok
+    ) if args.require_full_scope else True
+    shadow_blocker = ""
+    if args.require_full_scope and not latest_full_scope_real:
+        shadow_blocker = "full_scope_real_run_not_observed"
+    elif args.require_full_scope and not full_scope_real_run_gate_ok:
+        shadow_blocker = "full_scope_real_run_incomplete"
     if args.require_full_scope and not cron_has_full_scope:
         primary_blocker = "cron_missing_full_scope_orthogonal_job"
     elif args.require_full_scope and cron_scope_schedule_collision:
@@ -357,8 +416,6 @@ def main() -> int:
         primary_blocker = "cron_ador_no_publish_dry_run_gate_not_safe"
     elif active_cache_origin_issues:
         primary_blocker = "finmind_segment_cache_invalid_origin"
-    elif args.require_full_scope and latest_real and not latest_real_full_scope_segment_coverage_ok:
-        primary_blocker = "full_scope_real_run_not_observed"
     elif "provider_402_quota_or_payment_required" in set(provider_errors.values()):
         primary_blocker = "finmind_provider_402_quota_or_payment_required"
     elif orthogonal_batch_status in {"quota_exhausted_retry_next_day", "provider_timeout", "permission_denied"}:
@@ -375,7 +432,9 @@ def main() -> int:
         "cron_installed": CRON_PATH.exists(),
         "cron_path": rel(CRON_PATH),
         "cron_log_path": rel(CRON_LOG),
-        "cron_contains_daily_auto_entry": "run_daily_tw_stock_auto_update.py" in cron_text,
+        "cron_contains_daily_auto_entry": any(
+            is_daily_auto_cron_entry(line) for line in cron_text.splitlines()
+        ),
         "cron_config_finmind_scope": cron_scope,
         "cron_config_finmind_scope_rows": cron_scope_rows,
         "cron_has_daily_scope": cron_has_daily_scope,
@@ -394,13 +453,16 @@ def main() -> int:
         "latest_job": jobs[0] if jobs else {},
         "latest_job_ador_no_publish_orchestration": jobs[0].get("ador_no_publish_orchestration", {}) if jobs else {},
         "latest_real_finmind_job": latest_real,
+        "latest_full_scope_real_finmind_job": latest_full_scope_real,
+        "full_scope_real_job_count": len(full_scope_real_jobs),
         "latest_real_finmind_job_ador_no_publish_orchestration": latest_real.get("ador_no_publish_orchestration", {}) if latest_real else {},
         "latest_real_finmind_daily_price": archive,
         "latest_real_finmind_institutional": institutional,
         "latest_real_finmind_margin": margin,
         "latest_real_finmind_segment_status": segment_status,
         "latest_real_finmind_segments": segment_names,
-        "latest_real_finmind_inferred_scope": latest_real_inferred_scope,
+        "latest_real_finmind_inferred_scope": latest_overall_inferred_scope,
+        "latest_full_scope_real_finmind_inferred_scope": latest_full_scope_inferred_scope,
         "latest_real_finmind_full_scope_segments_required": sorted(FULL_SCOPE_SEGMENTS),
         "latest_real_finmind_full_scope_segment_coverage_ok": latest_real_full_scope_segment_coverage_ok,
         "latest_real_finmind_base_full_segments_present": base_full_segments,
@@ -408,6 +470,8 @@ def main() -> int:
         "latest_real_finmind_cache_origin_issues": latest_real_cache_origin_issues,
         "active_finmind_segment_cache_origin_issues": active_cache_origin_issues,
         "full_scope_real_run_gate_ok": full_scope_real_run_gate_ok,
+        "full_scope_shadow_nonblocking": bool(shadow_blocker and not primary_blocker),
+        "full_scope_shadow_blocker": shadow_blocker,
         "latest_real_finmind_provider_errors": provider_errors,
         "latest_real_finmind_cached_segments": cached_segments,
         "latest_real_finmind_orthogonal_batch_control": orthogonal_batch,
@@ -416,7 +480,11 @@ def main() -> int:
         "latest_real_finmind_orthogonal_batch_full_ready": orthogonal_batch_status == "success",
         "latest_real_finmind_orthogonal_batch_partial": orthogonal_batch_status == "success_partial",
         "latest_real_finmind_orthogonal_batch_cooldown": orthogonal_batch_status == "quota_exhausted_retry_next_day",
-        "scheduler_running_evidence": bool(jobs and CRON_PATH.exists() and "run_daily_tw_stock_auto_update.py" in cron_text),
+        "scheduler_running_evidence": bool(
+            jobs
+            and CRON_PATH.exists()
+            and any(is_daily_auto_cron_entry(line) for line in cron_text.splitlines())
+        ),
         "daily_price_captured": bool(archive.get("count", 0) and archive.get("date_max")),
         "institutional_captured": bool(institutional.get("count", 0) and institutional.get("date_max")),
         "margin_captured": bool(margin.get("count", 0) and margin.get("date_max")),
@@ -431,7 +499,7 @@ def main() -> int:
         and not result["cron_scope_schedule_collision"]
         and not active_cache_origin_issues
     )
-    print(json.dumps({"ok": ok, "out": rel(out_path), "scheduler_running_evidence": result["scheduler_running_evidence"], "cron_config_finmind_scope": cron_scope, "cron_config_ador_safe_for_cron": result["cron_config_ador_safe_for_cron"], "primary_blocker": result["primary_blocker"]}, ensure_ascii=False, indent=2))
+    print(json.dumps({"ok": ok, "out": rel(out_path), "scheduler_running_evidence": result["scheduler_running_evidence"], "cron_config_finmind_scope": cron_scope, "cron_config_ador_safe_for_cron": result["cron_config_ador_safe_for_cron"], "primary_blocker": result["primary_blocker"], "full_scope_shadow_blocker": result["full_scope_shadow_blocker"], "full_scope_shadow_nonblocking": result["full_scope_shadow_nonblocking"]}, ensure_ascii=False, indent=2))
     return 0 if ok else 2
 
 

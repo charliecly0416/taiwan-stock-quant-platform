@@ -292,6 +292,16 @@ def audit_file_has_no_fail(path: Path) -> bool:
 
 def validate_replay_result(manifest_path: Path) -> dict[str, Any]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    # WF-2A has a stricter, self-contained contract with different artifact
+    # aliases. Keep this legacy entrypoint useful without weakening its D2
+    # checks or forcing the WF-2A manifest into an older shape.
+    if manifest.get("schema_version") == "readonly_replay_result_wf2a_v1":
+        try:
+            from scripts.validate_tw_readonly_replay_window_artifact import validate_artifact
+        except ModuleNotFoundError:
+            from validate_tw_readonly_replay_window_artifact import validate_artifact
+
+        return validate_artifact(manifest_path)
     checks: list[dict[str, Any]] = []
     checks.append(check("artifact_type", manifest.get("artifact_type") == "replay_result", str(manifest.get("artifact_type"))))
     checks.append(check("schema_version", bool(manifest.get("schema_version")), str(manifest.get("schema_version", ""))))

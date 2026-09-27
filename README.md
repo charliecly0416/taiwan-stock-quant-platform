@@ -152,6 +152,7 @@ make verify
 
 - [项目原理与当前限制](docs/PROJECT_INTRO_CN.md)
 - [技术架构、模块、数据结构与流向](docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md)（新开发者第一技术入口）
+- [后端代码框架与完整调用链](docs/tw_modular_contracts/TW_BACKEND_CODE_FRAMEWORK_CN.md)（按真实代码阅读统一入口、日更、模型、策略、回放和 API）
 - [使用与环境配置](docs/USER_GUIDE_CN.md)
 - [开发接手指南](docs/DEVELOPMENT_ONBOARDING_CN.md)
 - [新模型与策略接入指南](docs/tw_modular_contracts/NEW_MODEL_AND_STRATEGY_DEVELOPER_GUIDE_CN.md)

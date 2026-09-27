@@ -24,9 +24,11 @@
 2. 本文：当前状态与处理流程。
 3. `docs/PROJECT_INTRO_CN.md`：产品价值、用户流程和系统边界。
 4. `docs/tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md`：第一技术入口，包含架构、模块实现、数据结构、数据流与追溯方法。
-5. `docs/PRODUCT_OPERATIONS_REVIEW_CN.md`：最近一次总体审查与未闭环事项。
-6. `docs/ops/STABLE_OPERATIONS_RUNBOOK_CN.md`：探针、备份、恢复、日志和部署验收。
-7. `docs/tw_modular_contracts/TW_PROJECT_DEVELOPMENT_CONSTITUTION_CN.md`：开发红线。
+5. `docs/tw_modular_contracts/TW_BACKEND_CODE_FRAMEWORK_CN.md`：按真实代码阅读统一入口、日更、数据、模型、策略、回放、WorkflowEngine 和 Flask API。
+6. `docs/tw_modular_contracts/TW_DATA_MODULE_MAP_AND_INTERFACES_CN.md`：数据抓取、标准化、artifact 查询和 API 提供的边界与代码导航。
+7. `docs/PRODUCT_OPERATIONS_REVIEW_CN.md`：最近一次总体审查与未闭环事项。
+8. `docs/ops/STABLE_OPERATIONS_RUNBOOK_CN.md`：探针、备份、恢复、日志和部署验收。
+9. `docs/tw_modular_contracts/TW_PROJECT_DEVELOPMENT_CONSTITUTION_CN.md`：开发红线。
 
 遇到专项任务后，再从 `docs/DEVELOPMENT_ONBOARDING_CN.md` 进入相应合同或开发指南。不要从阶段历史报告反推当前默认状态。
 
@@ -101,3 +103,10 @@ crontab -l
 - 用 `git diff --check` 检查补丁。
 - 文档中的“当前状态”必须重新通过 GET API 或权威配置核对。
 - 明确列出未运行的检查，不把本机结果称为云端 CI 或长期稳定性证明。
+
+## 8. 脚本目录当前形态
+
+2026-09-27 已将 172 个未被当前配置、运行时模块、测试和 CI 直接引用的阶段研究脚本移入
+`scripts/archive/historical_research/root_recovered_20260927/`。根目录只保留稳定入口、当前
+支持模块和验证器；瘦身报告及仓库外备份见
+`docs/ops/SCRIPTS_SLIMMING_REPORT_CN.md`。恢复归档脚本前必须重新检查依赖和当前合同。

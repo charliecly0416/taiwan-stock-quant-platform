@@ -125,6 +125,15 @@ def validate_daily_holding_counts(daily_nav: pd.DataFrame, snapshots: pd.DataFra
 
 def validate_artifact(manifest_path: Path) -> dict[str, Any]:
     manifest = load_json(manifest_path)
+    # WF-2A is not a D2/D3 parity artifact. Delegate to its authoritative
+    # validator instead of reporting a false schema/lineage failure here.
+    if manifest.get("schema_version") == "readonly_replay_result_wf2a_v1":
+        try:
+            from scripts.validate_tw_readonly_replay_window_artifact import validate_artifact as validate_wf2a
+        except ModuleNotFoundError:
+            from validate_tw_readonly_replay_window_artifact import validate_artifact as validate_wf2a
+
+        return validate_wf2a(manifest_path)
     artifacts = manifest.get("artifacts") or {}
     missing = [key for key in REQUIRED_ARTIFACTS if not artifacts.get(key) or not resolve(str(artifacts.get(key))).exists()]
     checks = [

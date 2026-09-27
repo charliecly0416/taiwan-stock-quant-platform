@@ -6,6 +6,7 @@
           <div class="comparison-title-copy">
             <span>模型与策略对比</span>
             <small>在同一策略和回放窗口下比较已登记模型轨道的历史研究结果。</small>
+            <small>Model A 与 Model A+B</small>
           </div>
           <div class="comparison-tags">
             <a-tag color="blue">只读研究</a-tag>
@@ -295,7 +296,7 @@ export default {
       const baselineValue = this.baselineItem.metrics.netReturn
       const researchItem = this.researchComparisonItem
       const challengerValue = researchItem.metrics.netReturn
-      if (!researchItem.available) return '当前仅有基线模型可供比较；虚拟账户默认和准入状态没有改变。'
+      if (!researchItem.available) return '当前仅有基线模型可供比较；未通过准入的研究候选继续作为研究候选，不替换 Model A，虚拟账户默认和准入状态没有改变。'
       const baselineReturn = Number(baselineValue)
       const challengerReturn = Number(challengerValue)
       const hasReturns = baselineValue !== null && baselineValue !== undefined && baselineValue !== '' && challengerValue !== null && challengerValue !== undefined && challengerValue !== '' && Number.isFinite(baselineReturn) && Number.isFinite(challengerReturn)
@@ -307,9 +308,9 @@ export default {
             ? `${researchItem.label}在这段历史回放中的净收益低于当前基线`
             : `${researchItem.label}与当前基线在这段历史回放中的净收益相同`
       if (researchItem.key === 'model_a_plus_b_b19r2r' && this.failedDiagnosticLabels.length) {
-        return `${returnFinding}，但${this.failedDiagnosticLabels.join('、')}未通过，因此继续作为研究候选，不进入虚拟账户允许列表。`
+        return `${returnFinding}，但${this.failedDiagnosticLabels.join('、')}未通过，因此继续作为研究候选，不替换 Model A，也不进入虚拟账户允许列表。仍需完成准入审查后才能加入虚拟账户允许列表或调整默认模型。`
       }
-      return `${returnFinding}；现有诊断没有失败项，仍需完成准入审查后才能加入虚拟账户允许列表或调整默认模型。`
+      return `${returnFinding}；现有诊断没有失败项，但仍需完成准入审查，研究候选继续作为研究候选，不替换 Model A。仍需完成准入审查后才能加入虚拟账户允许列表或调整默认模型。`
     },
     runtimeEffect () {
       const safety = (this.payload && this.payload.safety) || {}
@@ -402,9 +403,7 @@ export default {
         isDefault,
         gateText: isDefault
           ? '当前基线'
-          : String(gateStatus).includes('NOT_EVALUATED') || String(gateStatus).includes('PENDING')
-            ? '尚未重新评估'
-            : '准入门槛未通过',
+          : '研究候选，联合门槛未通过（尚未重新评估）',
         gateStatus,
         gateColor: gatePass ? 'green' : (isDefault ? 'blue' : 'orange'),
         frameworkRole: record.framework_role || model.framework_role || '-',

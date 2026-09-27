@@ -63,10 +63,17 @@ def test_installed_daily_and_full_cron_disable_model_b_shadow():
     cron = (ROOT / "data_tw/ops/daily_auto_update/tw-daily-auto-update.installed.cron").read_text(encoding="utf-8")
     assert "ENABLE_TW_MBCDS3_DAILY_SHADOW=false" in cron
     assert "ENABLE_TW_MBCDS3_DAILY_SHADOW=true" not in cron
-    scheduled = [line for line in cron.splitlines() if "run_daily_tw_stock_auto_update.py" in line]
+    # The installed schedule now uses the unified task dispatcher.  Keep the
+    # contract tied to the registered request files rather than the retired
+    # direct-runner command shape.
+    scheduled = [
+        line
+        for line in cron.splitlines()
+        if "scripts/run_tw_task.py" in line and "--request configs/tasks/daily_update" in line
+    ]
     assert len(scheduled) == 2
-    assert any("TW_DAILY_AUTO_FINMIND_SCOPE=daily" in line for line in scheduled)
-    assert any("TW_DAILY_AUTO_FINMIND_SCOPE=full" in line for line in scheduled)
+    assert any("configs/tasks/daily_update_base.yaml" in line for line in scheduled)
+    assert any("configs/tasks/daily_update.yaml" in line for line in scheduled)
     assert all("ENABLE_TW_MBCDS3_DAILY_SHADOW=true" not in line for line in scheduled)
 
 

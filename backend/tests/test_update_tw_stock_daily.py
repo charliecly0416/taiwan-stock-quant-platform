@@ -192,6 +192,75 @@ def test_finmind_hsa8_capture_binds_real_run_id_across_raw_normalized_and_adapte
     assert adapter["normalized_files"][0]["sha256"] == update_tw_stock_daily._file_sha256(Path(adapter["normalized_files"][0]["path"]))
 
 
+def test_finmind_hsa8_capture_keeps_partial_rows_and_failure_inventory(tmp_path, monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        content = b'{"status":200,"data":[{"date":"2026-08-27"}]}'
+        headers = {}
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"status": 200, "data": [{"date": "2026-08-27"}]}
+
+    calls = {"count": 0}
+
+    def fake_get(*args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 2:
+            raise TimeoutError("provider read timeout")
+        return FakeResponse()
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=fake_get))
+    monkeypatch.setenv("FINMIND_MIN_REQUEST_INTERVAL_SECONDS", "0")
+    monkeypatch.setenv("FINMIND_TRANSIENT_RETRIES", "0")
+    monkeypatch.setattr(
+        update_tw_stock_daily,
+        "parse_finmind_rows",
+        lambda rows, symbol: [SimpleNamespace(symbol=symbol, trade_date="2026-08-27")],
+    )
+
+    _records, capture = update_tw_stock_daily._real_hsa8_finmind_capture(
+        segment="margin",
+        symbols=["2330", "1303", "2303"],
+        start="2026-08-27",
+        end="2026-08-27",
+        output_dir=str(tmp_path),
+        acquisition_run_id="run-partial",
+    )
+
+    assert capture["capture_complete"] is False
+    assert capture["validator_status"] == "BLOCKED_SOURCE_SCOPE_OR_VALIDATOR_UNPROVEN"
+    assert capture["failed_symbols"] == {"1303": "TimeoutError:provider read timeout"}
+    assert capture["unknown_scope"] == ["1303"]
+    assert (tmp_path / "margin.adapter_output.json").is_file()
+
+
+def test_twii_only_workflow_skips_stock_and_orthogonal_fetches(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_twii(*, start, end, output_dir, acquisition_run_id):
+        calls.append((start, end, acquisition_run_id))
+        return {"status": "captured", "validator_status": "PASS", "pit_status": "PASS"}
+
+    monkeypatch.setattr(update_tw_stock_daily, "_real_hsa8_twii_capture", fake_twii)
+    report = update_tw_stock_daily.run_workflow(
+        symbols=["2330"],
+        start="2026-08-27",
+        end="2026-08-27",
+        apply=False,
+        validate=False,
+        twii_only=True,
+        handoff_output_dir=str(tmp_path),
+        acquisition_run_id="run-twii-only",
+    )
+
+    assert calls == [("2026-08-27", "2026-08-27", "run-twii-only")]
+    assert report["archive"]["count"] == 0
+    assert report["hsa8_capture"]["twii"]["status"] == "captured"
+
+
 def test_orthogonal_segment_does_not_repeat_twii_capture(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(

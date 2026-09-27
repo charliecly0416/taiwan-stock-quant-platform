@@ -98,6 +98,34 @@ def test_hsa_children_missing_input_fails_closed(tmp_path: Path) -> None:
     assert error.value.code == "B19R2R_BLOCKED_HANDOFF_CHILD"
 
 
+def test_hsa_children_null_scope_is_a_contract_blocker(tmp_path: Path) -> None:
+    run_id = "finmind.logical.fixture"
+    asof = "2026-09-17"
+    source = hsa_source(tmp_path, "adjusted_price", run_id, asof)
+    source["absent_scope"] = None
+    handoff = tmp_path / "same_run_handoff_validation.json"
+    write_json(
+        handoff,
+        {
+            "sources": [
+                source,
+                hsa_source(tmp_path, "institutional_flow", run_id, asof),
+                hsa_source(tmp_path, "margin_short", run_id, asof),
+            ]
+        },
+    )
+
+    with pytest.raises(shadow.ShadowError) as error:
+        shadow.validate_hsa_children(
+            handoff,
+            asof,
+            run_id,
+            shadow.parse_time("2026-09-17T14:45:00+00:00"),
+        )
+
+    assert error.value.code == "B19R2R_BLOCKED_HANDOFF_CHILD_CONTRACT"
+
+
 def test_published_model_a_reuse_requires_same_logical_acquisition_and_cutoff(tmp_path: Path) -> None:
     asof = "2026-09-18"
     run_id = "finmind.logical.same_date_and_universe"

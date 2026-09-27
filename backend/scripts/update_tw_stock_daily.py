@@ -13,6 +13,7 @@ import ctypes
 import hashlib
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -171,13 +172,14 @@ def _finmind_get(requests_module: Any, params: dict[str, Any], *, last_request_a
     interval = max(0.0, float(os.getenv("FINMIND_MIN_REQUEST_INTERVAL_SECONDS", "1.0")))
     retries = max(0, int(os.getenv("FINMIND_TRANSIENT_RETRIES", "2")))
     backoff = max(0.0, float(os.getenv("FINMIND_RETRY_BACKOFF_SECONDS", "5.0")))
+    timeout = max(1.0, float(os.getenv("FINMIND_REQUEST_TIMEOUT_SECONDS", "20")))
     request_count = 0
     for attempt in range(retries + 1):
         wait = interval - (time.monotonic() - last_request_at)
         if last_request_at and wait > 0:
             time.sleep(wait)
         try:
-            response = requests_module.get(FINMIND_BASE_URL, params=params, timeout=20)
+            response = requests_module.get(FINMIND_BASE_URL, params=params, timeout=timeout)
         except Exception:
             request_count += 1
             if attempt >= retries:
@@ -194,6 +196,12 @@ def _finmind_get(requests_module: Any, params: dict[str, Any], *, last_request_a
             response.raise_for_status()
         time.sleep(backoff * (2**attempt))
     raise RuntimeError("FinMind request retry loop exhausted")
+
+
+def _safe_provider_error(exc: BaseException) -> str:
+    """Keep provider diagnostics useful without persisting auth query values."""
+    message = f"{type(exc).__name__}:{exc}"
+    return re.sub(r"([?&](?:token|api_key)=)[^&\s]+", r"\1[REDACTED]", message, flags=re.IGNORECASE)[:500]
 
 
 def _real_hsa8_finmind_capture(*, segment: str, symbols: Sequence[str], start: str, end: str, output_dir: Optional[str], acquisition_run_id: str = "") -> tuple[list[Any], dict[str, Any]]:
@@ -220,6 +228,7 @@ def _real_hsa8_finmind_capture(*, segment: str, symbols: Sequence[str], start: s
     http_statuses: list[int] = []
     response_timing_headers_by_symbol: dict[str, dict[str, str]] = {}
     trade_dates: set[str] = set()
+    failed_symbols: dict[str, str] = {}
     last_request_at = 0.0
     total_request_count = 0
     for symbol in symbols:
@@ -228,33 +237,47 @@ def _real_hsa8_finmind_capture(*, segment: str, symbols: Sequence[str], start: s
         if token:
             params["token"] = token.strip()
         fetched = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-        response, last_request_at, request_count = _finmind_get(
-            requests,
-            params,
-            last_request_at=last_request_at,
-        )
-        total_request_count += request_count
-        http_statuses.append(int(response.status_code))
-        # Preserve provider timing hints as observations only.  These headers
-        # are never promoted to PIT PASS without an explicit provider policy.
-        response_headers = {
-            key.lower(): str(response.headers.get(key) or "")
-            for key in ("Date", "Last-Modified", "ETag", "Age")
-            if getattr(response, "headers", None) is not None and response.headers.get(key)
-        }
-        response_timing_headers_by_symbol[str(symbol)] = response_headers
-        raw_path = root / f"{segment}.{symbol}.http.raw"
-        _atomic_bytes(raw_path, response.content)
-        raw_paths.append(str(raw_path))
-        fetched_at.append(fetched)
-        payload = response.json()
-        if payload.get("status") not in (None, 200, "200", True):
-            raise ValueError(f"FinMind returned non-ok status for {symbol}: {payload.get('status')}")
-        data = payload.get("data") or []
-        if not isinstance(data, list):
-            raise ValueError(f"FinMind data must be a list for {symbol}")
-        trade_dates.update(str(row.get("date") or "").strip() for row in data if isinstance(row, dict) and row.get("date"))
-        records.extend(parser(data, symbol=symbol))
+        try:
+            response, last_request_at, request_count = _finmind_get(
+                requests,
+                params,
+                last_request_at=last_request_at,
+            )
+        except Exception as exc:
+            # A single provider timeout must not discard successful captures
+            # already written for this segment. Keep the segment blocked by
+            # scope validation, but finish the remaining symbols so the next
+            # logical retry has a complete failure inventory.
+            failed_symbols[str(symbol)] = _safe_provider_error(exc)
+            continue
+        try:
+            total_request_count += request_count
+            http_statuses.append(int(response.status_code))
+            # Preserve provider timing hints as observations only.  These headers
+            # are never promoted to PIT PASS without an explicit provider policy.
+            response_headers = {
+                key.lower(): str(response.headers.get(key) or "")
+                for key in ("Date", "Last-Modified", "ETag", "Age")
+                if getattr(response, "headers", None) is not None and response.headers.get(key)
+            }
+            response_timing_headers_by_symbol[str(symbol)] = response_headers
+            raw_path = root / f"{segment}.{symbol}.http.raw"
+            _atomic_bytes(raw_path, response.content)
+            raw_paths.append(str(raw_path))
+            fetched_at.append(fetched)
+            payload = response.json()
+            if payload.get("status") not in (None, 200, "200", True):
+                raise ValueError(f"FinMind returned non-ok status for {symbol}: {payload.get('status')}")
+            data = payload.get("data") or []
+            if not isinstance(data, list):
+                raise ValueError(f"FinMind data must be a list for {symbol}")
+            trade_dates.update(str(row.get("date") or "").strip() for row in data if isinstance(row, dict) and row.get("date"))
+            records.extend(parser(data, symbol=symbol))
+        except Exception as exc:
+            # Malformed payloads and parser errors are symbol-local too. Keep
+            # the raw bytes already captured, but leave this symbol unknown.
+            failed_symbols[str(symbol)] = _safe_provider_error(exc)
+            continue
     normalized_path = root / f"{segment}.normalized.json"
     normalized_payload = {
         "segment": segment,
@@ -284,6 +307,7 @@ def _real_hsa8_finmind_capture(*, segment: str, symbols: Sequence[str], start: s
             "request_count": total_request_count,
             "min_request_interval_seconds": max(0.0, float(os.getenv("FINMIND_MIN_REQUEST_INTERVAL_SECONDS", "1.0"))),
             "transient_retries": max(0, int(os.getenv("FINMIND_TRANSIENT_RETRIES", "2"))),
+            "request_timeout_seconds": max(1.0, float(os.getenv("FINMIND_REQUEST_TIMEOUT_SECONDS", "20"))),
         },
         "http_status": max(http_statuses, default=599),
         "response_timing_headers_by_symbol": response_timing_headers_by_symbol,
@@ -304,6 +328,9 @@ def _real_hsa8_finmind_capture(*, segment: str, symbols: Sequence[str], start: s
             "observation_scope": "segment_capture",
         },
         "http_response_bytes": True,
+        "capture_complete": scope_complete,
+        "failed_symbols": failed_symbols,
+        "failed_symbol_count": len(failed_symbols),
         "pit_status": "PASS" if scope_complete else "BLOCKED_PUBLICATION_AND_AVAILABILITY_UNPROVEN",
         # Scope is derived only from parsed records in this invocation and
         # only for the requested target date. Missing symbols remain unknown;
@@ -653,10 +680,18 @@ def run_workflow(
     margin: bool = True,
     monthly_revenue: bool = True,
     valuation: bool = True,
+    twii_only: bool = False,
     handoff_output_dir: Optional[str] = None,
     acquisition_run_id: str = "",
 ) -> Dict[str, Any]:
     real_capture = bool(handoff_output_dir)
+    if twii_only:
+        daily_price = False
+        corporate_actions = False
+        institutional = False
+        margin = False
+        monthly_revenue = False
+        valuation = False
     if daily_price and real_capture:
         records, daily_capture = _real_hsa8_finmind_capture(segment="daily_price", symbols=symbols, start=start, end=end, output_dir=handoff_output_dir, acquisition_run_id=acquisition_run_id)
     else:
@@ -718,7 +753,7 @@ def run_workflow(
             output_dir=handoff_output_dir,
             acquisition_run_id=acquisition_run_id,
         )
-        if real_capture and daily_price
+        if real_capture and (daily_price or twii_only)
         else {"status": "not_requested"}
     )
 
@@ -764,6 +799,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-margin", action="store_true", help="Skip FinMind margin purchase/short sale archive step.")
     parser.add_argument("--no-monthly-revenue", action="store_true", help="Skip FinMind monthly revenue archive step.")
     parser.add_argument("--no-valuation", action="store_true", help="Skip FinMind valuation archive step.")
+    parser.add_argument("--twii-only", action="store_true", help="Capture only the TWII source for an existing logical acquisition retry.")
     parser.add_argument("--handoff-output-dir", default="", help="Job-local raw/normalized handoff artifacts; no output when omitted.")
     parser.add_argument("--acquisition-run-id", default="", help="Authoritative same-run id embedded in HSA8 adapter output.")
     return parser
@@ -788,6 +824,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         margin=not args.no_margin,
         monthly_revenue=not args.no_monthly_revenue,
         valuation=not args.no_valuation,
+        twii_only=args.twii_only,
         handoff_output_dir=args.handoff_output_dir,
         acquisition_run_id=args.acquisition_run_id,
     )
@@ -803,6 +840,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         int((report.get("monthly_revenue") or {}).get("count") or 0) if not args.no_monthly_revenue else 0,
         int((report.get("valuation") or {}).get("count") or 0) if not args.no_valuation else 0,
     ]
+    if args.twii_only:
+        return 0 if (report.get("hsa8_capture", {}).get("twii", {}).get("status") == "captured") else 2
     if archive_count <= 0 and not any(enabled_non_price_counts):
         return 2
     if not args.no_validate and (mismatched > 0 or unchecked > 0):

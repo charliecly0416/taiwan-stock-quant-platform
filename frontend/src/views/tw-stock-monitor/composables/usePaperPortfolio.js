@@ -20,8 +20,14 @@ export function usePaperPortfolio () {
       const accountParams = latestData && latestData.paper_account_id
         ? { ...params, paper_account_id: latestData.paper_account_id }
         : params
+      // A missing clean decision is a valid empty state for a new user. Do
+      // not follow it with a guaranteed 404 account-state request; the panel
+      // can render the empty state while still showing the audit run list.
+      const accountPromise = latestData && latestData.paper_account_id
+        ? getTwStockPaperPortfolioState(accountParams)
+        : Promise.resolve(null)
       const [account, runs] = await Promise.all([
-        getTwStockPaperPortfolioState(accountParams),
+        accountPromise,
         getTwStockPaperPortfolioApplyRuns({ ...accountParams, limit: 20 })
       ])
       Object.assign(state, { latest, account, runs })

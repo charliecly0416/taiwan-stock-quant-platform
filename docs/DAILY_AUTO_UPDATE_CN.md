@@ -125,6 +125,17 @@ data_tw/ops/daily_auto_update/<job_id>/publish_report.md
 
 如果 FinMind 历史接口受额度或付费限制影响，可用本地 Yahoo/Scrapling 标准化文件补齐同一张归档表：
 
+FinMind 每个 symbol 的请求默认使用 20 秒超时，可通过
+`FINMIND_REQUEST_TIMEOUT_SECONDS` 调整；`FINMIND_TRANSIENT_RETRIES` 和
+`FINMIND_RETRY_BACKOFF_SECONDS` 控制临时失败的重试。单个 symbol 的网络或解析
+失败会被记录到该次 job 的 `margin.adapter_output.json`（`failed_symbols`），不会
+丢弃同一段已经成功抓到的其他 symbol；只要 scope 不完整，HSA8 handoff 仍保持
+阻断。
+
+同一目标日的后续运行会读取 logical acquisition state，只请求上次缺失的 symbol，
+并将新旧 raw/normalized 证据合并后重新验证完整 scope。若只是 TWSE 指数接口暂时
+返回前一交易日，日更会使用 `twii-only` 方式重试指数，不重新抓取 150 支股票。
+
 ```bash
 DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<db> \
 python backend/scripts/import_tw_stock_yahoo_normalized_archive.py \

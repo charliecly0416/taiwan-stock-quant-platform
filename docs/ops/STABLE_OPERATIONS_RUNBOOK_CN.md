@@ -69,6 +69,8 @@ python scripts/tw_stock_ops_backup.py drill \
 
 ## 统一任务入口
 
+数据抓取、标准化和只读查询的模块边界见 `docs/tw_modular_contracts/TW_DATA_MODULE_MAP_AND_INTERFACES_CN.md`。运维排错时先判断问题属于 Acquisition、Artifact production 还是 Access/Serving，再选择对应的 job、manifest 或 API 证据。
+
 新调度和人工执行优先使用 `scripts/run_tw_task.py`。先只校验配置和执行计划：
 
 ```bash
@@ -103,6 +105,16 @@ python scripts/run_tw_task.py --status daily_update --limit 5
 ```bash
 make check-project
 ```
+
+日更自然任务的调度审计使用：
+
+```bash
+python scripts/audit_tw_daily_auto_real_scheduled_jobs.py --require-full-scope
+```
+
+输出中的 `primary_blocker` 只表示会阻断当前主线的故障；`full_scope_shadow_blocker` 单独记录 B19R2R full-scope 影子链的缺口。当 `full_scope_shadow_nonblocking=true` 时，说明影子链仍需下一个合法窗口重试，但 Model A、产品 latest 和只读前端链路不应被判为失败。B19 的 provider timeout 必须保留原始 stderr 和 `full_orthogonal_refresh_evidence.json`，不能用旧缓存伪造成功。
+
+`daily_chain_status.json` 的终态以用户可读取的产品产物为准：同一任务的 DAPR18 证据确认 controlled signal、readonly snapshot 和 Agent prompt 都已对齐目标日时，状态应为 `READONLY_CONTEXT_READY`，并记录 `READONLY_LATEST_UPDATED_BY_EXPLICIT_GATE`。这不等于 formal provider 或 qlib accepted latest 已切换；两者仍由各自的 latest 指针和 validator 证明。
 
 健康检查只验证配置、任务计划、workflow 结构和脚本索引，不替代真实日更、数据 freshness 或部署验收。
 

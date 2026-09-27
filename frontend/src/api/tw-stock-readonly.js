@@ -74,6 +74,20 @@ export function getTwStockReadonlyReplayWindow (params = {}) {
   })
 }
 
+export function getTwStockReadonlyReplayOptions () {
+  return request({
+    url: `${BASE_URL}/readonly-replays/options`,
+    method: 'get'
+  })
+}
+
+export function getTwStockReadonlyReplayTask (runId) {
+  return request({
+    url: `${BASE_URL}/readonly-replays/${encodeURIComponent(runId)}`,
+    method: 'get'
+  })
+}
+
 export function getTwStockReadonlyModelStrategyComparison (params = {}) {
   return request({
     url: `${BASE_URL}/readonly/model-strategy-comparison`,

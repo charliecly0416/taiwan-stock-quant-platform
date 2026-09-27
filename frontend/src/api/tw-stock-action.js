@@ -2,6 +2,24 @@ import request from '@/utils/request'
 
 const BASE_URL = '/api/tw-stock'
 
+// Readonly replay submission is an isolated task creation action. The task
+// cannot mutate provider/latest, paper-account, broker, or order state, but
+// it still creates a filesystem-backed run record and therefore belongs on
+// the action surface rather than the GET-only readonly client.
+export function createTwStockReadonlyReplay (data = {}) {
+  return request({
+    url: `${BASE_URL}/readonly-replays`,
+    method: 'post',
+    data: {
+      model_track_id: data.model_track_id || data.modelTrackId,
+      strategy_rule: data.strategy_rule || data.strategyRule,
+      start_date: data.start_date || data.startDate,
+      end_date: data.end_date || data.endDate,
+      timeout_seconds: data.timeout_seconds || data.timeoutSeconds || 1200
+    }
+  })
+}
+
 export function saveTwStockMonitorConfig (data) {
   return request({
     url: `${BASE_URL}/monitor/config`,

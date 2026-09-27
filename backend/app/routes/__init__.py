@@ -39,6 +39,7 @@ def register_routes(app: Flask):
     from app.routes.readonly_replay_window import readonly_replay_window_bp
     from app.routes.readonly_replay_window_index import readonly_replay_window_index_bp
     from app.routes.readonly_model_strategy_comparison import readonly_model_strategy_comparison_bp
+    from app.routes.tw_stock_dynamic_replay import tw_stock_dynamic_replay_bp
     
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp, url_prefix='/api/auth')   # Auth routes
@@ -73,6 +74,7 @@ def register_routes(app: Flask):
     app.register_blueprint(readonly_replay_window_bp, url_prefix='/api/tw-stock')
     app.register_blueprint(readonly_replay_window_index_bp, url_prefix='/api/tw-stock')
     app.register_blueprint(readonly_model_strategy_comparison_bp, url_prefix='/api/tw-stock')
+    app.register_blueprint(tw_stock_dynamic_replay_bp, url_prefix='/api/tw-stock')
 
     # Agent Gateway (/api/agent/v1) — versioned, scoped surface for AI agents.
     # See docs/agent/AI_INTEGRATION_DESIGN.md.

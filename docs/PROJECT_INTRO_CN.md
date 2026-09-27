@@ -82,7 +82,9 @@ flowchart LR
 
 系统对调用方提供统一任务入口 `scripts/run_tw_task.py`。调用方提交 `task_type + parameters`，`configs/tw_task_registry.yaml` 负责选择受控 executor、参数 schema 和固定依赖：日更委托现有稳定日更入口，回测委托标准 ReplayResult builder，已注册 YAML DAG 委托 `WorkflowEngine`。任务请求不能传脚本路径或 shell 命令，因此统一入口只负责连接现有模块，不会形成第二套模型、策略或回放实现。
 
-统一入口还提供只读状态查询：`python scripts/run_tw_task.py --status`。项目级静态健康检查使用 `make check-project`，它验证配置、任务示例、workflow DAG 和脚本生命周期索引，不执行抓数、训练或发布。
+统一入口还提供只读状态查询：`python scripts/run_tw_task.py --status`。前端自定义回放通过 `POST /api/tw-stock/readonly-replays` 提交同一个 `readonly_backtest` 任务，再用 `GET /api/tw-stock/readonly-replays/{run_id}` 查询结果；任务按交易日串联模型、策略、意图和回放模块，并把结果写入隔离目录。项目级静态健康检查使用 `make check-project`，它验证配置、任务示例、workflow DAG 和脚本生命周期索引，不执行抓数、训练或发布。
+
+数据处理按 Acquisition、Artifact production、Access/Serving 三个边界组织。它们的实际代码位置、输入输出和扩展方式见 `docs/tw_modular_contracts/TW_DATA_MODULE_MAP_AND_INTERFACES_CN.md`；项目没有把抓取、查询和 API 返回合并成一个会产生混合副作用的 `DataService`。
 
 ```yaml
 schema_version: tw.task.request.v1

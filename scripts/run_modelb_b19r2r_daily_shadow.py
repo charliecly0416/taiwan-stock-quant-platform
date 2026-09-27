@@ -260,8 +260,15 @@ def validate_hsa_children(handoff_path: Path, asof: str, source_run_id: str, cut
         if len(matches) != 1:
             raise ShadowError("B19R2R_BLOCKED_HANDOFF_CHILD", family)
         source = matches[0]
-        absent = {normalize_symbol(item) for item in source.get("absent_scope", [])}
-        unknown = {normalize_symbol(item) for item in source.get("unknown_scope", [])}
+        absent_scope = source.get("absent_scope")
+        unknown_scope = source.get("unknown_scope")
+        # A malformed handoff must remain a source-contract blocker.  Treating
+        # null scope lists as iterable would leak an unhelpful TypeError and
+        # obscure that the source capture is incomplete.
+        if not isinstance(absent_scope, list) or not isinstance(unknown_scope, list):
+            raise ShadowError("B19R2R_BLOCKED_HANDOFF_CHILD_CONTRACT", family)
+        absent = {normalize_symbol(item) for item in absent_scope}
+        unknown = {normalize_symbol(item) for item in unknown_scope}
         if (
             source.get("acquisition_run_id") != source_run_id
             or source.get("target_asof") != asof

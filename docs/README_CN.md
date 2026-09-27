@@ -586,6 +586,7 @@ QuantDinger/
 |------|------|
 | [当前项目文档入口与归档政策](tw_modular_contracts/TW_CURRENT_PROJECT_DOC_ENTRY_AND_ARCHIVE_POLICY_CN.md) | 新统筹/执行者/审查者进入当前项目的第一入口，说明推荐阅读顺序、模块化原则和历史归档政策 |
 | [台股项目模块地图与链路串联说明](tw_modular_contracts/TW_PROJECT_MODULE_MAP_AND_FLOW_CN.md) | 当前数据、模型、信号、策略、回放、readonly artifact、API、前端、日更和模拟账户如何串联 |
+| [台股项目后端代码框架与完整链路](tw_modular_contracts/TW_BACKEND_CODE_FRAMEWORK_CN.md) | 按真实代码阅读统一任务入口、日更、数据、模型、策略、回放、WorkflowEngine 和 Flask API |
 | [台股模块化研究管线未来开发规范](tw_modular_contracts/TW_MODULAR_PIPELINE_FUTURE_DEVELOPMENT_GUIDE_CN.md) | 新增数据、特征、模型、策略、回放和前端接入时必须遵守的模块合同和审查流程 |
 | [台股开发、测试与实验手册](tw_modular_contracts/TW_DEVELOPER_TEST_AND_EXPERIMENT_PLAYBOOK_CN.md) | 开发、测试、实验和验收命令入口，避免回到一功能一大脚本 |
 | [当前策略上下文 API 字段字典](tw_modular_contracts/TW_CURRENT_STRATEGY_CONTEXT_API_FIELD_DICTIONARY_CN.md) | `/api/tw-stock/current-strategy-context` 统一字段、排名、策略快照和只读语义 |

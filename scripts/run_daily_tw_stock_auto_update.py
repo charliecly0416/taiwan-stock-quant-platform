@@ -927,6 +927,13 @@ def downstream_context_paths(asof: str) -> dict[str, str]:
 
 
 def publish_latest_gate_status(job: dict[str, Any]) -> str:
+    dapr18 = job.get("dapr18_controlled_latest_orchestration") if isinstance(job.get("dapr18_controlled_latest_orchestration"), dict) else {}
+    dapr18_state = dapr18.get("product_latest_state_after") if isinstance(dapr18.get("product_latest_state_after"), dict) else {}
+    if (
+        dapr18.get("status") in {"auto_publish_chain_completed", "auto_publish_idempotent_noop_already_current"}
+        and dapr18_state.get("all_product_latest_match_target") is True
+    ):
+        return "READONLY_LATEST_UPDATED_BY_EXPLICIT_GATE"
     if job.get("provider_publish_triggered") or job.get("latest_signal_updated"):
         return "EXPLICIT_LEGACY_GATE_TRIGGERED"
     readonly_snapshot = job.get("readonly_snapshot") if isinstance(job.get("readonly_snapshot"), dict) else {}
@@ -1037,6 +1044,13 @@ def build_daily_chain_status_payload(
     model_paths = model_a_manifest_paths(asof)
     signal_run = latest_option_c_daily_signal_run_for_asof(asof)
     context_paths = downstream_context_paths(asof)
+    dapr18_orchestration = job.get("dapr18_controlled_latest_orchestration") if isinstance(job.get("dapr18_controlled_latest_orchestration"), dict) else {}
+    dapr18_product_state = dapr18_orchestration.get("product_latest_state_after") if isinstance(dapr18_orchestration.get("product_latest_state_after"), dict) else {}
+    published_readonly_context = bool(
+        dapr18_orchestration.get("status") in {"auto_publish_chain_completed", "auto_publish_idempotent_noop_already_current"}
+        and dapr18_product_state.get("target_asof") == asof
+        and dapr18_product_state.get("all_product_latest_match_target") is True
+    )
     latest_signal_asof = latest_asof()
     weekend = is_weekend_asof(asof)
     data_window_status = str(job.get("status") or "")
@@ -1154,6 +1168,21 @@ def build_daily_chain_status_payload(
         blocked_at=blocked_at,
         blocker_reason=blocker_reason,
     )
+    # DAPR18 publishes the readonly snapshot and Agent prompt after Model A
+    # scoring. Recompute the terminal observation from that same run so the
+    # persisted chain status reflects the product artifacts users can read.
+    if published_readonly_context and model_a_signal_status == "READY":
+        pbpr0_decision_fields.update(
+            {
+                "state": "READONLY_CONTEXT_READY",
+                "refined_blocker": {"blocked_at": "", "reason": "none"},
+                "provider_bridge_readiness_state": "READONLY_PRODUCT_ARTIFACT_READY",
+            }
+        )
+        blocked_at = ""
+        blocker_reason = "none"
+        next_retry_hint = ""
+        next_required_action = "observe_next_trade_day"
     payload = {
         "schema_version": DNG13_DAILY_CHAIN_STATUS_SCHEMA_VERSION,
         "created_at": utc_now(),
@@ -1177,9 +1206,9 @@ def build_daily_chain_status_payload(
         "legacy_compatible_model_b": dict(MODELB_LEGACY_COMPATIBILITY),
         "strategy_input_bundle_status": "READY" if context_paths["strategy_input_bundle_manifest"] else ("BLOCKED_MODEL_A_SIGNAL" if not model_paths["signal_manifest"] else "MISSING"),
         "replay_input_bundle_status": "READY" if context_paths["replay_input_bundle_manifest"] else "NOT_BUILT_OR_NOT_REQUIRED_BY_DAILY_CHAIN",
-        "readonly_source_context_status": "READY" if context_paths["readonly_source_context_manifest"] else ("BLOCKED_MODEL_A_SIGNAL" if not model_paths["signal_manifest"] else "MISSING"),
-        "agent_source_context_status": "READY" if context_paths["agent_source_context_manifest"] else ("BLOCKED_MODEL_A_SIGNAL" if not model_paths["signal_manifest"] else "MISSING"),
-        "frontend_payload_status": "READONLY_SOURCE_CONTEXT_READY_NOT_PUBLISHED" if context_paths["readonly_source_context_manifest"] else "BLOCKED_READONLY_SOURCE_CONTEXT",
+        "readonly_source_context_status": "READY" if (context_paths["readonly_source_context_manifest"] or published_readonly_context) else ("BLOCKED_MODEL_A_SIGNAL" if not model_paths["signal_manifest"] else "MISSING"),
+        "agent_source_context_status": "READY" if (context_paths["agent_source_context_manifest"] or published_readonly_context) else ("BLOCKED_MODEL_A_SIGNAL" if not model_paths["signal_manifest"] else "MISSING"),
+        "frontend_payload_status": "READONLY_SOURCE_CONTEXT_READY" if published_readonly_context else ("READONLY_SOURCE_CONTEXT_READY_NOT_PUBLISHED" if context_paths["readonly_source_context_manifest"] else "BLOCKED_READONLY_SOURCE_CONTEXT"),
         "publish_latest_gate_status": publish_latest_gate_status(job),
         "pending_asof_status": pending_status,
         "next_retry_hint": next_retry_hint,
@@ -1207,6 +1236,12 @@ def build_daily_chain_status_payload(
             "provider_candidate_job_dir": str(provider_candidate.get("candidate_job_dir") or provider_candidate_refresh.get("candidate_job_dir") or ""),
             "provider_candidate_normalized": str(provider_candidate.get("candidate_normalized_path") or ""),
             "provider_candidate_staged_provider": str(provider_candidate.get("staged_provider_path") or ""),
+            "dapr18_product_latest_state_after": str(
+                (dapr18_orchestration.get("evidence_paths") or {}).get("product_latest_state_after") or ""
+            ),
+            "controlled_signal_latest": rel_path(CONTROLLED_MODEL_SIGNAL_LATEST),
+            "readonly_snapshot_latest": rel_path(READONLY_SNAPSHOT_LATEST),
+            "agent_prompt_latest": rel_path(AGENT_DAILY_PROMPT_LATEST),
             **context_paths,
         },
         "gate_status": {
@@ -1939,9 +1974,36 @@ def parse_json_stdout(command_result: dict[str, Any]) -> dict[str, Any]:
     if not stdout_path.exists():
         return {}
     try:
-        return json.loads(stdout_path.read_text(encoding="utf-8"))
-    except Exception:
+        text = stdout_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
         return {}
+    try:
+        payload = json.loads(text)
+        return payload if isinstance(payload, dict) else {}
+    except json.JSONDecodeError:
+        # Some subprocesses (notably Qlib) may write informational logs before
+        # their final JSON result.  Parse only complete JSON documents embedded
+        # in that output; do not accept a partial object or synthesize fields.
+        decoder = json.JSONDecoder()
+        candidates: list[tuple[int, int, dict[str, Any]]] = []
+        for index, char in enumerate(text):
+            if char != "{":
+                continue
+            try:
+                value, end = decoder.raw_decode(text[index:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict):
+                candidates.append((index + end, index, value))
+        if candidates:
+            # The command result is conventionally the last complete JSON
+            # document.  Using the greatest end offset also prefers an outer
+            # pretty-printed object over nested objects inside it.
+            candidates.sort(key=lambda item: (item[0], item[1]))
+            return candidates[-1][2]
+    except (OSError, UnicodeDecodeError):
+        pass
+    return {}
 
 
 def next_session_open_for_asof(asof: str, *, calendar_path: Path = CALENDAR) -> str:
@@ -5983,6 +6045,135 @@ def merge_finmind_segment_payloads(
     return merged
 
 
+def _capture_file_entries(capture: dict[str, Any], field: str) -> list[dict[str, str]]:
+    """Return canonical file bindings from either adapter or legacy path fields."""
+    entries = capture.get(field)
+    if isinstance(entries, list):
+        result: list[dict[str, str]] = []
+        for item in entries:
+            path = str(item.get("path") if isinstance(item, dict) else item or "").strip()
+            if not path:
+                continue
+            resolved = resolve_path(path)
+            if resolved.exists() and resolved.is_file():
+                result.append({
+                    "path": str(resolved),
+                    "role": str(item.get("role") if isinstance(item, dict) else (
+                        "provider_raw_response" if field == "raw_files" else "provider_normalized_payload"
+                    )),
+                    "sha256": str(file_fingerprint(resolved).get("sha256") or ""),
+                })
+        return result
+    legacy_field = "raw_paths" if field == "raw_files" else "normalized_paths"
+    return _capture_file_entries({field: capture.get(legacy_field) or []}, field)
+
+
+def _normalized_capture_records(capture: dict[str, Any]) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for entry in _capture_file_entries(capture, "normalized_files"):
+        payload = read_json(resolve_path(entry["path"]))
+        rows = payload.get("records") if isinstance(payload, dict) else []
+        if isinstance(rows, list):
+            records.extend(row for row in rows if isinstance(row, dict))
+    return records
+
+
+def merge_partial_finmind_capture(
+    *,
+    previous: dict[str, Any],
+    current: dict[str, Any],
+    symbols: list[str],
+    segment: str,
+    output_dir: Path,
+    end: str,
+) -> dict[str, Any]:
+    """Merge a resumable segment capture while retaining strict HSA8 semantics."""
+    if not previous or previous.get("validator_status") == "PASS":
+        return current
+    expected_scope = sorted({normalize_symbol_code(symbol) for symbol in symbols if normalize_symbol_code(symbol)})
+    previous_returned = {normalize_symbol_code(symbol) for symbol in previous.get("returned_scope", [])}
+    current_returned = {normalize_symbol_code(symbol) for symbol in current.get("returned_scope", [])}
+    returned_scope = sorted(previous_returned | current_returned)
+    failed_symbols = {
+        str(symbol): str(error)
+        for source in (previous.get("failed_symbols") or {}, current.get("failed_symbols") or {})
+        for symbol, error in source.items()
+    }
+    for symbol in returned_scope:
+        failed_symbols.pop(symbol, None)
+    unknown_scope = sorted(set(expected_scope) - set(returned_scope))
+    raw_entries: list[dict[str, str]] = []
+    seen_raw: set[str] = set()
+    for capture in (previous, current):
+        for entry in _capture_file_entries(capture, "raw_files"):
+            if entry["path"] not in seen_raw:
+                raw_entries.append(entry)
+                seen_raw.add(entry["path"])
+
+    records: list[dict[str, Any]] = []
+    seen_records: set[str] = set()
+    for capture in (previous, current):
+        for row in _normalized_capture_records(capture):
+            key = json.dumps(row, ensure_ascii=False, sort_keys=True, default=str)
+            if key not in seen_records:
+                records.append(row)
+                seen_records.add(key)
+    merged_normalized = output_dir / f"{segment}.normalized.merged.json"
+    write_json(merged_normalized, {
+        "segment": segment,
+        "artifact_kind": "provider_normalized_payload",
+        "records": records,
+    })
+    normalized_entries = [{
+        "path": str(merged_normalized),
+        "role": "provider_normalized_payload",
+        "sha256": str(file_fingerprint(merged_normalized).get("sha256") or ""),
+    }]
+    merged = dict(current)
+    merged["expected_scope"] = expected_scope
+    merged["returned_scope"] = returned_scope
+    merged["absent_scope"] = []
+    merged["unknown_scope"] = unknown_scope
+    merged["failed_symbols"] = failed_symbols
+    merged["failed_symbol_count"] = len(failed_symbols)
+    merged["capture_complete"] = not unknown_scope
+    merged["validator_status"] = "PASS" if not unknown_scope else "BLOCKED_SOURCE_SCOPE_OR_VALIDATOR_UNPROVEN"
+    merged["pit_status"] = "PASS" if not unknown_scope else "BLOCKED_PUBLICATION_AND_AVAILABILITY_UNPROVEN"
+    merged["trade_date"] = end if not unknown_scope else max(
+        str(previous.get("trade_date") or ""), str(current.get("trade_date") or "")
+    )
+    merged["raw_paths"] = [entry["path"] for entry in raw_entries]
+    merged["normalized_paths"] = [str(merged_normalized)]
+    merged["raw_files"] = raw_entries
+    merged["normalized_files"] = normalized_entries
+    merged["request_parameters"] = {
+        **dict(previous.get("request_parameters") or {}),
+        **dict(current.get("request_parameters") or {}),
+        "logical_expected_symbol_count": len(expected_scope),
+        "logical_returned_symbol_count": len(returned_scope),
+        "resumed_from_partial_capture": True,
+    }
+    available_times = [str(value) for value in (previous.get("available_at"), current.get("available_at")) if value]
+    fetched_times = [str(value) for value in (previous.get("fetched_at"), current.get("fetched_at")) if value]
+    if available_times:
+        merged["available_at"] = max(available_times)
+    if fetched_times:
+        merged["fetched_at"] = max(fetched_times)
+    canonical = {field: merged.get(field) for field in (
+        "provider", "source_id", "trade_date", "http_status", "validator_status", "pit_status",
+        "expected_scope", "returned_scope", "absent_scope", "unknown_scope", "endpoint",
+        "endpoint_version", "request_parameters", "acquisition_run_id", "target_asof",
+        "raw_files", "normalized_files",
+    )}
+    if "availability_evidence" in merged:
+        canonical["availability_evidence"] = merged["availability_evidence"]
+    merged["canonical_metadata_digest"] = hsa8._canonical_digest(canonical)
+    adapter_path = output_dir / f"{segment}.adapter_output.json"
+    write_json(adapter_path, merged)
+    merged["adapter_output_path"] = str(adapter_path)
+    return merged
+
+
 def status_from_finmind_result(result: dict[str, Any]) -> str:
     if result.get("ok"):
         return "success"
@@ -6602,6 +6793,7 @@ def run_finmind_segmented_update(
         if include_optional_segments:
             ordered_segments.extend(["corporate_actions", "monthly_revenue", "valuation"])
     logical_state = None
+    twii_capture: dict[str, Any] = {}
     if logical_state_path is not None:
         logical_state = logical_acquisition.load_state(logical_state_path, target_asof=end, symbols=symbols)
         # A successful cache is not current logical-run evidence.  Only state
@@ -6616,9 +6808,38 @@ def run_finmind_segmented_update(
             and item["capture"].get("pit_status") == "PASS"
         }
         ordered_segments = [segment for segment in ordered_segments if segment not in completed]
+        twii_item = logical_state.get("segments", {}).get("twii")
+        twii_capture = twii_item.get("capture") if isinstance(twii_item, dict) else None
+        if (
+            isinstance(twii_capture, dict)
+            and twii_capture.get("validator_status") != "PASS"
+            and "daily_price" not in ordered_segments
+        ):
+            # The TWSE index belongs to the daily-price segment, but a stale
+            # TWSE response should be retried without re-fetching all OHLCV.
+            ordered_segments.insert(0, "daily_price")
     segment_results: dict[str, dict[str, Any]] = {}
     cache_events: dict[str, dict[str, Any]] = {}
     for segment in ordered_segments:
+        previous_item = (logical_state.get("segments", {}).get(segment)
+                         if isinstance(logical_state, dict) else None)
+        previous_capture = (
+            previous_item.get("capture")
+            if isinstance(previous_item, dict) and isinstance(previous_item.get("capture"), dict)
+            else {}
+        )
+        segment_symbols = list(symbols)
+        if previous_capture and previous_capture.get("validator_status") != "PASS":
+            already_returned = {
+                normalize_symbol_code(symbol)
+                for symbol in previous_capture.get("returned_scope", [])
+                if normalize_symbol_code(symbol)
+            }
+            remaining = [symbol for symbol in symbols if normalize_symbol_code(symbol) not in already_returned]
+            # An incomplete capture with no unknown symbols still needs a
+            # fresh request so its metadata can be revalidated.
+            if remaining:
+                segment_symbols = remaining
         cache = load_finmind_segment_cache(segment=segment, end=end)
         cache_origin_issue = finmind_segment_cache_origin_issue(cache) if cache else ""
         if logical_state is not None:
@@ -6634,8 +6855,22 @@ def run_finmind_segmented_update(
         else:
             segment_handoff_dir = handoff_artifact_dir / segment
             segment_handoff_dir.mkdir(mode=0o750, exist_ok=True)
+            segment_symbols_file = symbols_file
+            if segment_symbols != symbols:
+                segment_symbols_file = job_dir / f"{segment}_retry_symbols.txt"
+                segment_symbols_file.write_text("\n".join(segment_symbols) + "\n", encoding="utf-8")
+            segment_argv = list(base_argv)
+            symbols_arg_index = segment_argv.index("--symbols-file")
+            segment_argv[symbols_arg_index + 1] = str(segment_symbols_file)
+            segment_argv.extend([
+                *segment_skip_flags[segment],
+                "--handoff-output-dir",
+                str(segment_handoff_dir),
+            ])
+            if segment == "daily_price" and isinstance(twii_capture, dict) and twii_capture.get("validator_status") != "PASS":
+                segment_argv.append("--twii-only")
             result = command_runner(
-                [*base_argv, *segment_skip_flags[segment], "--handoff-output-dir", str(segment_handoff_dir)],
+                segment_argv,
                 cwd=ROOT,
                 stdout_path=job_dir / f"finmind_{segment}_stdout.txt",
                 stderr_path=job_dir / f"finmind_{segment}_stderr.txt",
@@ -6660,6 +6895,15 @@ def run_finmind_segmented_update(
                     continue
                 if not isinstance(capture, dict) or capture.get("status") != "captured":
                     continue
+                if previous_capture and captured_name == segment:
+                    capture = merge_partial_finmind_capture(
+                        previous=previous_capture,
+                        current=capture,
+                        symbols=symbols,
+                        segment=segment,
+                        output_dir=segment_handoff_dir,
+                        end=end,
+                    )
                 evidence_path = str(capture.get("adapter_output_path") or "")
                 evidence_sha = file_fingerprint(resolve_path(evidence_path)).get("sha256", "") if evidence_path and resolve_path(evidence_path).exists() else ""
                 capture_ready = bool(
@@ -6849,7 +7093,7 @@ def build_real_same_run_handoff(*, job: dict[str, Any], job_dir: Path, symbols: 
         # root only for logical-run handoffs, never for ordinary jobs.
         validation_root = OPS_ROOT if job.get("acquisition_logical_run_id") else job_dir
         manifest = hsa8.build_runtime_handoff(validation_root, run_id, asof, sources, job_dir / "same_run_handoff")
-        report.update({"ok": True, "status": "PASS", "manifest_path": rel_path(manifest)})
+        report.update({"ok": True, "status": "PASS", "reason": "handoff_built", "manifest_path": rel_path(manifest)})
     except Exception as exc:
         report.update({"error": f"{type(exc).__name__}:{exc}"})
     write_json(job_dir / "same_run_handoff_validation.json", report)

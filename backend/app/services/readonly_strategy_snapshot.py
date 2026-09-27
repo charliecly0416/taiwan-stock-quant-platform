@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +12,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PUBLISH_ROOT = REPO_ROOT / "data_tw/artifacts/publish/readonly_strategy_snapshot"
 LATEST_PATH = PUBLISH_ROOT / "latest.json"
+ASOF_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 class ReadonlyStrategySnapshotError(Exception):
@@ -102,7 +105,16 @@ def _forbidden_scope_summary(forbidden_scope_audit: dict[str, Any]) -> dict[str,
 
 def _manifest_path_for_asof(asof: str | None) -> tuple[Path, dict[str, Any] | None]:
     if asof:
-        return (PUBLISH_ROOT / asof / "manifest.json").resolve(), None
+        if ASOF_PATTERN.fullmatch(asof) is None:
+            raise ReadonlyStrategySnapshotError("invalid_asof", "Snapshot asof must be YYYY-MM-DD")
+        try:
+            date.fromisoformat(asof)
+        except ValueError as exc:
+            raise ReadonlyStrategySnapshotError("invalid_asof", "Snapshot asof must be a valid calendar date") from exc
+        manifest_path = (PUBLISH_ROOT / asof / "manifest.json").resolve()
+        if not manifest_path.is_relative_to(PUBLISH_ROOT.resolve()):
+            raise ReadonlyStrategySnapshotError("asof_outside_readonly_root", "Snapshot asof is outside readonly snapshot root")
+        return manifest_path, None
     latest = _load_json(LATEST_PATH)
     if latest.get("artifact_type") != "readonly_strategy_snapshot_latest_pointer":
         raise ReadonlyStrategySnapshotError("invalid_latest_pointer", "Latest pointer is not a readonly snapshot pointer")

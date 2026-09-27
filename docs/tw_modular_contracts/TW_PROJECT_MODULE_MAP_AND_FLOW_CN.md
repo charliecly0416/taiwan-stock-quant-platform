@@ -443,6 +443,8 @@ flowchart TB
 
 ### 4.1 在仓库中去哪里找
 
+数据模块的完整边界、合同级接口和一天数据示例见 [数据模块地图与统一接口说明](TW_DATA_MODULE_MAP_AND_INTERFACES_CN.md)。该文档先解释 Acquisition、Artifact production、Access/Serving 的分工，再进入下面的具体实现导航。
+
 | 想查看的部分 | 当前入口 |
 | --- | --- |
 | baseline、模型和产品 artifact 身份 | `configs/active_baseline_descriptor.yaml`、`configs/tw_modular_registry.yaml`、`configs/tw_product_artifact_registry.yaml` |
@@ -495,7 +497,7 @@ B19R2R 读取 Model A 原始 Top50 和同日 78 个 PIT-safe 特征，只重排 
 
 OrderIntent 表达“策略想做什么”，不表达“已经成交”。ReplayExecution 在下一交易日价格、手续费、税和现金约束下决定实际成交，再输出 actions、daily NAV、position snapshots 和 summary。
 
-只读回放 API 不根据前端请求临时计算收益。历史 A/A+B 比较由 `readonly.dual_model_track_comparison` workflow 预先生成：A 与 A-only catalog 是 required 节点，A+B 和 paired comparison 是 nonblocking；各 track 独立演化组合状态，却使用同一策略规则、执行价格、费用和初始资金。每个 track 必须声明已注册的 `adapter_id`，adapter 同时锁定 canonical model、模型族、候选边界和自己的 source-bundle manifest；未知 adapter 或身份错绑都会在读取模型数据前失败，Model A 的输入引用也不依赖 B19 特征或训练产物。比较服务只读取已生成且 checksum 验证的 v9 catalog，并兼容回退 v8/v7/v6/v5/v1，所以切换下拉框不会训练、回放、写 provider/latest 或改变 baseline。
+静态只读回放窗口 API 不在 GET 请求中临时计算收益；它读取已登记且 checksum 验证的窗口。需要用户自定义模型、策略和日期时，前端提交 `POST /api/tw-stock/readonly-replays`，由统一任务入口的 `readonly_backtest` executor 在隔离目录中按交易日循环生成 ModelSignal、OrderIntent 和 ReplayResult，前端通过 `GET /api/tw-stock/readonly-replays/{run_id}` 轮询结果。两条入口都不训练、不写 provider/latest、不改变 baseline；动态任务也不会写模拟账户或订单。历史 A/A+B 比较仍由 `readonly.dual_model_track_comparison` workflow 预先生成：A 与 A-only catalog 是 required 节点，A+B 和 paired comparison 是 nonblocking。
 
 ### 5.5 Snapshot、Agent 与 API
 
@@ -733,7 +735,7 @@ GET /api/tw-stock/quant/ops/daily-auto-update/status
 GET /api/tw-stock/quant/ops/readonly-status
 ```
 
-前端只负责选择和展示。指标、收益、策略动作、模型排名和日期一致性结论都由后端读取已验证 artifact 后返回，浏览器不直接读取实验 CSV，也不重算回放。
+前端只负责选择、提交任务和展示。静态窗口的指标由后端读取已验证 artifact；动态回放的指标由统一任务 executor 生成后再由后端返回，浏览器不直接读取实验 CSV，也不在本地重算回放。
 
 ## 10. Workflow Kernel 现在做到哪里
 

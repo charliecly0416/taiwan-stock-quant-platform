@@ -100,3 +100,19 @@ Archived in second cleanup pass:
 - `train_tw_ltr_s2c_fresh_model.py`
 - `validate_tw_ltr_strategy_phasev2_comprehensive_stability.py`
 
+## 2026-09-27 root cleanup
+
+A third cleanup pass moved 172 unreferenced phase, dated, and one-off research scripts from
+the `scripts/` root into
+`root_recovered_20260927/`. The files were selected only after searching current configs,
+runtime modules, tests, CI, and workflow code. They are not part of the daily update, unified
+task entrypoint, readonly replay API, or frontend runtime.
+
+The exact source list, SHA256 manifest, credential scan, and isolated restore verification are
+kept outside the repository at:
+
+`/home/chuliyang/taiwan-stock-quant-platform-backups/slimming-20260927-r1/`
+
+The scan found only code that reads `FINMIND_TOKEN` from the environment; no literal credential
+value was present. Do not run these scripts against current production assets without a new
+contract and review.

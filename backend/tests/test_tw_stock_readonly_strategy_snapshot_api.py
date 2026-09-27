@@ -51,22 +51,31 @@ def test_readonly_strategy_snapshot_latest_get_returns_readonly_payload():
 
 
 def test_readonly_strategy_snapshot_asof_get_returns_same_artifact():
-    resp = _client().get("/api/tw-stock/readonly-strategy-snapshot/2026-06-18")
+    resp = _client().get("/api/tw-stock/readonly-strategy-snapshot/2026-09-23")
     payload = resp.get_json()
 
     assert resp.status_code == 200
     assert payload["code"] == 1
-    assert payload["data"]["asof"] == "2026-06-18"
-    assert payload["data"]["sources"]["manifest"].endswith("/2026-06-18/manifest.json")
+    assert payload["data"]["asof"] == "2026-09-23"
+    assert payload["data"]["sources"]["manifest"].endswith("/2026-09-23/manifest.json")
     assert payload["data"]["checksum"]["ok"] is True
-    assert payload["data"]["checksum"]["checked_file_count"] == 12
+    assert payload["data"]["checksum"]["checked_file_count"] == 4
+
+
+def test_readonly_strategy_snapshot_asof_rejects_invalid_date():
+    resp = _client().get("/api/tw-stock/readonly-strategy-snapshot/not-a-date")
+    payload = resp.get_json()
+
+    assert resp.status_code == 400
+    assert payload["code"] == 0
+    assert payload["data"]["status"] == "invalid_asof"
 
 
 def test_readonly_strategy_snapshot_routes_have_no_write_methods():
     client = _client()
     for path in [
         "/api/tw-stock/readonly-strategy-snapshot",
-        "/api/tw-stock/readonly-strategy-snapshot/2026-06-18",
+        "/api/tw-stock/readonly-strategy-snapshot/2026-09-23",
     ]:
         for method in ["post", "put", "patch", "delete"]:
             assert getattr(client, method)(path).status_code == 405

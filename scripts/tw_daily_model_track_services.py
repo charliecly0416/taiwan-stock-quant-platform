@@ -214,6 +214,23 @@ def build_model_track_services(
             timeout=timeout,
         )
         payload = parse_json_stdout(command)
+        # A failed shadow runner writes a blocker manifest with the generic
+        # ModelSignalArtifact shape.  Its identity fields are intentionally
+        # absent, so propagate the runner's contract error before attempting
+        # success-only artifact identity validation.
+        if not command.get("ok") or payload.get("ok") is not True:
+            return {
+                "ok": False,
+                "status": str(
+                    payload.get("status")
+                    or payload.get("error_code")
+                    or "BLOCKED_B19R2R"
+                ),
+                "model_signal_artifact": "",
+                "artifact_identity_errors": [],
+                "runner": command,
+                "runner_payload": payload,
+            }
         artifact_dir = Path(str(payload.get("artifact_dir") or output_dir))
         if not artifact_dir.is_absolute():
             artifact_dir = root / artifact_dir
