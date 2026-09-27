@@ -1,7 +1,0 @@
-{
-  "artifact_type": "readonly_replay_validation_report",
-  "created_at": "2026-06-18T11:39:13+00:00",
-  "manifest": "data_tw/artifacts/readonly_replay_windows/d6/e4_frozen_qlib_2018_2022/top50_exit_one_worst_sell/20260101_20260507/order_intent_replay_result/manifest.json",
-  "schema_version": "readonly_replay_validation_d6_v1",
-  "status": "pass"
-}

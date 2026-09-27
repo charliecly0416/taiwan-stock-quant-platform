@@ -1,2 +1,0 @@
-window,model_name,strategy_rule,start_date,end_date,diagnostic_only
-2026_ytd,e4_frozen_qlib_2018_2022,top50_exit_one_worst_sell,2026-01-01,2026-05-07,false

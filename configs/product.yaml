@@ -1,0 +1,46 @@
+schema_version: tw.clean_product.v1
+data_root: data_tw/product/data
+artifact_root: data_tw/product/artifacts
+universe: ["2330", "0050", "0056", "00878"]
+strategy: top50_exit_one_worst_sell
+execution: next_open
+datasets:
+  prices:
+    source: finmind
+    endpoint: TaiwanStockPrice
+    date_field: date
+    fields: [stock_id, date, open, max, min, close, Trading_Volume]
+    required: [stock_id, date, close]
+    numeric: [open, max, min, close, Trading_Volume]
+  institutional:
+    source: finmind
+    endpoint: TaiwanStockInstitutionalInvestorsBuySell
+    date_field: date
+    fields: [stock_id, date, name, buy, sell]
+    required: [stock_id, date, name]
+    numeric: [buy, sell]
+    lag_days: 1
+  margin:
+    source: finmind
+    endpoint: TaiwanStockMarginPurchaseShortSale
+    date_field: date
+    fields: [stock_id, date, MarginPurchaseTodayBalance, ShortSaleTodayBalance]
+    required: [stock_id, date]
+    numeric: [MarginPurchaseTodayBalance, ShortSaleTodayBalance]
+    lag_days: 1
+  twii:
+    source: finmind
+    endpoint: TaiwanStockPrice
+    date_field: date
+    fields: [stock_id, date, close]
+    required: [stock_id, date, close]
+    numeric: [close]
+models:
+  model_a:
+    role: baseline
+    stages: [model_a_score]
+    production_allowed: true
+  model_a_plus_b:
+    role: shadow
+    stages: [model_a_score, model_b_rerank]
+    production_allowed: false

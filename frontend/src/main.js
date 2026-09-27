@@ -1,49 +1,20 @@
-import Vue from 'vue'
-// ant-design-vue 1.x 全量样式（lazy_use.js 通过 Vue.use 注册组件，但样式仍需整体引入）
-import 'ant-design-vue/dist/antd.less'
-import App from './App.vue'
-import router from './router'
-import store from './store/'
-import i18n from './locales'
-import { VueAxios } from './utils/request'
-import ProLayout, { PageHeaderWrapper } from '@ant-design-vue/pro-layout'
+import './style.css'
 
-import bootstrap from './core/bootstrap'
-import './core/lazy_use' // use lazy load components
-import './permission' // permission control
-import './utils/filter' // global filter
-import './global.less' // global style
-// 必须在 global.less 之后：覆盖 Pro Layout 顶栏/侧栏底栏（否则会被 global 与组件顺序盖住）
-import './qd-layout-dark-override.less'
-
-Vue.config.productionTip = false
-
-// Suppress noisy ResizeObserver loop errors (harmless in most cases on responsive layouts)
-if (typeof window !== 'undefined') {
-  const ignoreResizeObserverError = (e) => {
-    const msg = (e && (e.reason && e.reason.message || e.message)) || ''
-    if (msg.includes('ResizeObserver loop') || msg.includes('ResizeObserver loop limit exceeded')) {
-      e.preventDefault && e.preventDefault()
-      e.stopImmediatePropagation && e.stopImmediatePropagation()
-      return false
-    }
-  }
-  window.addEventListener('error', ignoreResizeObserverError)
-  window.addEventListener('unhandledrejection', ignoreResizeObserverError)
-}
-
-// mount axios to `Vue.$http` and `this.$http`
-Vue.use(VueAxios)
-// use pro-layout components
-Vue.component('ProLayout', ProLayout)
-Vue.component('PageContainer', PageHeaderWrapper)
-Vue.component('PageHeaderWrapper', PageHeaderWrapper)
-
-new Vue({
-  router,
-  store,
-  i18n,
-  // init localstorage, vuex, Logo message
-  created: bootstrap,
-  render: h => h(App)
-}).$mount('#app')
+const app = document.querySelector('#app')
+app.innerHTML = `
+  <main>
+    <header><p class="eyebrow">READ-ONLY RESEARCH</p><h1>台股模型研究台</h1><p>同一份数据、同一条流水线，比较 baseline 与 shadow。</p></header>
+    <section class="card"><h2>模型与策略</h2><div id="config">载入中…</div></section>
+    <section class="card"><h2>动态回放</h2><form id="replay"><label>模型<select name="model"></select></label><label>开始<input name="start" type="date" required></label><label>结束<input name="end" type="date" required></label><button>执行只读回放</button></form><pre id="result">请选择参数。</pre></section>
+  </main>`
+const configBox = document.querySelector('#config')
+const select = document.querySelector('select[name=model]')
+fetch('/api/tw-stock/config').then(r => r.json()).then(data => {
+  const models = Object.entries(data.models || {})
+  configBox.innerHTML = `<div class="grid">${models.map(([id, m]) => `<article><strong>${id}</strong><span>${m.role}</span><small>${m.stages.join(' → ')}</small></article>`).join('')}<article><strong>${data.strategy}</strong><span>唯一策略</span><small>${data.execution}</small></article></div>`
+  select.innerHTML = models.map(([id, m]) => `<option value="${id}">${id} · ${m.role}</option>`).join('')
+}).catch(e => { configBox.textContent = e.message })
+document.querySelector('#replay').addEventListener('submit', async event => {
+  event.preventDefault(); const p = new URLSearchParams(new FormData(event.currentTarget)); const out = document.querySelector('#result'); out.textContent = '运行中…'
+  try { const r = await fetch(`/api/tw-stock/replay?${p}`); out.textContent = JSON.stringify(await r.json(), null, 2) } catch (e) { out.textContent = e.message }
+})
