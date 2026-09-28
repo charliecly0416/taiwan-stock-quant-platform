@@ -19,7 +19,7 @@
 - **模块化单体**：`clean_product/` 的 data / models / strategy / replay / agent / paper 分工，Flask routes 只负责接口适配，ProductService 组合业务。
 - **单向产物流**：数据 → 特征与信号 → 策略意图 → 回放与研究 API；前端不读私人实验文件，也不直接请求供应商。
 - **可靠发布**：`orchestrator.py` 每次生成独立 release，成功后原子切换 active.json。失败继续服务上一份；同日重跑不覆盖旧问答来源。
-- **实际运维**：展示 systemd 的 active 状态、daily.timer 和 operations 的运行记录；manual 与 scheduled 分开。说明自动重启、增量刷新、复权回补和失败后重试。
+- **实际运维**：展示系统页的持续运维检查、备份时间、剩余空间，以及systemd的Web/三个timer；manual与scheduled分开。解释失败保持旧批次、内容去重备份和独立目录升级；可打开部署报告展示恢复验证结果。
 
 推荐代码查看顺序：`config.py` → `data.py` / `provider_refresh.py` → `models.py` → `strategy.py` → `orchestrator.py` → `service.py` → `backend/app/routes/tw_stock.py`。无需逐行讲整份模型或遗留实验。
 

@@ -44,7 +44,8 @@ flowchart LR
 | 每日问答 | agent_builder.py、agent.py、agent_transport.py | 验证上下文后回答；当前为本地证据解释，远端适配默认关闭 |
 | 模拟账户 | paper.py、backend/app/routes/paper.py | owner 认证、SQLite 事务、预览/确认、幂等与并发保护；不接收 B19R2R |
 | 前端 | frontend/src/main.js、components.js、paper.js | 七页工作台；请求与渲染分离；系统页展示模块链路 |
-| 运维 | ops/clean-*.service、clean-daily.timer | 常驻 Web、自动重启、日志、收盘后运行 |
+| 运维 | maintenance.py、ops/clean-* | 日更、每10分钟健康检查、每日去重备份、日志与恢复 |
+| 部署 | scripts/deploy_clean_product.py、install_clean_services.py | Git + 资产快照生成独立环境，验证后切换，启动失败恢复旧服务 |
 
 未写全路径的 Python 文件均位于 `clean_product/`。
 
@@ -58,7 +59,9 @@ Qlib 分数表示相对研究排序；回放使用复权行情、冻结模型和
 - 发布只原子替换小型指针，保留旧批次用于恢复；日更进程锁防止并发。
 - provider 按单股文件流式构建，Future 只保留摘要，避免全市场 DataFrame 驻留。
 - 个股与候选背景只读取所需股票，排名优先读物化产物。
-- health 表示进程存活；ready 检查基线信号与每日上下文来源。
+- health 表示进程存活；ready 检查基线信号与每日上下文来源。运维报告另行检查日更、备份和磁盘，ready不会掩盖这些失败。
+- 持久SQLite账本在备份与部署时通过数据库backup接口一致性复制；代码版本和数据批次分别管理。
+- 运行目录独立于源码checkout；升级不覆盖原目录，不删除旧代码或本机资产。
 
 ## 扩展
 
