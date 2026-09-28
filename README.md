@@ -16,6 +16,8 @@
 
 ## 开发
 
+前端使用 Node.js 24；pnpm 版本由 `frontend/package.json` 的 `packageManager` 统一指定，CI 与容器使用相同版本来源。
+
 ```bash
 python -m pip install -r backend/requirements.txt -r backend/requirements-models.txt
 corepack pnpm --dir frontend install

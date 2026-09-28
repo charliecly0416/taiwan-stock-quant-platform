@@ -9,11 +9,12 @@ jobs:
         with: {python-version: '3.12'}
       - run: pip install -r backend/requirements-dev.txt
       - run: pytest -q
-      - uses: pnpm/action-setup@v4
-        with: {version: 10.33.4}
       - uses: actions/setup-node@v4
-        with: {node-version: '20', cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml}
-      - run: pnpm install
+        with: {node-version: '24'}
+      - uses: pnpm/action-setup@v4
+        with: {package_json_file: frontend/package.json}
+      - run: pnpm install --frozen-lockfile
         working-directory: frontend
+      - run: node --test frontend/tests/*.test.js
       - run: pnpm build
         working-directory: frontend
