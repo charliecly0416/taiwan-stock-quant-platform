@@ -1,0 +1,8 @@
+schema_version: tw.clean.replay_policy.v1
+strategy: top50_exit_one_worst_sell
+execution: next_open
+max_calendar_days: 730
+comparison_no_apply: true
+models:
+  model_a: {research_replay: true, paper_allowed: true}
+  model_a_plus_b: {research_replay: true, paper_allowed: false}

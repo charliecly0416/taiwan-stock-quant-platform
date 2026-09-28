@@ -1,0 +1,20 @@
+[Unit]
+Description=Taiwan stock clean research web and API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@ROOT@
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=@ROOT@
+ExecStart=@PYTHON@ -m gunicorn --bind 127.0.0.1:5000 --bind 0.0.0.0:8000 --workers 2 --timeout 180 --graceful-timeout 30 --max-requests 500 --max-requests-jitter 50 --access-logfile - --error-logfile - backend.app:create_app()
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=40
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

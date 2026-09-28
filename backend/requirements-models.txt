@@ -1,0 +1,6 @@
+# Versions exercised with the frozen B19R2R estimator and canonical parquet.
+lightgbm==4.6.0
+scikit-learn==1.8.0
+pyarrow==23.0.1
+# New Model A dates also require the Taiwan-patched Qlib build documented in README.
+# It is a local 0.9.8.dev31 source build, not an interchangeable PyPI release.

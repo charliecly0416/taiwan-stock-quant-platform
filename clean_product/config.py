@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from copy import deepcopy
+import json
 from pathlib import Path
 import os
 from typing import Any
@@ -18,10 +20,12 @@ class DatasetSpec:
     symbols_field: str = "stock_id"
     fields: tuple[str, ...] = ()
     lag_days: int = 0
+    history_days: int = 365
     source: str = "finmind"
     required: tuple[str, ...] = ()
     numeric: tuple[str, ...] = ()
     params: dict[str, Any] = field(default_factory=dict)
+    primary_key: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -48,10 +52,12 @@ def datasets(config: dict) -> dict[str, DatasetSpec]:
             symbols_field=str(item.get("symbols_field", "stock_id")),
             fields=tuple(item.get("fields", ())),
             lag_days=int(item.get("lag_days", 0)),
+            history_days=int(item.get("history_days", 365)),
             source=str(item.get("source", "finmind")),
             required=tuple(item.get("required", ())),
             numeric=tuple(item.get("numeric", ())),
             params=dict(item.get("params", {})),
+            primary_key=tuple(item.get("primary_key", ())),
         )
         for name, item in (config.get("datasets") or {}).items()
     }
@@ -74,8 +80,49 @@ def path(value: str | Path) -> Path:
     return candidate if candidate.is_absolute() else ROOT / candidate
 
 
+def trading_days(config: dict) -> list[str]:
+    provider = config.get("model_stages", {}).get("model_a_frozen", {}).get("provider_uri")
+    if not provider:
+        return []
+    calendar = path(provider) / "calendars" / "day.txt"
+    return [line.strip()[:10] for line in calendar.read_text(encoding="utf-8").splitlines() if line.strip()] if calendar.exists() else []
+
+
+def universe(config: dict) -> list[str]:
+    values = [str(item).strip() for item in config.get("universe", []) if str(item).strip()]
+    source = config.get("universe_file")
+    if source:
+        target = path(source)
+        if target.exists():
+            values = [line.split()[0].strip() for line in target.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return sorted(dict.fromkeys(values))
+
+
 def env_config(config: dict) -> dict:
-    result = dict(config)
+    result = deepcopy(config)
+    if result.get("_runtime_resolved"):
+        return result
     result["data_root"] = path(os.getenv("TW_PRODUCT_DATA_ROOT", result.get("data_root", "data_tw/product")))
     result["artifact_root"] = path(os.getenv("TW_PRODUCT_ARTIFACT_ROOT", result.get("artifact_root", "data_tw/product/artifacts")))
+    store = result["artifact_root"]
+    result["_artifact_store"] = store
+    active = store / "active.json"
+    if active.is_file():
+        release = json.loads(active.read_text())
+        root = path(release["artifact_root"]).resolve()
+        if release.get("schema_version") != "tw.clean.release.v1" or not root.is_relative_to((store / "releases").resolve()):
+            raise ValueError("ACTIVE_RELEASE_INVALID")
+        result["artifact_root"] = root
+        result["data_root"] = root / "data"
+        result.setdefault("agent", {})["prompt_root"] = str(root / "agent_daily_prompt")
+        provider = release.get("provider")
+        if provider:
+            stage = result["model_stages"]["model_a_frozen"]
+            stage.update(provider_uri=provider, selection_prices=release["selection_prices"],
+                         selection_universe=release["universe_file"])
+            result["universe_file"] = release.get("config_universe_file", release["universe_file"])
+            result["datasets"]["prices"].setdefault("params", {})["provider_uri"] = provider
+            result.setdefault("provider_refresh", {})["source_dir"] = release["selection_prices"]
+        result["_active_release"] = release
+    result["_runtime_resolved"] = True
     return result

@@ -1,0 +1,21 @@
+schema_version: arch1.active_baseline_descriptor.v1
+descriptor_id: active_baseline_descriptor
+authority: canonical_runtime_baseline
+readonly_only: true
+simulation_only: true
+# Restored identity from pre-clean commit 25839e1; frozen bytes verified locally.
+active_baseline:
+  status: MODEL_A_ONLY
+  model_a:
+    model_id: e4_frozen_qlib_2018_2022
+    model_family: e1_frozen_qlib_baseline
+    role: active_signal_model
+    artifact_path: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e1_frozen_qlib_training_and_oos_score/run/phasee1_frozen_qlib_model.pkl
+    artifact_sha256: b56ab7ca94fc098fd11c0ee3cf1d5b97ae97a3f241fb01c87fb24a62b0bcedf3
+    training_start: '2018-01-01'
+    training_end: '2022-12-31'
+  model_b: null
+  strategy_rule: top50_exit_one_worst_sell
+  execution_price_mode: next_open
+  product_mode: readonly_research_candidate_display
+  portfolio_mode: simulation_only_paper_portfolio

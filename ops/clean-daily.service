@@ -1,0 +1,14 @@
+[Unit]
+Description=Taiwan stock clean Model A daily release
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=@ROOT@
+ExecStart=@PYTHON@ scripts/run_product.py daily --publish --trigger-reason scheduled
+TimeoutStartSec=45min
+UMask=0077
+NoNewPrivileges=true

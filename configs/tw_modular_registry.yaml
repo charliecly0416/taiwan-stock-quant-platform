@@ -1,0 +1,17 @@
+schema_version: tw.clean.registry.v1
+models:
+  model_a:
+    canonical_id: e4_frozen_qlib_2018_2022
+    role: baseline
+    production_allowed: true
+    consumers: [readonly, replay, paper, agent]
+  model_a_plus_b:
+    canonical_id: modelb_b19r2r_lambdarank_exact50_78f_v2
+    role: shadow
+    production_allowed: false
+    consumers: [readonly, replay]
+    mainline_blocking: false
+    no_apply: true
+stages:
+  model_a_frozen: {adapter: qlib_frozen}
+  b19r2r_frozen: {adapter: b19r2r, feature_count: 78, exclude: [TW7769]}

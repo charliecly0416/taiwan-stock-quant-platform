@@ -1,46 +1,187 @@
-schema_version: tw.clean_product.v1
+schema_version: tw.clean_product.v2
 data_root: data_tw/product/data
 artifact_root: data_tw/product/artifacts
-universe: ["2330", "0050", "0056", "00878"]
+baseline_descriptor: configs/active_baseline_descriptor.yaml
+product:
+  name: 台股双轨研究台
+  readonly: true
+  simulation_only: true
+  default_model: model_a
+universe_file: qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/option_c_full_qlib_bin/instruments/all.txt
 strategy: top50_exit_one_worst_sell
 execution: next_open
+daily:
+  include_shadow: false
+  history_sessions: 2
+research_examples:
+  comparison_date: '2026-05-07'
+  comparison_start: '2026-05-07'
+  comparison_end: '2026-05-08'
+  replay_start: '2025-06-23'
+  replay_end: '2025-06-30'
+paper:
+  enabled: true
+  store: data_tw/product/paper/accounts.sqlite3
+simulation:
+  initial_cash: 1000000
+  buy_cost_rate: 0.001425
+  sell_cost_rate: 0.004425
+  min_cost: 20
+  max_positions: 50
+provider_refresh:
+  enabled: true
+  source_dir: qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/normalized_nonempty
+  start: '2015-01-01'
+  incremental_days: 45
+  minimum_coverage: 0.95
+  workers: 16
+  proxy: http://127.0.0.1:7890
 datasets:
   prices:
-    source: finmind
-    endpoint: TaiwanStockPrice
+    source: qlib_provider
+    endpoint: prices
     date_field: date
-    fields: [stock_id, date, open, max, min, close, Trading_Volume]
-    required: [stock_id, date, close]
-    numeric: [open, max, min, close, Trading_Volume]
+    fields:
+    - stock_id
+    - date
+    - open
+    - high
+    - low
+    - close
+    - volume
+    - vwap
+    required:
+    - stock_id
+    - date
+    - close
+    numeric:
+    - open
+    - high
+    - low
+    - close
+    - volume
+    - vwap
+    params:
+      provider_uri: qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/option_c_full_qlib_bin
+    history_days: 180
   institutional:
     source: finmind
     endpoint: TaiwanStockInstitutionalInvestorsBuySell
     date_field: date
-    fields: [stock_id, date, name, buy, sell]
-    required: [stock_id, date, name]
-    numeric: [buy, sell]
+    fields:
+    - stock_id
+    - date
+    - name
+    - buy
+    - sell
+    required:
+    - stock_id
+    - date
+    - name
+    numeric:
+    - buy
+    - sell
+    primary_key:
+    - stock_id
+    - date
+    - name
     lag_days: 1
+    history_days: 30
   margin:
     source: finmind
     endpoint: TaiwanStockMarginPurchaseShortSale
     date_field: date
-    fields: [stock_id, date, MarginPurchaseTodayBalance, ShortSaleTodayBalance]
-    required: [stock_id, date]
-    numeric: [MarginPurchaseTodayBalance, ShortSaleTodayBalance]
+    fields:
+    - stock_id
+    - date
+    - MarginPurchaseTodayBalance
+    - ShortSaleTodayBalance
+    required:
+    - stock_id
+    - date
+    numeric:
+    - MarginPurchaseTodayBalance
+    - ShortSaleTodayBalance
     lag_days: 1
+    history_days: 30
   twii:
     source: finmind
     endpoint: TaiwanStockPrice
     date_field: date
-    fields: [stock_id, date, close]
-    required: [stock_id, date, close]
-    numeric: [close]
+    fields:
+    - stock_id
+    - date
+    - close
+    required:
+    - stock_id
+    - date
+    - close
+    numeric:
+    - close
+    params:
+      data_id: TWII
+    history_days: 180
+model_stages:
+  model_a_frozen:
+    adapter: qlib_frozen
+    model_path: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e1_frozen_qlib_training_and_oos_score/run/phasee1_frozen_qlib_model.pkl
+    model_sha256: b56ab7ca94fc098fd11c0ee3cf1d5b97ae97a3f241fb01c87fb24a62b0bcedf3
+    training_manifest: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e1_frozen_qlib_training_and_oos_score/phasee1_training_manifest.json
+    training_manifest_sha256: f2be19c467cf96c5a5738180bf2afce21b259ab8837eb0f61434f0ac98fc4d87
+    prediction_archive: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e1_frozen_qlib_training_and_oos_score/phasee1_post_filter_oos_score_rank_2023_2026.csv
+    prediction_archive_sha256: d1be73bcbf1a60a4c5365efd8dfd09b86da2563c0201a16ce3cb5949048218f5
+    archive_score_column: qlib_score_raw
+    archive_rank_column: qlib_rank
+    raw_prediction_archive: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e1_frozen_qlib_training_and_oos_score/phasee1_raw_oos_score_rank_2023_2026.csv
+    raw_prediction_archive_sha256: 1009870dbc3e60b00896de4cd97ee467e22a55b72496b8a6a29e1410ea71091a
+    raw_archive_rank_column: qlib_rank_raw
+    inference_config: data_tw/experiments/extended_oos_qlib_orthogonal_ltr/phase_e1_frozen_qlib_training_and_oos_score/phasee1_generated_qlib_config.yaml
+    inference_config_sha256: 99391a294c7cda36fe850da8b6cdf10f276756ecb307c1d455cca18a7f8cd716
+    selection_prices: qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/normalized_nonempty
+    selection_universe: qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/option_c_full_qlib_bin/instruments/all.txt
+    provider_uri: qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/option_c_full_qlib_bin
+    handler_start: 2015-05-04
+    fit_start: 2018-01-01
+    fit_end: 2022-12-31
+    rank_scope: selected
+    inference_chunk_size: 150
+  b19r2r_frozen:
+    adapter: b19r2r
+    model_sha256: 8d31069593cc8a1cc7c6fa7ac4cf50a9e897a76af0ab446ddbc26551fc5e5421
+    training_manifest_sha256: 6ecf62deefd612ec85bdbedfd727d40dfa5fcc949057d8dc50315eb21081cfca
+    feature_schema_sha256: e1d50539b33b91bc353e1350c87968bf08507a34bb4c245c4f7d7ecada2ea9c7
+    historical_features_sha256: 59e18a8b3656b3afbce15a562cf1cd60eaa4dcc19369c659f6e0c0423cd801a5
+    model_path: data_tw/experiments/project_runtime_convergence/modelb_b19r2r_training_20260916/training_output_v1/MODEL_B_B19R2R_LGBM_RANKER.pkl
+    training_manifest: data_tw/experiments/project_runtime_convergence/modelb_b19r2r_training_20260916/training_output_v1/TRAINING_MANIFEST.json
+    feature_schema: data_tw/experiments/project_runtime_convergence/modelb_b2_canonical_pit_features_20260913/FEATURE_SCHEMA.json
+    historical_features: data_tw/experiments/project_runtime_convergence/modelb_b2_canonical_pit_features_20260913/FEATURE_ARTIFACT_RAW.parquet
+    exclude:
+    - TW7769
 models:
   model_a:
+    canonical_id: e4_frozen_qlib_2018_2022
+    required_datasets:
+    - prices
+    label: Model A
+    description: 冻结 Qlib Alpha158 基线模型
     role: baseline
-    stages: [model_a_score]
+    stages:
+    - model_a_frozen
     production_allowed: true
   model_a_plus_b:
+    canonical_id: modelb_b19r2r_lambdarank_exact50_78f_v2
+    required_datasets:
+    - prices
+    - institutional
+    - margin
+    - twii
+    label: Model A + B19R2R
+    description: 独立重跑 Model A，再用 78 个 PIT 特征重排同日 Top50
     role: shadow
-    stages: [model_a_score, model_b_rerank]
+    stages:
+    - model_a_frozen
+    - b19r2r_frozen
     production_allowed: false
+agent:
+  build_daily_prompt: true
+  prompt_root: data_tw/product/artifacts/agent_daily_prompt

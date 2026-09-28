@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Taiwan research after close with two retry opportunities
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 18,19,20:30:00 Asia/Taipei
+Persistent=true
+AccuracySec=1min
+Unit=clean-daily.service
+
+[Install]
+WantedBy=timers.target

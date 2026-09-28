@@ -1,0 +1,24 @@
+# Explicit source allowlist; never send local credentials, models or market data.
+**
+!backend/
+!backend/app/
+!backend/app/**
+!backend/run.py
+!backend/gunicorn_config.py
+!backend/requirements.txt
+!backend/requirements-models.txt
+!backend/requirements-runtime.lock
+!backend/Dockerfile
+!clean_product/
+!clean_product/**
+!configs/
+!configs/product.yaml
+!configs/active_baseline_descriptor.yaml
+!configs/tw_modular_registry.yaml
+!configs/tw_product_artifact_registry.yaml
+!configs/tw_replay_window_policy.yaml
+**/__pycache__/
+**/*.pyc
+**/.env*
+**/*.pem
+**/*.key

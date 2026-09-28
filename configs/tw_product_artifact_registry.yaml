@@ -1,0 +1,9 @@
+schema_version: tw.clean.artifact_registry.v1
+root: data_tw/product/artifacts
+signals: signals/{model}/{asof}
+intents: intents/{model}/{asof}
+daily: daily/{asof}/{run_id}
+agent: agent_daily_prompt/{asof}
+failed_signals: failed_runs/signals/{model}/{asof}/{run_id}
+legacy_agent_readonly_root: data_tw/artifacts/agent_daily_prompt
+candidate_publish_allowed: false
