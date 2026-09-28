@@ -19,6 +19,10 @@ research_examples:
   comparison_end: '2026-05-08'
   replay_start: '2025-06-23'
   replay_end: '2025-06-30'
+maintenance:
+  runtime_wheel: data_tw/product/runtime/pyqlib-0.9.8.dev31-cp313-cp313-linux_x86_64.whl
+  keep_days: 30
+  minimum_free_gb: 10
 paper:
   enabled: true
   store: data_tw/product/paper/accounts.sqlite3

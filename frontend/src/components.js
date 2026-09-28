@@ -66,3 +66,20 @@ export function architecturePanel(overview) {
     '<div class="technical-strip"><span>资料日期<strong>' + escape(overview.asof || '待验证') + '</strong></span><span>基线信号<strong>' + escape(baseline?.rows ?? '—') + '</strong></span><span>服务入口<strong>Flask + Gunicorn</strong></span><span>运行管理<strong>systemd</strong></span><span>发布方式<strong>完整批次切换</strong></span></div>' +
     '<details><summary>展开运维与来源</summary><dl><dt>当前批次</dt><dd>' + escape(release?.run_id || '尚未激活完整批次') + '</dd><dt>最近手工运行</dt><dd>' + escape(operation.latest_manual?.created_at || '尚无') + '</dd><dt>最近计划运行</dt><dd>' + escape(operation.latest_scheduled?.created_at || operation.scheduler?.created_at || '尚未触发，不能以手工运行替代') + '</dd><dt>日更策略</dt><dd>台北时间工作日 18:30、19:30、20:30；检查实际市场交易日，失败保留上一批次。</dd><dt>持久化边界</dt><dd>研究产物按运行保存；模拟账户使用独立 SQLite 账本，研究页面不写账户。</dd></dl></details></article>'
 }
+
+export function maintenancePanel(operations = {}) {
+  const report = operations.maintenance
+  if (!report) return empty('运维检查尚未运行', '健康检查每十分钟执行，分别检查服务、日更、备份和磁盘。')
+  const labels = { WEB_NOT_READY: '研究服务未就绪', LATEST_DAILY_FAILED: '最近日更失败',
+    SCHEDULED_DAILY_FAILED: '最近计划日更失败', DAILY_TIMEOUT: '日更超过预期时间',
+    SCHEDULED_ATTEMPT_MISSING: '未发现应有的计划运行', PUBLISHED_DATA_BEHIND_CHECKED_SESSION: '发布批次落后于已检查的市场交易日',
+    DISK_SPACE_LOW: '磁盘剩余空间不足', BACKUP_MISSING_OR_OLD: '备份缺失、失败或超过 36 小时' }
+  const stale = !report.created_at || Date.now() - Date.parse(report.created_at) > 25 * 60 * 1000
+  const alerts = [...(report.alerts || []), ...(stale ? [{code: '健康检查状态已超过 25 分钟未更新'}] : [])]
+  return '<article class="panel maintenance-panel"><div class="panel-head"><h3>持续运维检查</h3>' +
+    statusPill(report.status === 'OK' && !stale ? 'READY' : 'BLOCKED', stale ? '状态待刷新' : report.status) + '</div>' +
+    '<p>服务可用性与日更成功状态独立检查。告警记录在系统日志和本页。</p>' +
+    '<dl><dt>最后检查</dt><dd>' + escape(report.created_at) + '</dd><dt>最近备份</dt><dd>' + escape(report.backup?.created_at || '尚无') +
+    '</dd><dt>剩余空间</dt><dd>' + format.number(report.free_bytes / 1024 ** 3) + ' GB</dd></dl>' +
+    (alerts.length ? '<ul role="alert">' + alerts.map(a => '<li>' + escape(labels[a.code] || a.code) + '</li>').join('') + '</ul>' : '<p>当前检查没有异常。</p>') + '</article>'
+}

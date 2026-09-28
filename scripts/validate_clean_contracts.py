@@ -22,10 +22,10 @@ def main(default='modules'):
         stage = cfg['model_stages']['model_a_frozen']; verify_file(stage['model_path'], stage['model_sha256'])
     except Exception as exc: errors.append(str(exc))
     suites = {'m3': ['tests/test_clean_daily_isolation.py', 'tests/test_clean_release.py',
-                     'tests/test_clean_provider_refresh.py'],
+                     'tests/test_clean_provider_refresh.py', 'tests/test_clean_maintenance.py'],
               'modules': ['tests/test_clean_signal_integrity.py', 'tests/test_clean_agent_completion.py',
                           'tests/test_clean_paper.py', 'tests/test_clean_contracts.py',
-                          'tests/test_clean_release.py']}
+                          'tests/test_clean_release.py', 'tests/test_clean_maintenance.py']}
     if args.check == 'm3' and Path(args.audit_script) != Path('clean_product/orchestrator.py'):
         errors.append('clean M3 audits clean_product/orchestrator.py only; archived orchestrators are not executed')
     if args.check in suites:

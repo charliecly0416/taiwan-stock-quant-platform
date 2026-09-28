@@ -9,6 +9,7 @@
 | 策略 / 回放 | tw_replay_window_policy.yaml；strategy.py | correctness、product 测试；真实隔离回放 |
 | readonly API / Agent | service.py、agent.py、validation.py | api_validation、readiness、agent_completion；stack |
 | 模拟账户 | paper.py、routes/paper.py | paper 测试；预览/确认、幂等、并发 |
+| 运维 / 部署 | maintenance.py；ops/；deploy_clean_product.py | maintenance、deployment、release测试；隔离恢复与ready |
 | 前端 | frontend/src、frontend/tests | Node、pnpm build、三视口浏览器验收 |
 
 测试文件名为 `tests/test_clean_<名称>.py`。信号包含 date、instrument、score、rank、candidate_rank、full_qlib_rank；READY 必须有唯一键、有限分数、连续排名和可验证来源。Model A 是唯一 baseline，B19R2R 保持 production_allowed=false / mainline_blocking=false。

@@ -1,6 +1,6 @@
 # Taiwan Stock Clean Research Product
 
-当前运行主线是 `product-clean`：Python / Flask 后端、Vite 原生 JavaScript 前端，以及 systemd 管理的 Web 与日更服务。产品用于台股只读研究和独立模拟账户，不连接券商或真实订单。
+GitHub 默认分支与当前运行主线均为 `product-clean`：Python / Flask 后端、Vite 原生 JavaScript 前端，以及 systemd 管理的 Web 与日更服务。产品用于台股只读研究和独立模拟账户，不连接券商或真实订单。
 
 - 前端：`http://localhost:8000`；后端：`http://127.0.0.1:5000/api/ready`。
 - Model A：`e4_frozen_qlib_2018_2022`。全市场行情用于流动性筛选，冻结模型只为当日 150 支候选评分；Top50 使用 `top50_exit_one_worst_sell` / `next_open`。
@@ -12,7 +12,8 @@
 2. [架构与模块](docs/ARCHITECTURE_CN.md)：数据流、扩展点、发布与故障隔离。
 3. [运维手册](docs/OPERATIONS_CN.md)：状态、日志、日更、模拟令牌与恢复。
 4. [开发入口](docs/DEVELOPMENT_ONBOARDING_CN.md)：配置、合同与测试。
-5. [当前主线验收](docs/MAINLINE_ACCEPTANCE_CN.md)：本机实测、证据与未覆盖范围。
+5. [旧功能替代清单](docs/CLEAN_REPLACEMENT_CN.md)：保留范围、账户迁移与长期维护边界。
+6. [当前主线验收](docs/MAINLINE_ACCEPTANCE_CN.md)：本机实测、证据与未覆盖范围。
 
 ## 开发
 

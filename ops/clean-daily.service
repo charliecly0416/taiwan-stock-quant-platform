@@ -2,6 +2,7 @@
 Description=Taiwan stock clean Model A daily release
 After=network-online.target
 Wants=network-online.target
+OnFailure=clean-health.service
 
 [Service]
 Type=oneshot

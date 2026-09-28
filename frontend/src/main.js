@@ -1,7 +1,7 @@
 import './style.css'
 import { api } from './api.js'
 import { bindPaper, paperView } from './paper.js'
-import { architecturePanel, empty, escape, format, latestRenderer, lineChart, modelOptions, statusPill } from './components.js'
+import { architecturePanel, maintenancePanel, empty, escape, format, latestRenderer, lineChart, modelOptions, statusPill } from './components.js'
 
 const state = { overview: null, detail: null, view: 'overview', model: 'model_a' }
 const app = document.querySelector('#app')
@@ -111,7 +111,7 @@ function marketResult(data) {
 
 async function systemView() {
   const data = state.overview.data, operations = state.overview.operations
-  return architecturePanel(state.overview) + '<div class="section-head"><div><p class="eyebrow">DATA GOVERNANCE</p><h2>数据集状态</h2></div></div><div class="status-list">' + data.map(item => '<article><div><strong>' + escape(item.dataset) + '</strong><small>' + escape(item.source) + '</small></div>' + statusPill(item.status) + '<dl><div><dt>最新日期</dt><dd>' + (item.latest_asof || '尚无') + '</dd></div><div><dt>行数</dt><dd>' + format.number(item.rows) + '</dd></div></dl></article>').join('') + '</div><div class="section-head"><div><p class="eyebrow">OPERATIONS</p><h2>日更运行状态</h2></div></div><article class="panel ops"><div>' + statusPill(operations.status) + '<h3>' + (operations.latest?.asof || '尚未产生正式日更记录') + '</h3><p>baseline 失败才阻断主线；shadow 被挡住会保留原因，但不会污染 Model A 的状态。</p></div><dl><div><dt>Artifact root</dt><dd>' + escape(operations.artifact_root) + '</dd></div><div><dt>产品边界</dt><dd>readonly · simulation-only</dd></div></dl></article>'
+  return maintenancePanel(operations) + architecturePanel(state.overview) + '<div class="section-head"><div><p class="eyebrow">DATA GOVERNANCE</p><h2>数据集状态</h2></div></div><div class="status-list">' + data.map(item => '<article><div><strong>' + escape(item.dataset) + '</strong><small>' + escape(item.source) + '</small></div>' + statusPill(item.status) + '<dl><div><dt>最新日期</dt><dd>' + (item.latest_asof || '尚无') + '</dd></div><div><dt>行数</dt><dd>' + format.number(item.rows) + '</dd></div></dl></article>').join('') + '</div><div class="section-head"><div><p class="eyebrow">OPERATIONS</p><h2>日更运行状态</h2></div></div><article class="panel ops"><div>' + statusPill(operations.status) + '<h3>' + (operations.latest?.asof || '尚未产生正式日更记录') + '</h3><p>baseline 失败才阻断主线；shadow 被挡住会保留原因，但不会污染 Model A 的状态。</p></div><dl><div><dt>Artifact root</dt><dd>' + escape(operations.artifact_root) + '</dd></div><div><dt>产品边界</dt><dd>readonly · simulation-only</dd></div></dl></article>'
 }
 
 function bindRequest(formId, outputId, request, renderer, message, trigger) {

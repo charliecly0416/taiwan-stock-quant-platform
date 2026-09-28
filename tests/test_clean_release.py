@@ -99,3 +99,21 @@ def test_no_new_session_skips_refresh_and_preserves_active_release(release_confi
     assert pointer.read_bytes() == previous
     status = json.loads((pointer.parent / "scheduler_status.json").read_text())
     assert status == result
+
+
+def test_early_scheduled_failure_is_visible_and_keeps_published_release(release_config, monkeypatch):
+    cfg, target = release_config
+    run_daily("2026-09-24", config_path=target, local_only=True, publish=True)
+    store = Path(cfg["artifact_root"]); before = (store / "active.json").read_bytes()
+    def fail(*args):
+        raise TimeoutError("private transport details must not enter status")
+    monkeypatch.setattr("clean_product.provider_refresh.market_asof", fail)
+    with pytest.raises(TimeoutError):
+        run_daily(config_path=target, publish=True, trigger_reason="scheduled")
+    status = json.loads((store / "scheduler_status.json").read_text())
+    assert status["status"] == "BLOCKED" and status["active_asof"] == "2026-09-24"
+    assert status["reason"] == "DAILY_EXECUTION_FAILED: TimeoutError"
+    assert "private transport" not in json.dumps(status)
+    assert (store / "active.json").read_bytes() == before
+    assert ProductService(cfg).readiness()["ready"]
+    assert list((store / "daily" / "attempts").glob("*/run.json"))

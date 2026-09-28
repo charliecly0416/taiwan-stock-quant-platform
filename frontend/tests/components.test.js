@@ -41,3 +41,14 @@ test('an all-missing time series does not draw a zero-valued chart', () => {
   assert.match(chart, /<span>100<\/span>/)
   assert.match(chart, /<span>110<\/span>/)
 })
+
+
+test('maintenance distinguishes serving readiness from daily failure and escapes alerts', async () => {
+  const { maintenancePanel } = await import('../src/components.js')
+  const result = maintenancePanel({ maintenance: { status: 'CRITICAL', ready: true, created_at: new Date().toISOString(),
+    alerts: [{ code: 'SCHEDULED_DAILY_FAILED' }, { code: '<script>unsafe</script>' }] } })
+  assert.match(result, /最近计划日更失败/)
+  assert.match(result, /role="alert"/)
+  assert.doesNotMatch(result, /<script>/)
+  assert.match(maintenancePanel({}), /尚未运行/)
+})

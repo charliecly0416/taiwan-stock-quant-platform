@@ -1,0 +1,12 @@
+[Unit]
+Description=Check clean research readiness, daily execution, backups and disk
+After=clean-web.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@
+Environment=PYTHONPATH=@ROOT@
+ExecStart=@PYTHON@ scripts/maintain_clean_product.py health
+TimeoutStartSec=30
+UMask=0077
+NoNewPrivileges=true

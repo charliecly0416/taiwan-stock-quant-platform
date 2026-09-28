@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up clean research state daily at 04:00 Taipei
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 Asia/Taipei
+Persistent=true
+Unit=clean-backup.service
+
+[Install]
+WantedBy=timers.target

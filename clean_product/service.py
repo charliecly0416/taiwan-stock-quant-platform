@@ -283,6 +283,11 @@ class ProductService:
         root = self.config.get("_artifact_store", self.config["artifact_root"]) / "daily"
         scheduler_file = root.parent / 'scheduler_status.json'
         scheduler = json.loads(scheduler_file.read_text()) if scheduler_file.is_file() else None
+        maintenance_file = root.parent / 'ops/health.json'
+        try:
+            maintenance = json.loads(maintenance_file.read_text()) if maintenance_file.is_file() else None
+        except (ValueError, OSError):
+            maintenance = {"status": "CRITICAL", "alerts": [{"code": "MAINTENANCE_STATUS_INVALID", "severity": "CRITICAL"}]}
         runs = []
         for run in sorted([*root.glob('*/run.json'), *root.glob('*/*/run.json')], reverse=True):
             try:
@@ -293,10 +298,11 @@ class ProductService:
                 item = {"status": "BLOCKED", "reason": "DAILY_RUN_INVALID", "run_id": run.parent.name}
             if item.get("dry_run") is not True:
                 runs.append(item)
-        runs.sort(key=lambda item: (item.get('asof', ''), item.get('created_at', item.get('run_id', ''))), reverse=True)
+        runs.sort(key=lambda item: (item.get('created_at') or item.get('run_id') or '', item.get('asof') or ''), reverse=True)
         payload = runs[0] if runs else None
         return {"status": payload.get("status") if payload else "NO_RUN", "latest": payload,
-                "latest_scheduled": next((item for item in runs if item.get('trigger_reason') == 'scheduled'), None),
+                "latest_scheduled": next((item for item in runs if item.get('trigger_reason') == 'scheduled'), scheduler),
                 "latest_manual": next((item for item in runs if item.get('trigger_reason') == 'manual'), None),
                 "artifact_root": str(self.config["artifact_root"]),
-                "active_release": self.config.get("_active_release"), "scheduler": scheduler, "readonly": True}
+                "active_release": self.config.get("_active_release"), "scheduler": scheduler,
+                "maintenance": maintenance, "readonly": True}

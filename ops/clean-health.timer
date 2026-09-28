@@ -1,0 +1,10 @@
+[Unit]
+Description=Check clean research operations every ten minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+Unit=clean-health.service
+
+[Install]
+WantedBy=timers.target

@@ -42,7 +42,30 @@ def run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_r
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return {"status": "BLOCKED", "reason": "DAILY_ALREADY_RUNNING", "latest_pointer_written": False}
-        return _run_daily(asof, config_path=config_path, dry_run=dry_run, trigger_reason=trigger_reason, local_only=local_only, publish=True)
+        started = utc_now()
+        attempt = {"status": "RUNNING", "asof": asof, "started_at": started,
+                   "created_at": started, "trigger_reason": trigger_reason,
+                   "active_asof": config.get("_active_release", {}).get("asof"),
+                   "run_id": f"attempt-{uuid4().hex}", "local_only": local_only,
+                   "latest_pointer_written": False}
+        def record(payload):
+            write_json(store / "daily_status.json", payload)
+            if trigger_reason == "scheduled":
+                write_json(store / "scheduler_status.json", payload)
+        record(attempt)
+        try:
+            result = _run_daily(asof, config_path=config_path, dry_run=dry_run,
+                                trigger_reason=trigger_reason, local_only=local_only, publish=True)
+        except Exception as exc:
+            result = {**attempt, "status": "BLOCKED", "created_at": utc_now(),
+                      "reason": f"DAILY_EXECUTION_FAILED: {type(exc).__name__}"}
+            record(result)
+            write_json(store / "daily" / (asof or "attempts") / attempt["run_id"] / "run.json", result)
+            raise
+        result = {**attempt, **result, "created_at": utc_now()}
+        record(result)
+        write_json(store / "daily" / (result.get("asof") or "attempts") / result["run_id"] / "run.json", result)
+        return result
 
 
 def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_run: bool = False, trigger_reason: str = "manual", local_only: bool = False, publish: bool = False) -> dict:
@@ -57,7 +80,6 @@ def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_
             if ProductService(config).readiness()["ready"]:
                 result = {"status": "READY", "reason": "NO_NEW_MARKET_SESSION", "asof": asof,
                           "trigger_reason": trigger_reason, "created_at": utc_now(), "latest_pointer_written": False}
-                write_json(config["_artifact_store"] / "scheduler_status.json", result)
                 return result
     asof = asof or date.today().isoformat()
     date.fromisoformat(asof)

@@ -1,0 +1,12 @@
+[Unit]
+Description=Back up registered clean assets and the simulation ledger
+OnFailure=clean-health.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@
+Environment=PYTHONPATH=@ROOT@
+ExecStart=@PYTHON@ scripts/maintain_clean_product.py backup
+TimeoutStartSec=30min
+UMask=0077
+NoNewPrivileges=true

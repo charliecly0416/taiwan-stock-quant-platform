@@ -1,6 +1,6 @@
 # Clean 当前接手指南
 
-运行主线为 `product-clean`。5000 / 8000 已切换到 clean Gunicorn / Flask，systemd 管理 Web 和日更，前端 dist 由同一应用提供。当前结果和验收证据见 [主线验收](MAINLINE_ACCEPTANCE_CN.md)，不要用历史 BLOCKED 阶段报告覆盖实时状态。本轮没有修改远端默认分支。
+运行主线为 `product-clean`。5000 / 8000 已切换到 clean Gunicorn / Flask，systemd 管理 Web 和日更，前端 dist 由同一应用提供。当前结果和验收证据见 [主线验收](MAINLINE_ACCEPTANCE_CN.md)，不要用历史 BLOCKED 阶段报告覆盖实时状态。GitHub默认分支已切换为product-clean，旧main保留于legacy-main-20260928。
 
 ## 最短入口
 
@@ -40,4 +40,4 @@ TW_CLEAN_FRONTEND_URL=http://127.0.0.1:8000 python scripts/accept_clean_frontend
 
 本机发布验收必须使用真实服务端口。`--serve-build` 只用于开发隔离验证。浏览器可保存截图文件，但当前会话禁止 view_image 或把图片传入模型；阅读 DOM、网络和控制台 JSON，人工视觉审查如未执行须写明。
 
-当前正式部署使用原生 Python + systemd。定制台湾 Qlib wheel 与冻结模型是运行依赖；Docker 构建、远端大模型调用和旧账户迁移不在当前已验收范围。
+当前正式部署使用原生 Python + systemd，独立运行目录由systemctl查询；升级时不要误操作源码checkout的旧数据。健康检查、去重备份、恢复及部署入口见运维手册，功能对应见 [替代清单](CLEAN_REPLACEMENT_CN.md)。定制台湾 Qlib wheel 与冻结模型是运行依赖；Docker 构建、远端大模型调用和旧账户迁移不在当前已验收范围。

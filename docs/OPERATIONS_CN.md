@@ -1,68 +1,83 @@
 # Clean 运行与运维
 
-当前正式入口为 `http://localhost:8000`，API 同时监听 `127.0.0.1:5000`。两者来自同一个 clean Flask 应用；工作目录为仓库根，运行分支为 `product-clean`。Web 使用 Gunicorn 双 worker，由用户级 systemd 管理。
+前端 `http://localhost:8000`，API `http://127.0.0.1:5000`。同一Gunicorn/Flask应用提供API与构建后的前端。正式运行目录由systemd确定；升级采用独立目录，源码checkout不是运行数据的默认操作目录。
 
-## 查看状态
-
-在仓库根运行：
+## 状态与操作目录
 
 ```bash
-curl -fsS http://127.0.0.1:5000/api/health
+systemctl --user show clean-web.service -p WorkingDirectory --value
+# 后续维护先进入上面输出的目录，使用该目录的 .venv/bin/python
 curl -fsS http://127.0.0.1:5000/api/ready
 curl -fsS http://127.0.0.1:5000/api/tw-stock/operations/latest
-systemctl --user status clean-web.service clean-daily.timer
-systemctl --user list-timers clean-daily.timer
-journalctl --user -u clean-web.service -n 60 --no-pager
-journalctl --user -u clean-daily.service -n 60 --no-pager
+systemctl --user list-timers clean-daily.timer clean-health.timer clean-backup.timer
+journalctl --user -u clean-web -u clean-daily -u clean-health -u clean-backup -n 80 --no-pager
 ```
 
-health 是进程检查；ready 检查 Model A、provider 日历、已物化信号和每日问答来源。operations 区分 manual、scheduled 与 active_release；手动发布成功不能替代定时运行证据。查询不会触发采集。
+系统页显示模块链路、当前批次、日更与维护状态。ready是当前批次可服务；日更失败仍可继续提供旧完整批次；备份与日更失败单独告警，不能用ready掩盖。告警显示在UI与本机journal，尚未接入外部邮件或消息通知。
 
-## 日更与发布
+## 日更
 
-`clean-daily.timer` 在台北工作日 18:30、19:30、20:30 调用唯一日更入口。先查询指数实际交易日；如果仍是已发布交易日且 ready，记录 `NO_NEW_MARKET_SESSION`，避免重复抓全历史。周末和休市不能仅按自然日判定陈旧。
+台北工作日18:30、19:30、20:30运行 `clean-daily.timer`。指数实际交易日决定是否采集；休市记录 `NO_NEW_MARKET_SESSION`，不按自然日制造“新交易日”。全市场行情只用于流动性筛选，Model A评分150支，策略Top50；B影子资料不阻塞A。
 
-日更接入 Yahoo 行情增量与必要的复权修订回补；完成全市场流动性筛选后，Model A 只评分 150 支。B19R2R 影子资料不作为 Model A 发布前提。当前日更包含前一交易日信号，支持榜单变化和已知 next_open 的模拟预览。
+每次尝试先持久记录RUNNING；早期请求失败也记录BLOCKED及失败类型。定时与手动记录分开。发布生成完整独立release，通过后原子切换active.json，失败保留旧批次。
 
 ```bash
-# 常规维护：立即按实际交易日抓取并发布，使用 manual 标记
-python scripts/run_product.py daily --publish
-# 仅在本地数据已齐备时发布指定日期；不抓取
-python scripts/run_product.py daily --asof 2026-09-24 --local-only --publish
-# 隔离 fixture 验证，不发布
-python scripts/run_product.py daily --asof 2026-09-24 --dry-run
+# 以下为运维动作，不用来做普通代码验证
+.venv/bin/python scripts/run_product.py daily --publish
+# 已有本地数据的指定日期发布，不抓取
+.venv/bin/python scripts/run_product.py daily --asof YYYY-MM-DD --local-only --publish
 ```
 
-真实发布是运维动作，不作为普通代码测试。新批次保存在 `data_tw/product/artifacts/releases/<run_id>/`；Model A、策略和问答通过后原子替换 `data_tw/product/artifacts/active.json`。运行记录位于 `data_tw/product/artifacts/daily/<asof>/<run_id>/run.json`，定时状态位于 `scheduler_status.json`。失败保持当前完整批次；锁冲突返回 `DAILY_ALREADY_RUNNING`。不要手改 signals.csv、manifest 或 prompt。
+2026-09-28 12:30 UTC的实际定时尝试记录休市跳过。下一次新增交易日的完整定时采集、评分与发布仍需由未来实际运行证明，不能将这次跳过或手动发布替代它。
 
-## 更新服务
+## 健康、备份与容量
+
+`clean-health.timer` 每10分钟检查Web、计划漏跑、失败/超时、备份与磁盘。工作日台北21:30后应有当日定时尝试（包括休市跳过）；备份超过36小时告警；空间少于10GB告警。结果写当前artifact store的 `ops/health.json`。
+
+`clean-backup.timer` 每日台北04:00运行。仓库外默认目录 `~/.local/state/tw-stock-clean/backups` 权限0700，对象0600。只备份登记资产、配置、当前批次、日更证据、定制Qlib wheel和一致性SQLite账本；不扫描home、不备份.env或签名秘密。不可变对象按内容去重，静态模型无需每天重复复制。
 
 ```bash
-corepack pnpm --dir frontend build
-python scripts/install_clean_services.py --start
-systemctl --user is-active clean-web.service clean-daily.timer
-curl -fsS http://127.0.0.1:8000/api/ready
+.venv/bin/python scripts/maintain_clean_product.py health
+.venv/bin/python scripts/maintain_clean_product.py backup
+.venv/bin/python scripts/maintain_clean_product.py verify-backup --manifest /absolute/snapshot/manifest.json
+.venv/bin/python scripts/maintain_clean_product.py restore --manifest /absolute/snapshot/manifest.json --out /new/empty/path
+.venv/bin/python scripts/maintain_clean_product.py retention
 ```
 
-安装器将 `ops/` 中模板渲染到 `~/.config/systemd/user/`，生成私有模拟账户签名文件（0600），启用 Web 和 timer。当前账户已启用 linger，登出不停止服务。不要同时恢复旧保活 cron，避免它抢回 5000/8000。旧 cron 备份位于 `~/.local/state/tw-stock-clean/deployment-20260928T115143/crontab.before`；本次仅停用旧 Web 保活与旧日更入口，其余 cron 保留。
+restore拒绝覆盖已有目录，验证对象与SQLite后生成重新定位的 `runtime-config.yaml`；旧产物字节不改写，需在新目录本地重新发布才可激活。prepare命令将完成此步骤。新主机不恢复签名秘密，安装器创建新秘密，旧token需重签。
 
-## 故障处理与恢复
+保留策略为30天、至少7个快照，retention仅列出可归档计划，**不自动删除共享对象或旧资产**。删除须依仓库规则先验证仓库外副本可恢复。当前备份在同一台机器，能处理误改与代码升级；整盘损坏保护需要另一个存储位置，尚未配置异地备份。
 
-- Web 不健康：先查看 systemd 和日志；确认本机市场数据与冻结模型仍在，再重启 `clean-web.service`。
-- 新日更失败但 ready 仍为 true：继续服务旧批次，按该次 run.json 的失败阶段处理后手动重试。
-- 需要回退批次：暂时停止 timer，选择 `releases/<run_id>/release.json` 中已验证批次；备份 active.json 后，用同目录临时文件和原子 replace 恢复该 release JSON。检查 ready 与排名日期，再启动 timer。不要用复制单个信号文件的方式混合批次。
-- 重复性失败：检查 Yahoo 可达性、磁盘空间和 provider coverage。FinMind 附加数据只影响对应研究功能，不能默认为 Model A 的阻塞条件。
+## 可复现部署和升级
 
-当前不自动删除旧批次与 provider。磁盘不足时按仓库备份规则安排保留策略，不在排错时删历史资产。Docker 是可选部署方式，本轮没有完成容器构建。
+需要系统Python 3.13、Node.js 24/corepack、systemd用户服务、已登记的台湾定制Qlib wheel及资产备份。后端使用requirements-runtime.lock约束，前端使用frozen lockfile。脚本从指定Git提交导出源码，恢复资产，建新venv，安装依赖与构建前端，本地重新发布并验证150条排名与Agent后才标记READY。
 
-## 模拟账户与访问
-
-当前 `paper.enabled=true`，账户存储为 `data_tw/product/paper/accounts.sqlite3`。以专用演示身份生成一小时令牌，在前端“模拟账户”页输入：
+在源码checkout执行（目标必须不存在，选择持久目录）：
 
 ```bash
-python scripts/run_product.py paper-token --owner interview
+python scripts/deploy_clean_product.py prepare --ref clean-v1.0.0 --snapshot /absolute/snapshot/manifest.json --destination /absolute/new-release
+python scripts/deploy_clean_product.py activate --destination /absolute/new-release
 ```
 
-令牌只放在请求 Authorization header，不进 URL 或研究请求；不提交、不写入报告。先创建账户、再预览、再明确确认。使用前一已物化交易日，可获得下一开盘模拟结果；最新日期尚无下一交易日行情时，不能生成虚假的成交。账户与旧登录系统独立；未自动迁移旧账户。
+prepare不影响现有服务。activate拒绝日期过时的备份，获得日更锁，暂停Web写入并复制最新模拟账本，安装units后探测ready；启动失败恢复此前units和Web。旧目录保留。服务配置备份在 `~/.local/state/tw-stock-clean/service-installs/`；当前部署记录在 `current-deployment.json`。切换后从systemd查询新运行目录再执行维护。
 
-8000 当前监听外部网卡，面试可通过已有主机网络入口或 SSH 转发访问。异地公网部署时再配置域名、HTTPS 和访问策略；本轮只验收了本机正式服务与端口。
+代码回退：用**最新资产备份**与此前稳定Git标签重新prepare/activate，避免恢复旧账本。数据批次回退则使用下述命令，先暂停日更timer，选择已验证release；命令验证目标后原子切换，不混合单个信号文件。
+
+```bash
+systemctl --user stop clean-daily.timer
+.venv/bin/python scripts/maintain_clean_product.py rollback-release --release VALIDATED_RELEASE_ID
+curl -fsS http://127.0.0.1:5000/api/ready
+systemctl --user start clean-daily.timer
+```
+
+独立安装器为 `scripts/install_clean_services.py --start`。7个units包括Web、daily service/timer、health service/timer、backup service/timer。用户已开启linger，登出不停止服务。旧保活cron备份保留于 `~/.local/state/tw-stock-clean/deployment-20260928T115143/crontab.before`，不恢复旧入口抢占端口。
+
+## 账户、访问和发布边界
+
+```bash
+.venv/bin/python scripts/run_product.py paper-token --owner interview
+```
+
+演示token只用于模拟账户Authorization header，不提交、不放URL。账户创建、预览、确认后才改变模拟账本。最新日期没有下一交易日行情时不伪造成交。旧功能与账户范围见 [替代清单](CLEAN_REPLACEMENT_CN.md)。
+
+GitHub默认分支为product-clean；旧main保留于legacy-main-20260928。当前私有仓库套餐拒绝强制分支保护，CI仍执行但不宣称合并门禁已强制。公网域名/HTTPS、Docker、外部告警和异地备份均不在当前实测范围；当前本机服务可经已有网络或SSH转发展示。
