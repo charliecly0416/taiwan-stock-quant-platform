@@ -17,6 +17,13 @@ def config(tmp_path):
             "provider_refresh": {"source_dir": str(source), "minimum_coverage": .5, "workers": 2, "proxy": ""}}
 
 
+def test_runtime_contract_includes_scheduled_yahoo_fetcher():
+    requirements = (Path(__file__).parents[1] / "backend" / "requirements.txt").read_text()
+    constraints = (Path(__file__).parents[1] / "backend" / "requirements-runtime.lock").read_text()
+    assert "scrapling[fetchers]==0.4.8" in requirements
+    assert "scrapling==0.4.8" in constraints
+
+
 def test_provider_binary_offsets_preserve_missing_days(tmp_path):
     source = tmp_path / "source"; source.mkdir()
     prices("TW2330", ["2026-09-21", "2026-09-23"]).to_csv(source / "TW2330.csv", index=False)
