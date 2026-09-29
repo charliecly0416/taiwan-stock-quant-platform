@@ -226,6 +226,12 @@ def rollback_release(config, release_id):
     stage = {**cfg['model_stages']['model_a_frozen'], 'provider_uri': release['provider'],
              'selection_prices': release['selection_prices'], 'selection_universe': release['universe_file']}
     candidate['model_stages'] = {**cfg['model_stages'], 'model_a_frozen': stage}
+    if release.get('shadow_feature_delta'):
+        candidate['model_stages']['b19r2r_frozen'] = {
+            **candidate['model_stages'].get('b19r2r_frozen', {}),
+            'feature_delta': release['shadow_feature_delta'],
+            'feature_delta_sha256': release.get('shadow_feature_delta_sha256'),
+        }
     candidate['universe_file'] = release.get('config_universe_file', release['universe_file'])
     candidate['datasets'] = {**cfg.get('datasets', {}), 'prices': {**cfg.get('datasets', {}).get('prices', {}),
         'params': {**cfg.get('datasets', {}).get('prices', {}).get('params', {}), 'provider_uri': release['provider']}}}

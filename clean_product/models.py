@@ -79,6 +79,8 @@ def _verify_stage_assets(stage: dict) -> None:
                           ("prediction_archive", "prediction_archive")):
         if stage.get(key + "_sha256"):
             verify_file(stage[filename], stage[key + "_sha256"])
+    if stage.get("feature_delta") and stage.get("feature_delta_sha256"):
+        verify_file(stage["feature_delta"], stage["feature_delta_sha256"])
 
 
 def _rank(frame: pd.DataFrame, *, score: str = "score") -> pd.DataFrame:
@@ -284,6 +286,14 @@ def _b19r2r(frame: pd.DataFrame, *, asof: str, config: dict, stage: dict, fixtur
         raise ModelBlocked("B19R2R_FEATURE_SCHEMA_INVALID")
     historical = path(stage["historical_features"])
     features = _parquet(str(historical)).copy() if historical.exists() else pd.DataFrame()
+    delta = path(stage["feature_delta"]) if stage.get("feature_delta") else None
+    if delta and delta.exists():
+        current = _parquet(str(delta)).copy()
+        # Keep the frozen historical matrix for comparisons and overlay the
+        # current release's date.  The delta is verified before this stage is
+        # entered and is never written to the source historical artifact.
+        features = pd.concat([features, current], ignore_index=True)
+        features = features.drop_duplicates(["date", "instrument"], keep="last")
     if not features.empty:
         features["date"] = features["date"].astype(str).str[:10]
         features = features[features.date.eq(asof)]

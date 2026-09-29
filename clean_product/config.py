@@ -123,6 +123,12 @@ def env_config(config: dict) -> dict:
             result["universe_file"] = release.get("config_universe_file", release["universe_file"])
             result["datasets"]["prices"].setdefault("params", {})["provider_uri"] = provider
             result.setdefault("provider_refresh", {})["source_dir"] = release["selection_prices"]
+            shadow_delta = release.get("shadow_feature_delta")
+            if shadow_delta:
+                result["model_stages"].setdefault("b19r2r_frozen", {}).update(
+                    feature_delta=shadow_delta,
+                    feature_delta_sha256=release.get("shadow_feature_delta_sha256"),
+                )
         result["_active_release"] = release
     result["_runtime_resolved"] = True
     return result

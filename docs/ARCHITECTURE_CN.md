@@ -13,6 +13,10 @@ flowchart LR
   Provider --> Select[当日流动性 Top150]
   Select --> Model[Alpha158 / 冻结 Model A]
   Model --> Signal[ModelSignalArtifact]
+  Model --> ShadowData[FinMind flows + TWII]
+  ShadowData --> Features[78F PIT-safe shadow delta]
+  Features --> Challenger[B19R2R 重排 Top50]
+  Challenger --> ShadowEvidence[readonly comparison evidence]
   Signal --> Strategy[Top50 / exit one worst]
   Strategy --> Intent[OrderIntentArtifact]
   Signal --> Prompt[每日候选上下文与引用]
@@ -25,7 +29,7 @@ flowchart LR
   API --> Paper[独立认证 / SQLite 模拟账本]
 ```
 
-**日更写路径**：采集 → 标准化 → 候选筛选 → 排名 → 策略意图 → 问答上下文 → 校验 → 发布。每次运行独立保存。失败不覆盖当前批次，同日重跑也不会改坏上一份 Agent 引用。
+**日更写路径**：行情与 FinMind 数据采集 → 标准化 → Model A 候选筛选与排名 →（shadow）PIT 日期校验与 78F delta → B19R2R Top50 重排 → 策略意图 → 问答上下文 → 校验 → 发布。每次运行独立保存。shadow 失败只记录研究证据，不覆盖当前批次，也不改变 Model A 的发布资格。
 
 **请求读路径**：浏览器 → Flask route → ProductService → 已发布 artifact / 本地行情。查询不抓取外部数据。历史回放可按请求计算，但不写当前排名或模拟账户。
 

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from datetime import date
 import pickle
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
+from .artifacts import manifest, sha256, write_json
 from .config import path
 from .models import ModelBlocked
 
@@ -98,14 +101,22 @@ def _price_features(prices: pd.DataFrame, asof: str) -> tuple[pd.DataFrame, floa
     return latest, breadth
 
 
-def _institutional(frame: pd.DataFrame, prior: str) -> pd.DataFrame:
+def _institutional(frame: pd.DataFrame, prior: str, *, asof: str | None = None) -> pd.DataFrame:
     data = frame.rename(columns={"stock_id": "instrument"}).copy()
     if data.empty:
         raise ModelBlocked("B19R2R_INSTITUTIONAL_HISTORY_MISSING")
     data["instrument"] = _instrument(data.instrument); data["date"] = data.date.astype(str).str[:10]
+    if asof and "available_at" in data:
+        available = pd.to_datetime(data["available_at"], errors="coerce").dt.date
+        data = data[available <= date.fromisoformat(asof)].copy()
+        if data.empty:
+            raise ModelBlocked("B19R2R_INSTITUTIONAL_HISTORY_MISSING")
     data["net"] = pd.to_numeric(data.buy, errors="coerce") - pd.to_numeric(data.sell, errors="coerce")
     label = data.name.astype(str).str.lower()
-    data["group"] = np.select([label.str.contains("trust"), label.str.contains("dealer")], ["investment_trust_net_buy", "dealer_net_buy"], default="foreign_net_buy")
+    data["group"] = np.select(
+        [label.str.contains(r"trust|investment|投信", regex=True),
+         label.str.contains(r"dealer|自營", regex=True)],
+        ["investment_trust_net_buy", "dealer_net_buy"], default="foreign_net_buy")
     data = data.groupby(["instrument", "date", "group"], as_index=False).net.sum().pivot(index=["instrument", "date"], columns="group", values="net").reset_index()
     for name in ("foreign_net_buy", "investment_trust_net_buy", "dealer_net_buy"):
         if name not in data: data[name] = 0.0
@@ -115,14 +126,23 @@ def _institutional(frame: pd.DataFrame, prior: str) -> pd.DataFrame:
         for window in (1, 3, 5, 10): data[f"{name}_roll{window}"] = data.groupby("instrument")[name].transform(lambda x: x.rolling(window, min_periods=1).sum())
     data["institutional_total_net_buy_streak"] = data.groupby("instrument", group_keys=False).institutional_total_net_buy.apply(_streak, signed=True)
     data["institutional_missing_flag"] = 0.0; data["institutional_delay_flag"] = 0.0; data["institutional_flow_delay_days"] = 0.0; data["institutional_flow_asof_missing_flag"] = 0.0
-    return data[data.date.eq(prior)].drop(columns=["date"])
+    if asof and "available_at" in data:
+        data = data.sort_values(["instrument", "date"]).groupby("instrument", as_index=False).tail(1)
+    else:
+        data = data[data.date.eq(prior)]
+    return data.drop(columns=["date", "available_at"], errors="ignore")
 
 
-def _margin(frame: pd.DataFrame, prior: str) -> pd.DataFrame:
+def _margin(frame: pd.DataFrame, prior: str, *, asof: str | None = None) -> pd.DataFrame:
     data = frame.rename(columns={"stock_id": "instrument", "MarginPurchaseTodayBalance": "margin_balance", "ShortSaleTodayBalance": "short_balance"}).copy()
     if data.empty:
         raise ModelBlocked("B19R2R_MARGIN_HISTORY_MISSING")
     data["instrument"] = _instrument(data.instrument); data["date"] = data.date.astype(str).str[:10]
+    if asof and "available_at" in data:
+        available = pd.to_datetime(data["available_at"], errors="coerce").dt.date
+        data = data[available <= date.fromisoformat(asof)].copy()
+        if data.empty:
+            raise ModelBlocked("B19R2R_MARGIN_HISTORY_MISSING")
     data = data.sort_values(["instrument", "date"])
     for name in ("margin_balance", "short_balance"):
         data[name] = pd.to_numeric(data[name], errors="coerce"); data[f"{name}_change"] = data.groupby("instrument")[name].diff()
@@ -131,7 +151,11 @@ def _margin(frame: pd.DataFrame, prior: str) -> pd.DataFrame:
     data["margin_direction_proxy"] = np.sign(data.margin_balance_change); data["short_direction_proxy"] = np.sign(data.short_balance_change)
     data["margin_short_divergence_proxy"] = data.margin_direction_proxy - data.short_direction_proxy
     data["margin_short_missing_flag"] = 0.0; data["margin_short_delay_flag"] = 0.0; data["margin_short_delay_days"] = 0.0; data["margin_short_asof_missing_flag"] = 0.0
-    return data[data.date.eq(prior)].drop(columns=["date"])
+    if asof and "available_at" in data:
+        data = data.sort_values(["instrument", "date"]).groupby("instrument", as_index=False).tail(1)
+    else:
+        data = data[data.date.eq(prior)]
+    return data.drop(columns=["date", "available_at"], errors="ignore")
 
 
 def _market(frame: pd.DataFrame, asof: str) -> dict[str, float]:
@@ -158,8 +182,102 @@ def build_b19_features(*, asof: str, model_a: pd.DataFrame, data: dict[str, pd.D
     score = _model_history(config, model_a, asof)
     technical, breadth = _price_features(prices, asof)
     output = model_a.head(50)[["date", "instrument"]].merge(score, on=["date", "instrument"]).merge(technical, on=["date", "instrument"])
-    output = output.merge(_institutional(data.get("institutional", pd.DataFrame()), prior), on="instrument", how="left")
-    output = output.merge(_margin(data.get("margin", pd.DataFrame()), prior), on="instrument", how="left")
+    output = output.merge(_institutional(data.get("institutional", pd.DataFrame()), prior, asof=asof), on="instrument", how="left")
+    output = output.merge(_margin(data.get("margin", pd.DataFrame()), prior, asof=asof), on="instrument", how="left")
     output["market_breadth20"] = breadth
     for name, value in _market(data.get("twii", pd.DataFrame()), asof).items(): output[name] = value
     return output[["date", "instrument", *feature_order]]
+
+
+def validate_b19_inputs(*, asof: str, data: dict[str, pd.DataFrame], config: dict) -> str:
+    """Validate the source dates that can be used for a same-day B19R2R run.
+
+    The model uses the previous market session for delayed FinMind flows.  A
+    source that only has old rows must therefore block the shadow lane instead
+    of silently producing a feature row from stale data.
+    """
+    prices = data.get("prices", pd.DataFrame())
+    if prices.empty or "date" not in prices:
+        raise ModelBlocked("B19R2R_PRICE_HISTORY_MISSING")
+    price_dates = sorted({str(value)[:10] for value in prices["date"].dropna() if str(value)[:10] <= asof})
+    if asof not in price_dates or len(price_dates) < 2:
+        raise ModelBlocked("B19R2R_PRICE_CALENDAR_MISSING", asof)
+    prior = price_dates[-2]
+    for name in ("institutional", "margin", "twii"):
+        frame = data.get(name, pd.DataFrame())
+        if frame.empty or "date" not in frame:
+            raise ModelBlocked(f"B19R2R_{name.upper()}_HISTORY_MISSING")
+        dates = pd.to_datetime(frame["date"], errors="coerce").dt.date
+        if dates.isna().any():
+            raise ModelBlocked(f"B19R2R_{name.upper()}_DATE_INVALID")
+        spec = (config.get("datasets") or {}).get(name, {})
+        lag_days = int(spec.get("lag_days", 0)) if isinstance(spec, dict) else int(getattr(spec, "lag_days", 0))
+        latest_allowed = prior if lag_days > 0 else asof
+        usable = dates[dates <= date.fromisoformat(latest_allowed)]
+        if usable.empty or max(usable).isoformat() < prior:
+            latest = max(usable).isoformat() if not usable.empty else max(dates).isoformat()
+            raise ModelBlocked(f"B19R2R_{name.upper()}_STALE", f"{latest}<{prior}")
+    return prior
+
+
+def derive_available_at(*, asof: str, data: dict[str, pd.DataFrame], config: dict) -> None:
+    """Attach a conservative availability timestamp to live source frames.
+
+    FinMind rows carry trade dates but no trustworthy publication timestamp in
+    the public response.  The registered lag policy therefore maps delayed
+    families to the next price session; the feature join can only consume rows
+    whose derived availability is at or before the decision date.
+    """
+    prices = data.get("prices", pd.DataFrame())
+    if prices.empty or "date" not in prices:
+        return
+    calendar = sorted({str(value)[:10] for value in prices["date"].dropna()})
+    next_session = {day: calendar[index + 1] for index, day in enumerate(calendar[:-1])}
+    for name in ("institutional", "margin", "twii"):
+        frame = data.get(name)
+        if frame is None or frame.empty or "date" not in frame:
+            continue
+        item = frame.copy()
+        lag = int((config.get("datasets", {}).get(name, {}) or {}).get("lag_days", 0))
+        derived = item["date"].astype(str).str[:10].map(next_session if lag > 0 else lambda value: value)
+        if "available_at" in item:
+            item["available_at"] = item["available_at"].where(item["available_at"].notna(), derived)
+        else:
+            item["available_at"] = derived
+        data[name] = item
+
+
+def write_b19_feature_artifact(*, frame: pd.DataFrame, asof: str, config: dict,
+                               feature_order: list[str], run_id: str) -> dict[str, Any]:
+    """Persist one immutable, current-date feature delta for a daily release."""
+    if len(feature_order) != 78 or len(set(feature_order)) != 78:
+        raise ModelBlocked("B19R2R_FEATURE_SCHEMA_INVALID")
+    expected = {"date", "instrument", *feature_order}
+    missing = sorted(expected - set(frame.columns))
+    if missing:
+        raise ModelBlocked("B19R2R_FEATURE_COLUMNS_MISSING", ",".join(missing[:8]))
+    output = frame[["date", "instrument", *feature_order]].copy()
+    output["date"] = output["date"].astype(str).str[:10]
+    output["instrument"] = output["instrument"].astype(str)
+    values = output[feature_order].apply(pd.to_numeric, errors="coerce")
+    bad = [name for name in feature_order if not np.isfinite(values[name].to_numpy(dtype=float)).all()]
+    if bad:
+        raise ModelBlocked("B19R2R_INCOMPLETE_78F", ",".join(bad[:8]))
+    if output.duplicated(["date", "instrument"]).any() or not output.date.eq(asof).all():
+        raise ModelBlocked("B19R2R_FEATURE_KEY_INVALID")
+    output = output.assign(feature_raw_complete_78=True, raw_missing_features="", available_at=asof)
+    root = Path(config["artifact_root"]) / "shadow_features" / asof
+    root.mkdir(parents=True, exist_ok=True)
+    target = root / "FEATURE_ARTIFACT_DELTA.parquet"
+    temporary = target.with_suffix(f".{run_id}.tmp.parquet")
+    output.to_parquet(temporary, index=False)
+    temporary.replace(target)
+    payload = manifest(
+        artifact_type="FeatureArtifact", status="READY", asof=asof, run_id=run_id,
+        files={"features": target}, feature_count=len(feature_order), row_count=len(output),
+        feature_order=feature_order, feature_raw_complete_78=True, available_at=asof,
+        role="shadow", production_allowed=False, mainline_blocking=False,
+    )
+    write_json(root / "manifest.json", payload)
+    return {"path": str(target), "sha256": sha256(target), "manifest": str(root / "manifest.json"),
+            "rows": len(output), "asof": asof, "status": "READY"}

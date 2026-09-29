@@ -34,7 +34,8 @@ def validate_registries(config: dict) -> None:
         raise ValueError('CANDIDATE_PUBLISH_FORBIDDEN')
     expected = {'signals': 'signals/{model}/{asof}', 'intents': 'intents/{model}/{asof}',
                 'daily': 'daily/{asof}/{run_id}', 'agent': 'agent_daily_prompt/{asof}',
-                'failed_signals': 'failed_runs/signals/{model}/{asof}/{run_id}'}
+                'failed_signals': 'failed_runs/signals/{model}/{asof}/{run_id}',
+                'shadow_feature_delta': 'shadow_features/{asof}/FEATURE_ARTIFACT_DELTA.parquet'}
     if any(artifacts.get(k) != v for k, v in expected.items()):
         raise ValueError('ARTIFACT_REGISTRY_LAYOUT_MISMATCH')
 

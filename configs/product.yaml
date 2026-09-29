@@ -11,7 +11,9 @@ universe_file: qlib_pipeline/data_tw/experiments/yahoo_adjusted_primary/option_c
 strategy: top50_exit_one_worst_sell
 execution: next_open
 daily:
-  include_shadow: false
+  # Run the research challenger in the same scheduled batch.  Its status is
+  # recorded independently and remains non-blocking for the Model A release.
+  include_shadow: true
   history_sessions: 2
 research_examples:
   comparison_date: '2026-05-07'
@@ -39,6 +41,7 @@ provider_refresh:
   incremental_days: 45
   minimum_coverage: 0.95
   workers: 16
+  finmind_workers: 8
   proxy: http://127.0.0.1:7890
 datasets:
   prices:

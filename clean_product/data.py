@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -40,8 +41,7 @@ class FinMindAdapter:
         symbols = [explicit] if explicit else universe(config)
         if not symbols:
             raise DataError(f"{spec.name}: empty acquisition universe")
-        rows: list[dict[str, Any]] = []
-        for symbol in symbols:
+        def fetch_symbol(symbol: str) -> list[dict[str, Any]]:
             params = dict(base)
             data_id = re.sub(r"^TW(?=\d+$)", "", str(symbol))
             params.update(dataset=spec.endpoint, data_id=data_id, start_date=start, end_date=asof, token=token)
@@ -54,7 +54,20 @@ class FinMindAdapter:
             payload = response.json()
             if payload.get("msg") not in ("success", "Success", None):
                 raise DataError(f"{spec.name}/{symbol}: {payload.get('msg')}")
-            rows.extend(payload.get("data") or [])
+            return payload.get("data") or []
+        workers = max(1, min(16, int((config.get("provider_refresh") or {}).get("finmind_workers", 8))))
+        if len(symbols) == 1 or workers == 1:
+            return [row for symbol in symbols for row in fetch_symbol(symbol)]
+        rows: list[dict[str, Any]] = []
+        with ThreadPoolExecutor(max_workers=min(workers, len(symbols)), thread_name_prefix="finmind") as pool:
+            futures = {pool.submit(fetch_symbol, symbol): symbol for symbol in symbols}
+            try:
+                for future in as_completed(futures):
+                    rows.extend(future.result())
+            except Exception:
+                for future in futures:
+                    future.cancel()
+                raise
         return rows
 
 
@@ -186,7 +199,10 @@ class DataCatalog:
             frame = incoming
         frame.to_csv(target, index=False)
         digest = hashlib.sha256(target.read_bytes()).hexdigest()
-        manifest = {"dataset": spec.name, "asof": asof, "source": source, "rows": len(frame), "path": str(target), "sha256": digest}
+        latest = str(frame[spec.date_field].max())[:10] if not frame.empty else None
+        manifest = {"dataset": spec.name, "asof": asof, "available_at": asof,
+                    "lag_days": spec.lag_days, "latest_asof": latest, "source": source,
+                    "rows": len(frame), "path": str(target), "sha256": digest}
         (self.root / f"{spec.name}.manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         return manifest
 

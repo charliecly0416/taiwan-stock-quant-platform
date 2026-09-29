@@ -70,6 +70,25 @@ def test_shadow_execution_exception_is_recorded_without_aborting_baseline(tmp_pa
     assert next(item for item in result["models"] if item["model"] == "b")["reason"] == "MODEL_EXECUTION_FAILED: RuntimeError"
 
 
+def test_enabled_shadow_lane_builds_features_after_baseline(tmp_path, monkeypatch):
+    cfg, target = config(tmp_path)
+    cfg["daily"] = {"include_shadow": True}
+    cfg["models"]["b"]["required_datasets"] = ["prices"]
+    target.write_text(yaml.safe_dump(cfg))
+    calls = []
+
+    def feature_step(**kwargs):
+        calls.append(kwargs["model_a"])
+        return {"path": str(tmp_path / "FEATURE_ARTIFACT_DELTA.parquet"), "sha256": "abc", "rows": 1, "status": "READY"}
+
+    monkeypatch.setattr("clean_product.orchestrator._prepare_shadow_features", feature_step)
+    monkeypatch.setattr(ModelRunner, "run", fake_signal)
+    result = run_daily("2026-09-25", config_path=target)
+    shadow = next(item for item in result["models"] if item["model"] == "b")
+    assert result["status"] == "READY" and shadow["status"] == "READY"
+    assert shadow["feature_artifact"]["status"] == "READY" and calls
+
+
 def test_cli_preserves_blocked_exit_status(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["product", "daily", "--dry-run"])
     monkeypatch.setattr(cli, "run_daily", lambda *args, **kwargs: {"status": "BLOCKED"})

@@ -21,6 +21,8 @@ journalctl --user -u clean-web -u clean-daily -u clean-health -u clean-backup -n
 
 每次尝试先持久记录RUNNING；早期请求失败也记录BLOCKED及失败类型。定时与手动记录分开。发布生成完整独立release，通过后原子切换active.json，失败保留旧批次。
 
+Shadow 日更与 Model A 共用同一批次锁，但状态独立记录为 `models[].role=shadow`，失败不会阻塞 Model A 发布。B19R2R 会增量获取 FinMind 的 institutional、margin、twii 数据，按数据集的 `lag_days` 检查可用日期，生成当前日期的 78F PIT-safe delta，并把路径和 SHA256 写入 release。历史冻结特征继续用于历史比较，当前 delta 不会改写历史文件。运行服务通过用户级文件 `~/.config/tw-stock-clean/finmind.env` 读取 `FINMIND_TOKEN`；该文件不属于仓库，建议权限为 `0600`。未配置 token 或数据过期时，日更应显示 B 为 BLOCKED，同时 Model A 仍可 READY。
+
 ```bash
 # 以下为运维动作，不用来做普通代码验证
 .venv/bin/python scripts/run_product.py daily --publish

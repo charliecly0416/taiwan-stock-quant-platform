@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+import json
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from uuid import uuid4
 import fcntl
 
 from .artifacts import manifest, utc_now, write_json
-from .config import CONFIG_PATH, datasets, env_config, load_config, models, trading_days
+from .config import CONFIG_PATH, datasets, env_config, load_config, models, path, trading_days
 from .data import DataCatalog, DataError
-from .models import ModelRunner
+from .features import build_b19_features, derive_available_at, validate_b19_inputs, write_b19_feature_artifact
+from .models import ModelBlocked, ModelRunner
 from .strategy import top50_exit_one_worst_sell
 
 
@@ -27,6 +29,24 @@ def _load_data(catalog: DataCatalog, names: list[str], *, asof: str, fixture: bo
                 except DataError:
                     pass
     return output
+
+
+def _prepare_shadow_features(*, config: dict, data: dict, asof: str, run_id: str,
+                             model_a: object) -> dict:
+    """Build and register the current 78F delta without replacing history."""
+    stage = config["model_stages"]["b19r2r_frozen"]
+    schema_path = path(stage["feature_schema"])
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    order = list(schema.get("feature_order") or [])
+    derive_available_at(asof=asof, data=data, config=config)
+    validate_b19_inputs(asof=asof, data=data, config=config)
+    frame = build_b19_features(asof=asof, model_a=model_a, data=data,
+                               config=config, feature_order=order)
+    artifact = write_b19_feature_artifact(frame=frame, asof=asof, config=config,
+                                          feature_order=order, run_id=run_id)
+    stage["feature_delta"] = artifact["path"]
+    stage["feature_delta_sha256"] = artifact["sha256"]
+    return artifact
 
 
 def run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_run: bool = False, trigger_reason: str = "manual", local_only: bool = False, publish: bool = False) -> dict:
@@ -127,21 +147,53 @@ def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_
                 acquired.append({"dataset": name, "status": "BLOCKED",
                                  "reason": f"DATA_ACQUISITION_FAILED: {type(exc).__name__}"})
     data = _load_data(catalog, list(specs), asof=asof, fixture=dry_run)
+    # Frozen Qlib stages read their provider directly.  Shadow feature
+    # construction needs a bounded OHLCV history, so load only the configured
+    # lookback instead of duplicating the full provider in every daily run.
+    if config.get("daily", {}).get("include_shadow") is True and not dry_run:
+        try:
+            start = (date.fromisoformat(asof) - timedelta(days=400)).isoformat()
+            data["prices"] = catalog.query_local_source("prices", start, asof)
+        except DataError as exc:
+            data["__shadow_price_error"] = str(exc)
     runner = ModelRunner(config); tracks = []
     failed_datasets = {item["dataset"] for item in acquired if item["status"] != "READY"}
-    for name, spec in models(config).items():
+    ordered_models = sorted(models(config).items(), key=lambda item: (item[1].role != "baseline", item[0]))
+    for name, spec in ordered_models:
         if spec.role == "shadow" and config.get("daily", {}).get("include_shadow") is False:
             tracks.append({"model": name, "role": spec.role, "status": "SKIPPED",
                            "reason": "SHADOW_RESEARCH_ON_DEMAND", "signal_rows": 0,
-                           "intents": [], "mainline_blocking": False})
+                           "intents": [], "mainline_blocking": False, "feature_artifact": None})
             continue
         required = config["models"][name].get("required_datasets", ["prices"])
         missing = sorted(set(required) & failed_datasets)
         if missing:
             tracks.append({"model": name, "role": spec.role, "status": "BLOCKED",
                            "reason": "REQUIRED_DATASET_UNAVAILABLE: " + ",".join(missing),
-                           "signal_rows": 0, "intents": [], "mainline_blocking": spec.role == "baseline"})
+                           "signal_rows": 0, "intents": [], "mainline_blocking": spec.role == "baseline",
+                           "feature_artifact": None})
             continue
+        feature_artifact = None
+        if spec.role == "shadow" and config.get("daily", {}).get("include_shadow") is True and not dry_run:
+            try:
+                if data.get("__shadow_price_error"):
+                    raise ModelBlocked("B19R2R_PRICE_HISTORY_MISSING", data["__shadow_price_error"])
+                model_a = data.get("__model_a_signals", {}).get(asof)
+                if model_a is None:
+                    raise ModelBlocked("B19R2R_MODELA_SIGNAL_MISSING", asof)
+                feature_artifact = _prepare_shadow_features(config=config, data=data, asof=asof,
+                                                            run_id=run_id, model_a=model_a)
+            except ModelBlocked as exc:
+                tracks.append({"model": name, "role": spec.role, "status": "BLOCKED",
+                               "reason": str(exc), "signal_rows": 0, "intents": [],
+                               "mainline_blocking": False, "feature_artifact": None})
+                continue
+            except Exception as exc:
+                tracks.append({"model": name, "role": spec.role, "status": "BLOCKED",
+                               "reason": f"SHADOW_FEATURE_BUILD_FAILED: {type(exc).__name__}",
+                               "signal_rows": 0, "intents": [], "mainline_blocking": False,
+                               "feature_artifact": None})
+                continue
         try:
             signal = runner.run(name, asof, data=data, fixture=dry_run)
         except Exception as exc:
@@ -166,7 +218,9 @@ def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_
                 model=name, strategy=config.get("strategy"), execution=config.get("execution"),
                 source_signal=str(signal.artifact_dir / "manifest.json") if signal.artifact_dir else None,
                 fixture=dry_run, readonly=True, simulation_only=True))
-        tracks.append({"model": name, "role": spec.role, "status": signal.status, "reason": signal.reason, "signal_rows": len(signal.rows), "intents": intent_rows, "mainline_blocking": spec.role == "baseline"})
+        tracks.append({"model": name, "role": spec.role, "status": signal.status, "reason": signal.reason,
+                       "signal_rows": len(signal.rows), "intents": intent_rows,
+                       "mainline_blocking": spec.role == "baseline", "feature_artifact": feature_artifact})
     baseline = next((item for item in tracks if item["role"] == "baseline"), None)
     status = "READY" if baseline and baseline["status"] == "READY" else "BLOCKED"
     history = []
@@ -205,6 +259,10 @@ def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_
                        "provider": stage["provider_uri"], "selection_prices": stage["selection_prices"],
                        "universe_file": stage["selection_universe"], "created_at": utc_now(),
                        "config_universe_file": config.get("universe_file")}
+            shadow = next((item for item in tracks if item.get("role") == "shadow"), None)
+            if shadow and shadow.get("feature_artifact"):
+                release["shadow_feature_delta"] = shadow["feature_artifact"]["path"]
+                release["shadow_feature_delta_sha256"] = shadow["feature_artifact"]["sha256"]
             write_json(config["artifact_root"] / "release.json", release)
             write_json(store / "active.json", release)
             result["latest_pointer_written"] = True

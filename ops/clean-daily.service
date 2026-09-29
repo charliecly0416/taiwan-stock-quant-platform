@@ -9,6 +9,8 @@ Type=oneshot
 WorkingDirectory=@ROOT@
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONPATH=@ROOT@
+# Optional user-owned file; the token is never stored in this repository.
+EnvironmentFile=-%h/.config/tw-stock-clean/finmind.env
 ExecStart=@PYTHON@ scripts/run_product.py daily --publish --trigger-reason scheduled
 TimeoutStartSec=45min
 UMask=0077
