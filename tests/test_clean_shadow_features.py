@@ -9,7 +9,10 @@ from clean_product.models import ModelBlocked
 
 
 def feature_order():
-    return json.loads(Path("data_tw/experiments/project_runtime_convergence/modelb_b2_canonical_pit_features_20260913/FEATURE_SCHEMA.json").read_text())["feature_order"]
+    # Keep the unit test independent of ignored production model assets.  The
+    # runtime path validates the real frozen schema before building a delta;
+    # this test only exercises the artifact writer's 78-column contract.
+    return [f"feature_{index}" for index in range(78)]
 
 
 def test_shadow_input_validation_uses_lagged_session(tmp_path):
