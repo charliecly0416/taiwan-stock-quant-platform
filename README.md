@@ -12,8 +12,8 @@ GitHub 默认分支与当前运行主线均为 `product-clean`：Python / Flask 
 2. [架构与模块](docs/ARCHITECTURE_CN.md)：数据流、扩展点、发布与故障隔离。
 3. [运维手册](docs/OPERATIONS_CN.md)：状态、日志、日更、模拟令牌与恢复。
 4. [开发入口](docs/DEVELOPMENT_ONBOARDING_CN.md)：配置、合同与测试。
-5. [旧功能替代清单](docs/CLEAN_REPLACEMENT_CN.md)：保留范围、账户迁移与长期维护边界。
-6. [当前主线验收](docs/MAINLINE_ACCEPTANCE_CN.md)：本机实测、证据与未覆盖范围。
+5. [旧功能替代清单](docs/CLEAN_REPLACEMENT_CN.md)：保留范围、账户迁移与长期维护边界。\n6. [2026-09-29 首日日更检查](docs/DAILY_CHAIN_CHECK_20260929_CN.md)：自动触发、失败重试与成功产物证据。
+7. [当前主线验收](docs/MAINLINE_ACCEPTANCE_CN.md)：本机实测、证据与未覆盖范围。
 
 ## 开发
 

@@ -17,7 +17,7 @@ journalctl --user -u clean-web -u clean-daily -u clean-health -u clean-backup -n
 
 ## 日更
 
-台北工作日18:30、19:30、20:30运行 `clean-daily.timer`。指数实际交易日决定是否采集；休市记录 `NO_NEW_MARKET_SESSION`，不按自然日制造“新交易日”。全市场行情只用于流动性筛选，Model A评分150支，策略Top50；B影子资料不阻塞A。
+台北工作日18:30、19:30、20:30运行 `clean-daily.timer`。指数实际交易日决定是否采集；休市记录 `NO_NEW_MARKET_SESSION`，不按自然日制造“新交易日”。全市场行情只用于流动性筛选，Model A评分150支，策略Top50；B影子资料不阻塞A。Yahoo 增量刷新依赖 `scrapling[fetchers]`，已固定在 `backend/requirements.txt` 和运行约束中；新环境必须通过 `pip check` 后才可启用 timer。
 
 每次尝试先持久记录RUNNING；早期请求失败也记录BLOCKED及失败类型。定时与手动记录分开。发布生成完整独立release，通过后原子切换active.json，失败保留旧批次。
 
