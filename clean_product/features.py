@@ -72,8 +72,7 @@ def _price_features(prices: pd.DataFrame, asof: str, calendar: list[str] | None 
     frame["instrument"] = _instrument(frame.instrument)
     frame["date"] = frame.date.astype(str).str[:10]
     frame = frame[frame.date.le(asof)]
-    if config.get("_shadow_calendar"):
-        frame = frame[frame.date.isin(config["_shadow_calendar"])].sort_values(["instrument", "date"])
+    frame = frame.sort_values(["instrument", "date"])
     calendar = calendar or sorted(frame.date.unique())
     output = []
     for instrument, rows in frame.groupby("instrument"):
