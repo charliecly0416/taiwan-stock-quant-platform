@@ -109,6 +109,10 @@ def main() -> int:
             failures.append("fixture replay is not READY")
 
     app = create_app({'AGENT_REMOTE_DISABLED': True}); app.testing = True
+    from clean_product.service import ProductService
+    current_asof = ProductService(config).latest_asof()
+    if not current_asof:
+        raise ValueError('NO_CURRENT_PROVIDER_SESSION')
     checks = [
         "/api/health", "/api/ready", "/api/tw-stock/config", "/api/tw-stock/overview",
         "/api/tw-stock/data-status", "/api/tw-stock/operations/latest",
@@ -121,6 +125,7 @@ def main() -> int:
         "/api/tw-stock/agent/explain/2330?model=model_a&date=2026-09-24",
         "/api/tw-stock/replay?model=model_a&start=2025-06-23&end=2025-06-30",
     ]
+    checks = [url.replace("2026-09-24", current_asof) for url in checks]
     responses = {}
     with app.test_client() as client:
         for path in checks:
@@ -150,7 +155,7 @@ def main() -> int:
                 or "nav" in payload or "positions" in payload):
             failures.append("shadow model reached the paper-account surface")
         chat_path = '/api/tw-stock/agent/simple-chat'
-        response = client.post(chat_path, json={'question': '排名第一是谁？', 'date': '2026-09-24'})
+        response = client.post(chat_path, json={'question': '排名第一是谁？', 'date': current_asof})
         payload = response.get_json() or {}
         responses[chat_path] = {'http': response.status_code, 'status': payload.get('status'),
                                 'reason': payload.get('reason'), 'mode': payload.get('mode')}
