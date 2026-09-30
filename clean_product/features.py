@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-import pickle
+import json
 from pathlib import Path
 from typing import Any
 
@@ -296,7 +296,13 @@ def write_b19_feature_artifact(*, frame: pd.DataFrame, asof: str, config: dict,
     values = output[feature_order].apply(pd.to_numeric, errors="coerce")
     bad = [name for name in feature_order if not np.isfinite(values[name].to_numpy(dtype=float)).all()]
     if bad:
-        raise ModelBlocked("B19R2R_INCOMPLETE_78F", ",".join(bad[:8]))
+        gaps = [{"instrument": str(output.loc[index, "instrument"]),
+                 "missing_features": [name for name in feature_order if not np.isfinite(values.loc[index, name])]}
+                for index in output.index if not np.isfinite(values.loc[index].to_numpy(dtype=float)).all()]
+        write_json(Path(config["artifact_root"]) / "feature_coverage.json",
+                   {"status": "BLOCKED", "asof": asof, "required_rows": len(output),
+                    "complete_rows": len(output) - len(gaps), "gaps": gaps, "neutral_fill": False})
+        raise ModelBlocked("B19R2R_INCOMPLETE_78F", json.dumps(gaps, ensure_ascii=False))
     output[feature_order] = values.astype(float)
     if output.empty:
         raise ModelBlocked("B19R2R_FEATURE_EMPTY")

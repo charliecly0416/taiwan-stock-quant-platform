@@ -44,7 +44,7 @@ def _history(config, current, cache):
         validate_signal_rows(rows, day)
         published.append(rows[['date', 'instrument', 'score', 'rank']])
     if published:
-        history = pd.concat([history, *published], ignore_index=True).drop_duplicates(['date', 'instrument'], keep='last')
+        history = pd.concat(([history] if not history.empty else []) + published, ignore_index=True).drop_duplicates(['date', 'instrument'], keep='last')
     missing = sorted(set(days) - set(history.date))
     if missing:
         data = {}
@@ -133,7 +133,7 @@ def _execute(config, result, local_only):
     stored = ProductService(config)._stored_signal('model_a_plus_b', asof)
     if stored is None or stored.status != 'READY':
         raise ModelBlocked('SHADOW_STORED_SIGNAL_INVALID')
-    result.update(status='READY', signal_rows=len(signal.rows), top1=str(signal.rows.iloc[0].instrument))
+    result.update(status='READY', execution_status='COMPLETED', signal_rows=len(signal.rows), top1=str(signal.rows.iloc[0].instrument))
 
 
 def run_shadow(*, config_path=CONFIG_PATH, trigger_reason='manual', local_only=False):
@@ -171,10 +171,14 @@ def run_shadow(*, config_path=CONFIG_PATH, trigger_reason='manual', local_only=F
                     raise ModelBlocked('SHADOW_BASELINE_CHANGED_RETRY')
                 write_json(store / 'shadow_active.json', result)
                 result['latest_pointer_written'] = True
-        except (ModelBlocked, DataError) as exc:
-            result.update(status='BLOCKED', reason=str(exc))
+        except ModelBlocked as exc:
+            result.update(status='BLOCKED', reason=str(exc), execution_status='COMPLETED', gate=exc.code)
+            if exc.code == 'B19R2R_INCOMPLETE_78F':
+                result['feature_gaps'] = json.loads(exc.detail)
+        except DataError as exc:
+            result.update(status='BLOCKED', reason=str(exc), execution_status='FAILED')
         except Exception as exc:
             # Provider exceptions may contain credential-bearing request URLs.
-            result.update(status='BLOCKED', reason=f'SHADOW_EXECUTION_FAILED: {type(exc).__name__}')
+            result.update(status='BLOCKED', reason=f'SHADOW_EXECUTION_FAILED: {type(exc).__name__}', execution_status='FAILED')
         result['created_at'] = utc_now(); record()
         return result

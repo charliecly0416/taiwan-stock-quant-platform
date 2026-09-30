@@ -79,7 +79,12 @@ class ProductService:
                 return SignalResult(model, asof, pd.DataFrame(), "BLOCKED", self.config["_shadow_error"])
             artifact_root = self.config.get("_shadow_root", artifact_root)
         root = artifact_root / "signals" / model / asof
-        if not root.exists(): return None
+        if not root.exists():
+            shadow = self.config.get("_shadow_status", {})
+            if (self.config["models"][model].get("role") == "shadow" and shadow.get("asof") == asof
+                    and shadow.get("status") in {"BLOCKED", "RUNNING"}):
+                return SignalResult(model, asof, pd.DataFrame(), "BLOCKED", shadow.get("reason", "SHADOW_RUNNING"))
+            return None
         try:
             validate_baseline(self.config)
             payload, rows = read_signal_artifact(root, self.config, model, asof)

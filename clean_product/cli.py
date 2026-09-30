@@ -79,7 +79,7 @@ def main() -> int:
             payload = {"status": "BLOCKED", "model": args.model, "start": args.start, "end": args.end, "reason": str(exc), "readonly": True, "simulation_only": True, "fixture": args.dry_run}
             print(json.dumps(payload, ensure_ascii=False, indent=2, default=str)); return 2
     print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
-    return 0 if payload.get("status") == "READY" else 1
+    return 0 if payload.get("status") == "READY" or (args.task == "shadow" and payload.get("execution_status") == "COMPLETED") else 1
 
 
 if __name__ == "__main__":

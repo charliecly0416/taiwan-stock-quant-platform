@@ -138,3 +138,24 @@ def test_history_cache_never_overwrites_published_baseline_signal(tmp_path):
     assert filename.read_bytes() == before
     history = pd.read_parquet(cache / 'model_a_history.parquet')
     assert len(history) == 300 and history.date.nunique() == 2
+
+
+def test_current_shadow_gate_reaches_api_without_affecting_baseline(tmp_path):
+    from clean_product.service import ProductService
+    cfg, _, store, active = runtime(tmp_path)
+    cfg['models'] = {'model_a': {'role': 'baseline'}, 'model_a_plus_b': {'role': 'shadow'}}
+    write_json(store / 'shadow_status.json', {'source_run_id': active['run_id'], 'asof': active['asof'],
+                                            'status': 'BLOCKED', 'reason': 'B19R2R_INCOMPLETE_78F: TW7610'})
+    service = ProductService(cfg)
+    assert service._stored_signal('model_a', active['asof']) is None
+    assert service._stored_signal('model_a_plus_b', active['asof']).reason.endswith('TW7610')
+    assert service._stored_signal('model_a_plus_b', '2026-05-07') is None
+
+
+def test_shadow_cli_quality_gate_is_completed_but_execution_failure_is_nonzero(monkeypatch):
+    from clean_product import cli
+    monkeypatch.setattr('sys.argv', ['product', 'shadow'])
+    monkeypatch.setattr('clean_product.shadow.run_shadow', lambda **kwargs: {'status': 'BLOCKED', 'execution_status': 'COMPLETED'})
+    assert cli.main() == 0
+    monkeypatch.setattr('clean_product.shadow.run_shadow', lambda **kwargs: {'status': 'BLOCKED', 'execution_status': 'FAILED'})
+    assert cli.main() == 1

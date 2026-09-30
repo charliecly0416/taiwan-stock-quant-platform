@@ -143,5 +143,12 @@ def env_config(config: dict) -> dict:
                 result["model_stages"]["b19r2r_frozen"].update(feature_delta=delta["path"], feature_delta_sha256=delta["sha256"])
         except (ValueError, OSError, KeyError, TypeError):
             result["_shadow_error"] = "SHADOW_RELEASE_INVALID"
+    status_file = store / "shadow_status.json"
+    try:
+        shadow_status = json.loads(status_file.read_text()) if status_file.is_file() else {}
+        if shadow_status.get("source_run_id") == result.get("_active_release", {}).get("run_id"):
+            result["_shadow_status"] = shadow_status
+    except (ValueError, OSError, TypeError):
+        pass
     result["_runtime_resolved"] = True
     return result
