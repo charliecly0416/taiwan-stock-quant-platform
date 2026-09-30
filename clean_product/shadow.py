@@ -12,7 +12,7 @@ import pandas as pd
 
 from .artifacts import utc_now, write_json
 from .config import CONFIG_PATH, datasets, env_config, load_config, path, trading_days
-from .data import DataCatalog
+from .data import DataCatalog, DataError
 from .models import ModelBlocked, ModelRunner
 from .orchestrator import _prepare_shadow_features
 from .service import ProductService
@@ -75,7 +75,7 @@ def _execute(config, result, local_only):
             result['datasets'].append(catalog.fetch(datasets(config)[name], asof))
         data[name] = catalog.query(name, end=asof)
     breadth_symbols = _history(config, model_a, cache)
-    start = (date.fromisoformat(asof) - timedelta(days=400)).isoformat()
+    start = '2021-01-04'  # Frozen transform's canonical price-calendar start (MACD warmup).
     data['prices'] = catalog.query_local_source('prices', start, asof,
                                                symbols=sorted(breadth_symbols | set(model_a.instrument)))
     artifact = _prepare_shadow_features(config=config, data=data, asof=asof,
@@ -129,7 +129,7 @@ def run_shadow(*, config_path=CONFIG_PATH, trigger_reason='manual', local_only=F
                     raise ModelBlocked('SHADOW_BASELINE_CHANGED_RETRY')
                 write_json(store / 'shadow_active.json', result)
                 result['latest_pointer_written'] = True
-        except ModelBlocked as exc:
+        except (ModelBlocked, DataError) as exc:
             result.update(status='BLOCKED', reason=str(exc))
         except Exception as exc:
             # Provider exceptions may contain credential-bearing request URLs.
