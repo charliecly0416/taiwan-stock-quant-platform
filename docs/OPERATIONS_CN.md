@@ -25,7 +25,7 @@ Shadow 使用独立 `clean-shadow.timer`（台北工作日18:45、19:45、20:45�
 
 FinMind 只抓 A 当日 Top50（排除TW7769、不递补）的法人及融资券，并抓 TAIEX 指数。公开接口可不带 token；可选服务文件 `~/.config/tw-stock-clean/finmind.env` 提供 FINMIND_TOKEN（0600，不入库）。缓存按标的续抓，指数至少400自然日，数据响应保存 captured_at；无官方发布时间时，特征明确标记 availability_is_derived，按下一交易日可用策略计算，不能把它说成真实历史抓取证据。
 
-首次运行从冻结特征末日续补 Model A 候选排名历史，之后增量保存。价格与指数先对齐独立 Yahoo ^TWII 交易日历（不把个股日期并集当作市场开市证明）；每次成功构建保存不可变来源副本及采集时间；market_breadth20 保持冻结特征的150支参考集合。缺法人类别、前一交易日数据、真实昨余额或 OX 数据均阻塞 shadow，不补零。每次生成独立目录 `shadow/{run_id}`，含78F delta、信号、run.json；验证后才写 shadow_active.json，并再次检查 A 批次没有改变。旧 B 不会挂到新 A 上。API operations 的 shadow.latest / shadow.scheduled 分别记录最近尝试与定时尝试；健康告警为 WARNING，A 的 ready 保持独立。
+首次运行从冻结特征末日续补 Model A 候选排名历史，之后增量保存。价格与指数先对齐独立 Yahoo ^TWII 交易日历（不把个股日期并集当作市场开市证明）；每次成功构建保存不可变来源副本及采集时间；market_breadth20 保持冻结特征的150支参考集合。缺法人类别、前一交易日数据、真实昨余额或 OX 数据均阻塞 shadow，不补零。每次生成独立目录 `shadow/{run_id}`，含78F delta、信号、run.json；验证后才写 shadow_active.json，并再次检查 A 批次没有改变。旧 B 不会挂到新 A 上。API operations 的 shadow.latest / shadow.scheduled 分别记录最近尝试与定时尝试；健康告警为 WARNING，A 的 ready 保持独立。`execution_status=COMPLETED` 表示任务完成检查；数据门禁仍可为 `status=BLOCKED`，不会伪装为模型 READY。网络或程序异常为 execution_status=FAILED，服务退出非零。feature_coverage.json 和 operations.shadow.latest.feature_gaps 给出具体缺数据的股票及字段。
 
 手动验证使用 `.venv/bin/python scripts/run_product.py shadow`；已有采集数据时可加 `--local-only`。手动成功不等于定时成功，须核对 timer 的触发记录与 shadow.scheduled。备份包含 shadow 缓存、运行与指针。
 ```bash

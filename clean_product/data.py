@@ -46,7 +46,7 @@ class FinMindAdapter:
             if not prior.empty:
                 for symbol, rows in prior.groupby(spec.symbols_field):
                     latest = date.fromisoformat(str(rows[spec.date_field].max())[:10])
-                    starts[str(symbol)] = max(start, (latest - timedelta(days=16)).isoformat())
+                    starts[str(symbol)] = start if latest.isoformat() > asof else max(start, (latest - timedelta(days=16)).isoformat())
         def fetch_symbol(symbol: str) -> list[dict[str, Any]]:
             params = dict(base)
             data_id = re.sub(r"^TW(?=\d+$)", "", str(symbol))
@@ -58,7 +58,8 @@ class FinMindAdapter:
                 response.raise_for_status()
             except requests.RequestException as exc:
                 # requests errors can embed a URL containing the query-string token.
-                raise DataError(f"{spec.name}/{data_id}: provider request failed ({type(exc).__name__})") from None
+                status = exc.response.status_code if exc.response is not None else None
+                raise DataError(f"{spec.name}/{data_id}: provider request failed ({type(exc).__name__}, HTTP {status})") from None
             payload = response.json()
             if payload.get("msg") not in ("success", "Success", None):
                 raise DataError(f"{spec.name}/{symbol}: provider rejected request (status={payload.get('status')})")
@@ -186,7 +187,8 @@ class DataCatalog:
             if target.exists() and not (spec.source == "finmind" and not spec.params.get("data_id")):
                 existing = pd.read_csv(target, usecols=[spec.date_field])
                 latest = date.fromisoformat(str(existing[spec.date_field].max())[:10])
-                start = (latest - timedelta(days=max(2, spec.lag_days + 14))).isoformat()
+                start = ((date.fromisoformat(asof) - timedelta(days=spec.history_days)) if latest.isoformat() > asof
+                         else (latest - timedelta(days=max(2, spec.lag_days + 14)))).isoformat()
             else:
                 start = (date.fromisoformat(asof) - timedelta(days=spec.history_days)).isoformat()
         try:

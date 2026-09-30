@@ -102,3 +102,19 @@ def test_invalid_provider_offsets_are_rejected(tmp_path, values):
     np.array(values, dtype='<f4').tofile(target)
     with pytest.raises(DataError):
         QlibProviderAdapter._decode(target, 2)
+
+
+def test_historical_fetch_does_not_start_after_requested_end(tmp_path, monkeypatch):
+    cfg = config(tmp_path); cfg['data_root'].mkdir()
+    pd.DataFrame([{'stock_id': '2330', 'date': '2026-09-29', 'close': 100.}]).to_csv(cfg['data_root'] / 'prices.csv', index=False)
+    captured = []
+    class Response:
+        def raise_for_status(self): pass
+        def json(self): return {'msg': 'success', 'data': []}
+    def get(url, **kwargs):
+        captured.append(kwargs['params']); return Response()
+    monkeypatch.setattr('clean_product.data.requests.get', get)
+    monkeypatch.delenv('FINMIND_TOKEN', raising=False)
+    DataCatalog(cfg).fetch(datasets(cfg)['prices'], '2026-09-10')
+    assert captured and captured[0]['start_date'] <= captured[0]['end_date'] == '2026-09-10'
+    assert 'token' not in captured[0]

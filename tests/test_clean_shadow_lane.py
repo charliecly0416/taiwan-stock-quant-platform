@@ -159,3 +159,10 @@ def test_shadow_cli_quality_gate_is_completed_but_execution_failure_is_nonzero(m
     assert cli.main() == 0
     monkeypatch.setattr('clean_product.shadow.run_shadow', lambda **kwargs: {'status': 'BLOCKED', 'execution_status': 'FAILED'})
     assert cli.main() == 1
+
+
+def test_new_baseline_does_not_inherit_a_restored_shadow_delta(tmp_path):
+    cfg, _, _, _ = runtime(tmp_path)
+    cfg['model_stages']['b19r2r_frozen'].update(feature_delta='/old/release/features.parquet', feature_delta_sha256='stale')
+    stage = env_config(cfg)['model_stages']['b19r2r_frozen']
+    assert 'feature_delta' not in stage and 'feature_delta_sha256' not in stage

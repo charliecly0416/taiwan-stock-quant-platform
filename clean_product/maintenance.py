@@ -72,7 +72,9 @@ def health(config, *, base_url='http://127.0.0.1:5000', now=None, write=True, pr
     except (KeyError, TypeError, ValueError): scheduled_day = None
     if scheduled_day is None or scheduled_day < deadline.date(): alert('SCHEDULED_ATTEMPT_MISSING')
     if config.get('daily', {}).get('shadow_separate'):
-        if not shadow or age(shadow) > 4 * 86400: alert('SHADOW_SCHEDULE_MISSING', 'WARNING')
+        try: shadow_day = datetime.fromisoformat(shadow['created_at']).astimezone(ZoneInfo('Asia/Taipei')).date()
+        except (KeyError, TypeError, ValueError): shadow_day = None
+        if shadow_day is None or shadow_day < deadline.date(): alert('SHADOW_SCHEDULE_MISSING', 'WARNING')
         if shadow.get('status') == 'RUNNING' and age(shadow) > 45 * 60: alert('SHADOW_TIMEOUT', 'WARNING')
     expected = scheduler.get('asof'); active = config.get('_active_release', {}).get('asof')
     if expected and active and expected > active: alert('PUBLISHED_DATA_BEHIND_CHECKED_SESSION')

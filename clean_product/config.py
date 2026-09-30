@@ -115,6 +115,9 @@ def env_config(config: dict) -> dict:
         result["artifact_root"] = root
         result["data_root"] = root / "data"
         result.setdefault("agent", {})["prompt_root"] = str(root / "agent_daily_prompt")
+        shadow_stage = result.get("model_stages", {}).get("b19r2r_frozen", {})
+        shadow_stage.pop("feature_delta", None)
+        shadow_stage.pop("feature_delta_sha256", None)
         provider = release.get("provider")
         if provider:
             stage = result["model_stages"]["model_a_frozen"]
