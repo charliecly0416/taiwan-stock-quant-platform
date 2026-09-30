@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import date, timedelta
 from pathlib import Path
 from uuid import uuid4
 import fcntl
@@ -16,6 +15,7 @@ from .data import DataCatalog, DataError
 from .models import ModelBlocked, ModelRunner
 from .orchestrator import _prepare_shadow_features
 from .service import ProductService
+from .validation import validate_signal_rows, verify_file
 
 
 def _history(config, current, cache):
@@ -27,6 +27,23 @@ def _history(config, current, cache):
     history = pd.read_parquet(filename) if filename.exists() else pd.DataFrame(columns=['date', 'instrument', 'score', 'rank'])
     asof = str(current.date.iloc[0])
     days = [day for day in trading_days(config) if end < day < asof]
+    # Preserve rankings already published by A. Recompute only dates for which
+    # no immutable daily signal exists (the one-time historical gap).
+    published = []
+    for manifest_path in sorted(config['_artifact_store'].glob('releases/*/signals/model_a/*/manifest.json')):
+        metadata = json.loads(manifest_path.read_text())
+        day = metadata.get('asof')
+        if day not in days or metadata.get('status') != 'READY':
+            continue
+        if metadata.get('canonical_id') != config['models']['model_a']['canonical_id']:
+            continue
+        filename = manifest_path.parent / 'signals.csv'
+        verify_file(filename, metadata['files']['signals']['sha256'])
+        rows = pd.read_csv(filename)
+        validate_signal_rows(rows, day)
+        published.append(rows[['date', 'instrument', 'score', 'rank']])
+    if published:
+        history = pd.concat([history, *published], ignore_index=True).drop_duplicates(['date', 'instrument'], keep='last')
     missing = sorted(set(days) - set(history.date))
     if missing:
         data = {}
