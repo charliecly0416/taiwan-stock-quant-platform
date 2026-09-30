@@ -118,3 +118,23 @@ def test_index_calendar_excludes_stock_only_dates_before_lag_and_rolling():
             'margin': pd.DataFrame({'date': [calendar[-3]], 'stock_id': ['2330']})}
     derive_available_at(asof=calendar[-1], data=data, config={'datasets': {'margin': {'lag_days': 1}}})
     assert data['margin'].iloc[0].available_at == calendar[-1]
+
+
+def test_history_cache_never_overwrites_published_baseline_signal(tmp_path):
+    from clean_product.shadow import _history
+    from clean_product.artifacts import manifest
+    store = tmp_path / 'artifacts'; cache = store / 'shadow_data'; cache.mkdir(parents=True)
+    source = store / 'releases/a/signals/model_a/2026-05-08'; source.mkdir(parents=True)
+    prior = pd.DataFrame([{'date': '2026-05-08', 'instrument': f'TW{1000+i}', 'score': float(150-i), 'rank': i+1} for i in range(150)])
+    filename = source / 'signals.csv'; prior.to_csv(filename, index=False)
+    before = filename.read_bytes()
+    write_json(source / 'manifest.json', manifest(artifact_type='ModelSignalArtifact', status='READY', asof='2026-05-08', run_id='a', files={'signals': filename}, canonical_id='A'))
+    frozen = tmp_path / 'frozen.parquet'; prior.assign(date='2026-05-07').to_parquet(frozen)
+    cfg = {'_artifact_store': store, '_shadow_calendar': ['2026-05-07', '2026-05-08', '2026-05-11'],
+           'models': {'model_a': {'canonical_id': 'A'}}, 'model_stages': {'b19r2r_frozen': {'historical_features': str(frozen)}}}
+    current = prior.assign(date='2026-05-11')
+    _history(cfg, current, cache)
+    _history(cfg, current, cache)
+    assert filename.read_bytes() == before
+    history = pd.read_parquet(cache / 'model_a_history.parquet')
+    assert len(history) == 300 and history.date.nunique() == 2

@@ -38,9 +38,9 @@ def _history(config, current, cache):
             continue
         if metadata.get('canonical_id') != config['models']['model_a']['canonical_id']:
             continue
-        filename = manifest_path.parent / 'signals.csv'
-        verify_file(filename, metadata['files']['signals']['sha256'])
-        rows = pd.read_csv(filename)
+        signal_file = manifest_path.parent / 'signals.csv'
+        verify_file(signal_file, metadata['files']['signals']['sha256'])
+        rows = pd.read_csv(signal_file)
         validate_signal_rows(rows, day)
         published.append(rows[['date', 'instrument', 'score', 'rank']])
     if published:
