@@ -103,3 +103,18 @@ def test_index_must_cover_current_session_and_canonical_calendar():
     frame = pd.DataFrame({'date': calendar, 'close': np.arange(125) + 100.})
     assert np.isfinite(_market(frame, calendar[-1], calendar)['TWII_close_vs_MA120'])
     with pytest.raises(ModelBlocked, match='STALE_OR_GAPPED'): _market(frame.iloc[:-1], calendar[-1], calendar)
+
+
+def test_index_calendar_excludes_stock_only_dates_before_lag_and_rolling():
+    calendar = pd.bdate_range('2026-01-01', periods=70).strftime('%Y-%m-%d').tolist()
+    phantom = calendar[-2]
+    canonical = [day for day in calendar if day != phantom]
+    prices = pd.DataFrame({'date': calendar, 'instrument': 'TW2330', 'open': 100., 'high': 101.,
+                           'low': 99., 'close': 100., 'volume': 1000., 'vwap': 100.})
+    prices.loc[prices.date.eq(phantom), 'close'] = 100000.
+    actual, _ = _price_features(prices, calendar[-1], canonical)
+    assert actual.iloc[0].MA20 == 100.
+    data = {'prices': prices, '__calendar': canonical,
+            'margin': pd.DataFrame({'date': [calendar[-3]], 'stock_id': ['2330']})}
+    derive_available_at(asof=calendar[-1], data=data, config={'datasets': {'margin': {'lag_days': 1}}})
+    assert data['margin'].iloc[0].available_at == calendar[-1]
