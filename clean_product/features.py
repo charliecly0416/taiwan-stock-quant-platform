@@ -46,6 +46,8 @@ def _model_history(config: dict, current: pd.DataFrame, asof: str) -> pd.DataFra
     frame = pd.concat([frame, now], ignore_index=True).drop_duplicates(["date", "instrument"], keep="last")
     frame["date"] = pd.to_datetime(frame.date).dt.date.astype(str)
     frame = frame[frame.date.le(asof)]
+    if config.get("_shadow_calendar"):
+        frame = frame[frame.date.isin(config["_shadow_calendar"])]
     group = frame.groupby("date").model_a_raw_score
     frame["qlib_score_raw"] = frame.model_a_raw_score
     frame["qlib_score_percentile_by_date"] = group.rank(pct=True)
@@ -69,7 +71,9 @@ def _price_features(prices: pd.DataFrame, asof: str, calendar: list[str] | None 
         raise ModelBlocked("B19R2R_PRICE_HISTORY_MISSING")
     frame["instrument"] = _instrument(frame.instrument)
     frame["date"] = frame.date.astype(str).str[:10]
-    frame = frame[frame.date.le(asof)].sort_values(["instrument", "date"])
+    frame = frame[frame.date.le(asof)]
+    if config.get("_shadow_calendar"):
+        frame = frame[frame.date.isin(config["_shadow_calendar"])].sort_values(["instrument", "date"])
     calendar = calendar or sorted(frame.date.unique())
     output = []
     for instrument, rows in frame.groupby("instrument"):
@@ -195,13 +199,13 @@ def _market(frame: pd.DataFrame, asof: str, calendar: list[str] | None = None) -
 
 def build_b19_features(*, asof: str, model_a: pd.DataFrame, data: dict[str, pd.DataFrame], config: dict, feature_order: list[str]) -> pd.DataFrame:
     prices = data.get("prices", pd.DataFrame())
-    dates = sorted(day for day in prices.get("date", pd.Series(dtype=str)).astype(str).unique() if day <= asof)
+    dates = data.get("__calendar") or sorted(day for day in prices.get("date", pd.Series(dtype=str)).astype(str).unique() if day <= asof)
     if asof not in dates or len(dates) < 2:
         raise ModelBlocked("B19R2R_PRICE_CALENDAR_MISSING", asof)
     prior = dates[-2]
     score = _model_history(config, model_a, asof)
     from .config import trading_days
-    calendar = [day for day in trading_days(config) if dates[0] <= day <= asof] or dates
+    calendar = data.get("__calendar") or [day for day in trading_days(config) if dates[0] <= day <= asof] or dates
     breadth_symbols = set(pd.read_parquet(path(config["model_stages"]["b19r2r_frozen"]["historical_features"]), columns=["instrument"]).instrument.unique())
     technical, breadth = _price_features(prices, asof, calendar, breadth_symbols)
     exact = model_a.sort_values("rank").head(50)
@@ -226,7 +230,7 @@ def validate_b19_inputs(*, asof: str, data: dict[str, pd.DataFrame], config: dic
     prices = data.get("prices", pd.DataFrame())
     if prices.empty or "date" not in prices:
         raise ModelBlocked("B19R2R_PRICE_HISTORY_MISSING")
-    price_dates = sorted({str(value)[:10] for value in prices["date"].dropna() if str(value)[:10] <= asof})
+    price_dates = data.get("__calendar") or sorted({str(value)[:10] for value in prices["date"].dropna() if str(value)[:10] <= asof})
     if asof not in price_dates or len(price_dates) < 2:
         raise ModelBlocked("B19R2R_PRICE_CALENDAR_MISSING", asof)
     prior = price_dates[-2]
@@ -258,7 +262,7 @@ def derive_available_at(*, asof: str, data: dict[str, pd.DataFrame], config: dic
     prices = data.get("prices", pd.DataFrame())
     if prices.empty or "date" not in prices:
         return
-    calendar = sorted({str(value)[:10] for value in prices["date"].dropna()})
+    calendar = data.get("__calendar") or sorted({str(value)[:10] for value in prices["date"].dropna()})
     next_session = {day: calendar[index + 1] for index, day in enumerate(calendar[:-1])}
     for name in ("institutional", "margin", "twii"):
         frame = data.get(name)
@@ -314,7 +318,7 @@ def write_b19_feature_artifact(*, frame: pd.DataFrame, asof: str, config: dict,
         feature_order=feature_order, feature_raw_complete_78=True, available_at=asof,
         role="shadow", production_allowed=False, mainline_blocking=False,
         availability_policy="next_market_session", availability_is_derived=True,
-        captured_at=utc_now(),
+        captured_at=utc_now(), source_inputs=config.get("_shadow_sources", {}),
     )
     write_json(root / "manifest.json", payload)
     return {"path": str(target), "sha256": sha256(target), "manifest": str(root / "manifest.json"),

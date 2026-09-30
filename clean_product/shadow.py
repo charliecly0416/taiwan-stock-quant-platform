@@ -6,10 +6,11 @@ from pathlib import Path
 from uuid import uuid4
 import fcntl
 import json
+import shutil
 
 import pandas as pd
 
-from .artifacts import utc_now, write_json
+from .artifacts import sha256, utc_now, write_json
 from .config import CONFIG_PATH, datasets, env_config, load_config, path, trading_days
 from .data import DataCatalog, DataError
 from .models import ModelBlocked, ModelRunner
@@ -26,7 +27,7 @@ def _history(config, current, cache):
     filename = cache / 'model_a_history.parquet'
     history = pd.read_parquet(filename) if filename.exists() else pd.DataFrame(columns=['date', 'instrument', 'score', 'rank'])
     asof = str(current.date.iloc[0])
-    days = [day for day in trading_days(config) if end < day < asof]
+    days = [day for day in config['_shadow_calendar'] if end < day < asof]
     # Preserve rankings already published by A. Recompute only dates for which
     # no immutable daily signal exists (the one-time historical gap).
     published = []
@@ -86,7 +87,21 @@ def _execute(config, result, local_only):
     symbols = exact[~exact.instrument.isin(stage.get('exclude', []))].instrument.tolist()
     fetch_config = {**config, 'universe': symbols, 'universe_file': None}
     catalog = DataCatalog(fetch_config)
-    data = {}
+    calendar_file = cache / 'market_calendar.csv'
+    if not local_only:
+        from .provider_refresh import _fetch
+        calendar_frame = _fetch('TWII', '2021-01-04', asof,
+                                str(config.get('provider_refresh', {}).get('proxy', '')))
+        if calendar_frame.empty or str(calendar_frame.date.max()) != asof:
+            raise ModelBlocked('SHADOW_MARKET_CALENDAR_UNAVAILABLE')
+        calendar_frame[['date']].to_csv(calendar_file, index=False)
+    calendar = pd.read_csv(calendar_file).date.astype(str).tolist()
+    if not calendar or calendar[-1] != asof:
+        raise ModelBlocked('SHADOW_MARKET_CALENDAR_STALE')
+    config['_shadow_calendar'] = calendar
+    result['market_calendar'] = {'path': str(calendar_file), 'sha256': sha256(calendar_file),
+                                 'source': 'Yahoo ^TWII', 'asof': asof}
+    data = {'__calendar': calendar}
     for name in ('institutional', 'margin', 'twii'):
         if not local_only:
             result['datasets'].append(catalog.fetch(datasets(config)[name], asof))
@@ -95,6 +110,16 @@ def _execute(config, result, local_only):
     start = '2021-01-04'  # Frozen transform's canonical price-calendar start (MACD warmup).
     data['prices'] = catalog.query_local_source('prices', start, asof,
                                                symbols=sorted(breadth_symbols | set(model_a.instrument)))
+    sources = {}
+    source_root = config['artifact_root'] / 'source_inputs'; source_root.mkdir(parents=True, exist_ok=True)
+    for filename in ('market_calendar.csv', 'institutional.csv', 'margin.csv', 'twii.csv', 'model_a_history.parquet'):
+        target = source_root / filename
+        shutil.copyfile(cache / filename, target)
+        sources[filename] = {'path': str(target), 'sha256': sha256(target)}
+    config['_shadow_history'] = sources['model_a_history.parquet']['path']
+    config['_shadow_sources'] = sources
+    result['source_inputs'] = sources
+    result['market_calendar']['path'] = sources['market_calendar.csv']['path']
     artifact = _prepare_shadow_features(config=config, data=data, asof=asof,
                                         run_id=result['run_id'], model_a=model_a)
     result['feature_artifact'] = artifact
