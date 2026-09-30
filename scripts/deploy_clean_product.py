@@ -39,6 +39,10 @@ def prepare(snapshot, destination, ref, python):
     archive = subprocess.check_output(['git', '-C', str(ROOT), 'archive', commit])
     with tarfile.open(fileobj=io.BytesIO(archive)) as bundle: bundle.extractall(destination, filter='data')
     config = yaml.safe_load((destination / 'runtime-config.yaml').read_text())
+    source_config = yaml.safe_load((destination / 'configs/product.yaml').read_text())
+    for section in ('daily', 'datasets'):
+        config[section] = source_config[section]
+    config['datasets']['prices'].setdefault('params', {})['provider_uri'] = config['model_stages']['model_a_frozen']['provider_uri']
     # Backup credentials are intentionally absent; signing secrets are created by
     # the installer on a new host. Artifact-local Agent mode is the safe default.
     (destination / 'configs/product.yaml').write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False))

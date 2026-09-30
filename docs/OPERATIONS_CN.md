@@ -21,8 +21,13 @@ journalctl --user -u clean-web -u clean-daily -u clean-health -u clean-backup -n
 
 每次尝试先持久记录RUNNING；早期请求失败也记录BLOCKED及失败类型。定时与手动记录分开。发布生成完整独立release，通过后原子切换active.json，失败保留旧批次。
 
-Shadow 日更与 Model A 共用同一批次锁，但状态独立记录为 `models[].role=shadow`，失败不会阻塞 Model A 发布。B19R2R 会增量获取 FinMind 的 institutional、margin、twii 数据，按数据集的 `lag_days` 检查可用日期，生成当前日期的 78F PIT-safe delta，并把路径和 SHA256 写入 release。历史冻结特征继续用于历史比较，当前 delta 不会改写历史文件。运行服务通过用户级文件 `~/.config/tw-stock-clean/finmind.env` 读取 `FINMIND_TOKEN`；该文件不属于仓库，建议权限为 `0600`。未配置 token 或数据过期时，日更应显示 B 为 BLOCKED，同时 Model A 仍可 READY。
+Shadow 使用独立 `clean-shadow.timer`（台北工作日18:45、19:45、20:45）和 `clean-shadow.service`，绑定已发布的 Model A 批次；其失败、超时或同日重试都不阻塞 A。`daily.shadow_separate=true` 时主线只负责 Model A；shadow 入口是 `scripts/run_product.py shadow`，无需 `--publish`，不会切换主线 active.json。
 
+FinMind 只抓 A 当日 Top50（排除TW7769、不递补）的法人及融资券，并抓 TAIEX 指数。公开接口可不带 token；可选服务文件 `~/.config/tw-stock-clean/finmind.env` 提供 FINMIND_TOKEN（0600，不入库）。缓存按标的续抓，指数至少400自然日，数据响应保存 captured_at；无官方发布时间时，特征明确标记 availability_is_derived，按下一交易日可用策略计算，不能把它说成真实历史抓取证据。
+
+首次运行从冻结特征末日续补 Model A 候选排名历史，之后增量保存。价格与指数先对齐交易日；market_breadth20 保持冻结特征的150支参考集合。缺法人类别、前一交易日数据、真实昨余额或 OX 数据均阻塞 shadow，不补零。每次生成独立目录 `shadow/{run_id}`，含78F delta、信号、run.json；验证后才写 shadow_active.json，并再次检查 A 批次没有改变。旧 B 不会挂到新 A 上。API operations 的 shadow.latest / shadow.scheduled 分别记录最近尝试与定时尝试；健康告警为 WARNING，A 的 ready 保持独立。
+
+手动验证使用 `.venv/bin/python scripts/run_product.py shadow`；已有采集数据时可加 `--local-only`。手动成功不等于定时成功，须核对 timer 的触发记录与 shadow.scheduled。备份包含 shadow 缓存、运行与指针。
 ```bash
 # 以下为运维动作，不用来做普通代码验证
 .venv/bin/python scripts/run_product.py daily --publish
@@ -30,7 +35,7 @@ Shadow 日更与 Model A 共用同一批次锁，但状态独立记录为 `model
 .venv/bin/python scripts/run_product.py daily --asof YYYY-MM-DD --local-only --publish
 ```
 
-2026-09-28 12:30 UTC的实际定时尝试记录休市跳过。下一次新增交易日的完整定时采集、评分与发布仍需由未来实际运行证明，不能将这次跳过或手动发布替代它。
+Model A 在2026-09-29的完整定时更新已成功；shadow 的定时验收需单独记录，不以 Model A 的成功或休市跳过代替。
 
 ## 健康、备份与容量
 

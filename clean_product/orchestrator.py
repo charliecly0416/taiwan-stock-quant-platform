@@ -92,6 +92,8 @@ def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_
     if trigger_reason not in ("manual", "scheduled"):
         raise ValueError("trigger_reason must be manual or scheduled")
     config = env_config(load_config(config_path))
+    if config.get("daily", {}).get("shadow_separate"):
+        config["daily"]["include_shadow"] = False
     if asof is None and publish and not local_only:
         from .provider_refresh import market_asof
         asof = market_asof(config, datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat())
@@ -195,6 +197,8 @@ def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_
                                "feature_artifact": None})
                 continue
         try:
+            if feature_artifact:
+                runner = ModelRunner(config)
             signal = runner.run(name, asof, data=data, fixture=dry_run)
         except Exception as exc:
             tracks.append({"model": name, "role": spec.role, "status": "BLOCKED",

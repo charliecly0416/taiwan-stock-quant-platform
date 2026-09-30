@@ -27,7 +27,7 @@ def main():
         with os.fdopen(os.open(secret, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), 'w') as stream:
             stream.write(secrets.token_urlsafe(48))
     previous = {}; rendered = {}
-    for name in ('clean-web.service', 'clean-daily.service', 'clean-daily.timer',
+    for name in ('clean-web.service', 'clean-daily.service', 'clean-daily.timer', 'clean-shadow.service', 'clean-shadow.timer',
                  'clean-health.service', 'clean-health.timer', 'clean-backup.service', 'clean-backup.timer'):
         if (destination / name).exists(): previous[name] = (destination / name).read_text()
         rendered[name] = (ROOT / 'ops' / name).read_text().replace('@ROOT@', str(ROOT)).replace('@PYTHON@', sys.executable)
@@ -36,15 +36,15 @@ def main():
     try:
         for name, content in rendered.items(): (destination / name).write_text(content)
         subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True)
-        subprocess.run(['systemctl', '--user', 'enable', 'clean-web.service', 'clean-daily.timer', 'clean-health.timer', 'clean-backup.timer'], check=True)
+        subprocess.run(['systemctl', '--user', 'enable', 'clean-web.service', 'clean-daily.timer', 'clean-shadow.timer', 'clean-health.timer', 'clean-backup.timer'], check=True)
         if args.start:
             from scripts.deploy_clean_product import wait_ready
             subprocess.run(['systemctl', '--user', 'restart', 'clean-web.service'], check=True)
             wait_ready('http://127.0.0.1:5000')
-            subprocess.run(['systemctl', '--user', 'start', 'clean-daily.timer', 'clean-health.timer', 'clean-backup.timer'], check=True)
+            subprocess.run(['systemctl', '--user', 'start', 'clean-daily.timer', 'clean-shadow.timer', 'clean-health.timer', 'clean-backup.timer'], check=True)
     except Exception:
         for name, content in previous.items(): (destination / name).write_text(content)
-        for name in ('clean-daily.timer', 'clean-health.timer', 'clean-backup.timer'):
+        for name in ('clean-daily.timer', 'clean-shadow.timer', 'clean-health.timer', 'clean-backup.timer'):
             if name not in previous: subprocess.run(['systemctl', '--user', 'disable', '--now', name], check=False)
         subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True)
         if args.start and 'clean-web.service' in previous:

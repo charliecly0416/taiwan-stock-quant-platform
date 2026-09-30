@@ -1,0 +1,16 @@
+[Unit]
+Description=Taiwan stock B19R2R independent research shadow
+After=network-online.target clean-daily.service
+Wants=network-online.target
+OnFailure=clean-health.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=@ROOT@
+EnvironmentFile=-%h/.config/tw-stock-clean/finmind.env
+ExecStart=@PYTHON@ scripts/run_product.py shadow --trigger-reason scheduled
+TimeoutStartSec=40min
+UMask=0077
+NoNewPrivileges=true

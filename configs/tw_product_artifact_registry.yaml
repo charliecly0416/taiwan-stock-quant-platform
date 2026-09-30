@@ -6,5 +6,9 @@ daily: daily/{asof}/{run_id}
 agent: agent_daily_prompt/{asof}
 failed_signals: failed_runs/signals/{model}/{asof}/{run_id}
 shadow_feature_delta: shadow_features/{asof}/FEATURE_ARTIFACT_DELTA.parquet
+shadow_runs: shadow/{run_id}
+shadow_active: shadow_active.json
+shadow_data: shadow_data
+shadow_scheduler: shadow_scheduler_status.json
 legacy_agent_readonly_root: data_tw/artifacts/agent_daily_prompt
 candidate_publish_allowed: false

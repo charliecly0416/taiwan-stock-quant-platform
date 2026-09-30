@@ -1,0 +1,11 @@
+[Unit]
+Description=Research shadow after Model A with independent retries
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 18,19,20:45:00 Asia/Taipei
+Persistent=true
+AccuracySec=1min
+Unit=clean-shadow.service
+
+[Install]
+WantedBy=timers.target

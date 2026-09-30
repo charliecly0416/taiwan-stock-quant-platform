@@ -20,7 +20,7 @@ def test_failed_install_restores_previous_units_and_restarts_old_service(tmp_pat
     root = tmp_path / 'new'; (root / 'frontend/dist').mkdir(parents=True)
     (root / 'frontend/dist/index.html').write_text('fixture')
     (root / 'ops').mkdir()
-    units = ['clean-web.service', 'clean-daily.service', 'clean-daily.timer', 'clean-health.service',
+    units = ['clean-web.service', 'clean-daily.service', 'clean-daily.timer', 'clean-shadow.service', 'clean-shadow.timer', 'clean-health.service',
              'clean-health.timer', 'clean-backup.service', 'clean-backup.timer']
     for name in units: (root / 'ops' / name).write_text('[Service]\nWorkingDirectory=@ROOT@\n')
     home = tmp_path / 'home'; dest = home / '.config/systemd/user'; dest.mkdir(parents=True)

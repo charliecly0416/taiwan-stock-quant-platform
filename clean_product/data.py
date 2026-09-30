@@ -34,17 +34,25 @@ class SourceAdapter(Protocol):
 class FinMindAdapter:
     def fetch(self, spec: DatasetSpec, *, asof: str, start: str, config: dict) -> list[dict[str, Any]]:
         token = os.getenv("FINMIND_TOKEN", "").strip()
-        if not token:
-            raise DataError("FINMIND_TOKEN is required for a live acquisition")
         base = dict(spec.params)
         explicit = base.pop("data_id", None)
         symbols = [explicit] if explicit else universe(config)
         if not symbols:
             raise DataError(f"{spec.name}: empty acquisition universe")
+        starts = {}
+        existing_path = Path(config["data_root"]) / f"{spec.name}.csv"
+        if not explicit and existing_path.is_file():
+            prior = pd.read_csv(existing_path, dtype={spec.symbols_field: str})
+            if not prior.empty:
+                for symbol, rows in prior.groupby(spec.symbols_field):
+                    latest = date.fromisoformat(str(rows[spec.date_field].max())[:10])
+                    starts[str(symbol)] = max(start, (latest - timedelta(days=16)).isoformat())
         def fetch_symbol(symbol: str) -> list[dict[str, Any]]:
             params = dict(base)
             data_id = re.sub(r"^TW(?=\d+$)", "", str(symbol))
-            params.update(dataset=spec.endpoint, data_id=data_id, start_date=start, end_date=asof, token=token)
+            params.update(dataset=spec.endpoint, data_id=data_id, start_date=starts.get(data_id, start), end_date=asof)
+            if token:
+                params["token"] = token
             try:
                 response = requests.get("https://api.finmindtrade.com/api/v4/data", params=params, timeout=60)
                 response.raise_for_status()
@@ -53,7 +61,7 @@ class FinMindAdapter:
                 raise DataError(f"{spec.name}/{data_id}: provider request failed ({type(exc).__name__})") from None
             payload = response.json()
             if payload.get("msg") not in ("success", "Success", None):
-                raise DataError(f"{spec.name}/{symbol}: {payload.get('msg')}")
+                raise DataError(f"{spec.name}/{symbol}: provider rejected request (status={payload.get('status')})")
             return payload.get("data") or []
         workers = max(1, min(16, int((config.get("provider_refresh") or {}).get("finmind_workers", 8))))
         if len(symbols) == 1 or workers == 1:
@@ -145,7 +153,8 @@ class DataCatalog:
         for field in spec.fields:
             if field not in frame:
                 frame[field] = pd.NA
-        frame = frame[list(spec.fields)]
+        columns = [*spec.fields, *[key for key in ("available_at", "captured_at") if key in frame and key not in spec.fields]]
+        frame = frame[columns]
         sort_fields = [spec.date_field]
         if spec.symbols_field in frame:
             sort_fields.append(spec.symbols_field)
@@ -174,7 +183,7 @@ class DataCatalog:
     def fetch(self, spec: DatasetSpec, asof: str, start: str | None = None) -> dict[str, Any]:
         if start is None:
             target = self._file(spec.name)
-            if target.exists():
+            if target.exists() and not (spec.source == "finmind" and not spec.params.get("data_id")):
                 existing = pd.read_csv(target, usecols=[spec.date_field])
                 latest = date.fromisoformat(str(existing[spec.date_field].max())[:10])
                 start = (latest - timedelta(days=max(2, spec.lag_days + 14))).isoformat()
@@ -185,7 +194,10 @@ class DataCatalog:
         except KeyError as exc:
             raise DataError(f"unknown data source: {spec.source}") from exc
         rows = adapter.fetch(spec, asof=asof, start=start, config=self.config)
-        return self.store(spec, self.normalize(spec, rows), asof, spec.source)
+        normalized = self.normalize(spec, rows)
+        from .artifacts import utc_now
+        normalized["captured_at"] = utc_now()
+        return self.store(spec, normalized, asof, spec.source)
 
     def store(self, spec: DatasetSpec, frame: pd.DataFrame, asof: str, source: str) -> dict[str, Any]:
         self.root.mkdir(parents=True, exist_ok=True)

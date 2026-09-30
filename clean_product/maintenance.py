@@ -21,7 +21,7 @@ from .config import ROOT, env_config, path
 
 ASSET_FIELDS = ('model_path', 'training_manifest', 'prediction_archive', 'raw_prediction_archive',
                 'inference_config', 'selection_prices', 'selection_universe', 'provider_uri',
-                'feature_schema', 'historical_features')
+                'feature_schema', 'historical_features', 'feature_delta')
 PRIVATE = re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\b(?:ghp_|github_pat_|sk-proj-)[A-Za-z0-9_-]{24,}')
 
 
@@ -53,6 +53,9 @@ def health(config, *, base_url='http://127.0.0.1:5000', now=None, write=True, pr
             alert('INVALID_' + name.replace('/', '_').replace('.', '_').upper()); return {}
     scheduler = record('scheduler_status.json'); latest = record('daily_status.json') or scheduler
     backup = record('ops/backup.json')
+    shadow = record('shadow_scheduler_status.json')
+    if config.get('daily', {}).get('shadow_separate'):
+        if shadow.get('status') == 'BLOCKED': alert('SCHEDULED_SHADOW_FAILED', 'WARNING')
     def age(item):
         try: return (now - datetime.fromisoformat(item['created_at'])).total_seconds()
         except (KeyError, TypeError, ValueError): return float('inf')
@@ -68,6 +71,9 @@ def health(config, *, base_url='http://127.0.0.1:5000', now=None, write=True, pr
     try: scheduled_day = datetime.fromisoformat(scheduler['created_at']).astimezone(ZoneInfo('Asia/Taipei')).date()
     except (KeyError, TypeError, ValueError): scheduled_day = None
     if scheduled_day is None or scheduled_day < deadline.date(): alert('SCHEDULED_ATTEMPT_MISSING')
+    if config.get('daily', {}).get('shadow_separate'):
+        if not shadow or age(shadow) > 4 * 86400: alert('SHADOW_SCHEDULE_MISSING', 'WARNING')
+        if shadow.get('status') == 'RUNNING' and age(shadow) > 45 * 60: alert('SHADOW_TIMEOUT', 'WARNING')
     expected = scheduler.get('asof'); active = config.get('_active_release', {}).get('asof')
     if expected and active and expected > active: alert('PUBLISHED_DATA_BEHIND_CHECKED_SESSION')
     free = shutil.disk_usage(store if store.exists() else ROOT).free
@@ -86,7 +92,8 @@ def inventory(config, *, project_root=ROOT):
     root = Path(project_root).resolve(); cfg = env_config(config)
     targets = {root / 'configs', cfg['artifact_root'], cfg['data_root']}
     store = cfg['_artifact_store']
-    targets.update(store / name for name in ('active.json', 'daily', 'scheduler_status.json', 'daily_status.json'))
+    targets.update(store / name for name in ('active.json', 'daily', 'scheduler_status.json', 'daily_status.json',
+                                               'shadow', 'shadow_data', 'shadow_active.json', 'shadow_status.json', 'shadow_scheduler_status.json'))
     for stage in cfg.get('model_stages', {}).values():
         targets.update(path(stage[k]) for k in ASSET_FIELDS if stage.get(k))
     if cfg.get('universe_file'): targets.add(path(cfg['universe_file']))
@@ -127,7 +134,8 @@ def backup(config, *, project_root=ROOT):
     if destination.is_relative_to(root): raise ValueError('BACKUP_MUST_BE_OUTSIDE_REPOSITORY')
     destination.mkdir(parents=True, exist_ok=True, mode=0o700)
     destination.chmod(0o700)
-    with (destination / 'backup.lock').open('a') as lock, (cfg['_artifact_store'] / 'daily.lock').open('a') as daily_lock:
+    with (destination / 'backup.lock').open('a') as lock, (cfg['_artifact_store'] / 'daily.lock').open('a') as daily_lock, (cfg['_artifact_store'] / 'shadow.lock').open('a') as shadow_lock:
+        fcntl.flock(shadow_lock, fcntl.LOCK_SH | fcntl.LOCK_NB)
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         fcntl.flock(daily_lock, fcntl.LOCK_SH | fcntl.LOCK_NB)
         if read_json(cfg['_artifact_store'] / 'active.json') != cfg.get('_active_release'):

@@ -14,6 +14,7 @@ daily:
   # Run the research challenger in the same scheduled batch.  Its status is
   # recorded independently and remains non-blocking for the Model A release.
   include_shadow: true
+  shadow_separate: true
   history_sessions: 2
 research_examples:
   comparison_date: '2026-05-07'
@@ -93,7 +94,7 @@ datasets:
     - date
     - name
     lag_days: 1
-    history_days: 30
+    history_days: 400
   margin:
     source: finmind
     endpoint: TaiwanStockMarginPurchaseShortSale
@@ -103,6 +104,9 @@ datasets:
     - date
     - MarginPurchaseTodayBalance
     - ShortSaleTodayBalance
+    - MarginPurchaseYesterdayBalance
+    - ShortSaleYesterdayBalance
+    - Note
     required:
     - stock_id
     - date
@@ -110,7 +114,7 @@ datasets:
     - MarginPurchaseTodayBalance
     - ShortSaleTodayBalance
     lag_days: 1
-    history_days: 30
+    history_days: 400
   twii:
     source: finmind
     endpoint: TaiwanStockPrice
@@ -126,8 +130,8 @@ datasets:
     numeric:
     - close
     params:
-      data_id: TWII
-    history_days: 180
+      data_id: TAIEX
+    history_days: 400
 model_stages:
   model_a_frozen:
     adapter: qlib_frozen

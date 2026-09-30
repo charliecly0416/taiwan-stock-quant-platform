@@ -11,7 +11,7 @@ from .replay import replay
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Clean Taiwan stock research product")
-    parser.add_argument("task", choices=["daily", "replay", "candidate", "paper-token", "paper-import", "paper-export"]); parser.add_argument("--asof"); parser.add_argument("--model", default="model_a")
+    parser.add_argument("task", choices=["shadow", "daily", "replay", "candidate", "paper-token", "paper-import", "paper-export"]); parser.add_argument("--asof"); parser.add_argument("--model", default="model_a")
     parser.add_argument("--start"); parser.add_argument("--end"); parser.add_argument("--dry-run", action="store_true")
     parser.add_argument('--publish', action='store_true', help='Atomically activate a complete daily release')
     parser.add_argument('--local-only', action='store_true', help='Use existing local data without fetching')
@@ -61,7 +61,12 @@ def main() -> int:
         payload.update(scope='isolated_local_candidate', latest_pointer_written=False)
         write_json(output / 'candidate_result.json', payload)
         print(json.dumps(payload, ensure_ascii=False, indent=2)); return 0 if payload['status'] == 'READY' else 1
-    if args.task == "daily":
+    if args.task == "shadow":
+        if args.dry_run or args.asof or args.publish:
+            parser.error('shadow binds the active baseline; use --local-only for offline execution')
+        from .shadow import run_shadow
+        payload = run_shadow(trigger_reason=args.trigger_reason, local_only=args.local_only)
+    elif args.task == "daily":
         payload = run_daily(args.asof, dry_run=args.dry_run, local_only=args.local_only,
                             publish=args.publish, trigger_reason=args.trigger_reason)
     else:

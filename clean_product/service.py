@@ -73,7 +73,12 @@ class ProductService:
         return data
 
     def _stored_signal(self, model: str, asof: str) -> SignalResult | None:
-        root = self.config["artifact_root"] / "signals" / model / asof
+        artifact_root = self.config["artifact_root"]
+        if self.config["models"][model].get("role") == "shadow":
+            if self.config.get("_shadow_error"):
+                return SignalResult(model, asof, pd.DataFrame(), "BLOCKED", self.config["_shadow_error"])
+            artifact_root = self.config.get("_shadow_root", artifact_root)
+        root = artifact_root / "signals" / model / asof
         if not root.exists(): return None
         try:
             validate_baseline(self.config)
@@ -305,4 +310,16 @@ class ProductService:
                 "latest_manual": next((item for item in runs if item.get('trigger_reason') == 'manual'), None),
                 "artifact_root": str(self.config["artifact_root"]),
                 "active_release": self.config.get("_active_release"), "scheduler": scheduler,
+                "shadow": self._shadow_operations(root.parent),
                 "maintenance": maintenance, "readonly": True}
+
+    @staticmethod
+    def _shadow_operations(store):
+        result = {}
+        for key, filename in (("latest", "shadow_status.json"), ("scheduled", "shadow_scheduler_status.json")):
+            target = store / filename
+            try:
+                result[key] = json.loads(target.read_text()) if target.is_file() else None
+            except (OSError, ValueError):
+                result[key] = {"status": "BLOCKED", "reason": "SHADOW_STATUS_INVALID"}
+        return result

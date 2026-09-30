@@ -130,5 +130,18 @@ def env_config(config: dict) -> dict:
                     feature_delta_sha256=release.get("shadow_feature_delta_sha256"),
                 )
         result["_active_release"] = release
+        # Invalid research state must never make Model A unavailable.
+        pointer = store / "shadow_active.json"
+        try:
+            shadow = json.loads(pointer.read_text()) if pointer.is_file() else {}
+            if shadow.get("source_run_id") == release.get("run_id") and shadow.get("asof") == release.get("asof"):
+                shadow_root = path(shadow["artifact_root"]).resolve()
+                delta = shadow["feature_artifact"]
+                if shadow.get("status") != "READY" or not shadow_root.is_relative_to((store / "shadow").resolve()) or not path(delta["path"]).resolve().is_relative_to(shadow_root):
+                    raise ValueError("SHADOW_RELEASE_INVALID")
+                result["_shadow_root"] = shadow_root
+                result["model_stages"]["b19r2r_frozen"].update(feature_delta=delta["path"], feature_delta_sha256=delta["sha256"])
+        except (ValueError, OSError, KeyError, TypeError):
+            result["_shadow_error"] = "SHADOW_RELEASE_INVALID"
     result["_runtime_resolved"] = True
     return result
