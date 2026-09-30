@@ -164,7 +164,7 @@ def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_
     for name, spec in ordered_models:
         if spec.role == "shadow" and config.get("daily", {}).get("include_shadow") is False:
             tracks.append({"model": name, "role": spec.role, "status": "SKIPPED",
-                           "reason": "SHADOW_RESEARCH_ON_DEMAND", "signal_rows": 0,
+                           "reason": "SHADOW_SCHEDULED_SEPARATELY" if config.get("daily", {}).get("shadow_separate") else "SHADOW_RESEARCH_ON_DEMAND", "signal_rows": 0,
                            "intents": [], "mainline_blocking": False, "feature_artifact": None})
             continue
         required = config["models"][name].get("required_datasets", ["prices"])

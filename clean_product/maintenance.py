@@ -55,7 +55,8 @@ def health(config, *, base_url='http://127.0.0.1:5000', now=None, write=True, pr
     backup = record('ops/backup.json')
     shadow = record('shadow_scheduler_status.json')
     if config.get('daily', {}).get('shadow_separate'):
-        if shadow.get('status') == 'BLOCKED': alert('SCHEDULED_SHADOW_FAILED', 'WARNING')
+        if shadow.get('status') == 'BLOCKED':
+            alert('SCHEDULED_SHADOW_GATED' if shadow.get('execution_status') == 'COMPLETED' else 'SCHEDULED_SHADOW_FAILED', 'WARNING')
     def age(item):
         try: return (now - datetime.fromisoformat(item['created_at'])).total_seconds()
         except (KeyError, TypeError, ValueError): return float('inf')
