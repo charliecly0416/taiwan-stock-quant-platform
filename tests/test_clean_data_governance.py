@@ -147,3 +147,33 @@ def test_finmind_retries_transient_http_failures_per_symbol(tmp_path, monkeypatc
     monkeypatch.setattr('clean_product.data.requests.get', get)
     FinMindAdapter().fetch(datasets(cfg)['prices'], asof='2026-09-24', start='2026-09-23', config=cfg)
     assert calls == ['2330', '2330']
+
+
+def test_finmind_quota_fallback_reuses_cached_symbol_and_records_manifest(tmp_path, monkeypatch):
+    cfg = config(tmp_path)
+    cfg['universe'] = ['TW3665']
+    cfg['datasets']['margin'] = {
+        'source': 'finmind', 'endpoint': 'TaiwanStockMarginPurchaseShortSale',
+        'fields': ['stock_id', 'date', 'MarginPurchaseTodayBalance', 'ShortSaleTodayBalance'],
+        'required': ['stock_id', 'date'], 'numeric': ['MarginPurchaseTodayBalance', 'ShortSaleTodayBalance'],
+        'primary_key': ['stock_id', 'date'], 'lag_days': 1,
+    }
+    cfg['data_root'].mkdir(parents=True)
+    pd.DataFrame([{'stock_id': '3665', 'date': '2026-09-30',
+                   'MarginPurchaseTodayBalance': 10, 'ShortSaleTodayBalance': 2}]).to_csv(
+                       cfg['data_root'] / 'margin.csv', index=False)
+
+    class Response:
+        status_code = 402
+        def raise_for_status(self):
+            raise requests.HTTPError(response=self)
+        def json(self):
+            return {'status': 402, 'msg': 'Requests reach the upper limit'}
+
+    monkeypatch.setattr('clean_product.data.requests.get', lambda *args, **kwargs: Response())
+    result = DataCatalog(cfg).fetch(datasets(cfg)['margin'], '2026-10-01')
+    assert result['provider_fallback_symbols'] == ['3665']
+    manifest = pd.read_csv(cfg['data_root'] / 'margin.csv')
+    assert len(manifest) == 1 and manifest.iloc[0].stock_id == 3665
+    payload = (cfg['data_root'] / 'margin.manifest.json').read_text()
+    assert 'provider_fallback_symbols' in payload

@@ -34,6 +34,7 @@ class SourceAdapter(Protocol):
 
 class FinMindAdapter:
     def fetch(self, spec: DatasetSpec, *, asof: str, start: str, config: dict) -> list[dict[str, Any]]:
+        self.fallback_symbols: list[str] = []
         token = os.getenv("FINMIND_TOKEN", "").strip()
         base = dict(spec.params)
         explicit = base.pop("data_id", None)
@@ -41,11 +42,13 @@ class FinMindAdapter:
         if not symbols:
             raise DataError(f"{spec.name}: empty acquisition universe")
         starts = {}
+        cached_by_symbol: dict[str, list[dict[str, Any]]] = {}
         existing_path = Path(config["data_root"]) / f"{spec.name}.csv"
         if not explicit and existing_path.is_file():
             prior = pd.read_csv(existing_path, dtype={spec.symbols_field: str})
             if not prior.empty:
                 for symbol, rows in prior.groupby(spec.symbols_field):
+                    cached_by_symbol[str(symbol)] = rows.to_dict("records")
                     latest = date.fromisoformat(str(rows[spec.date_field].max())[:10])
                     starts[str(symbol)] = start if latest.isoformat() > asof else max(start, (latest - timedelta(days=16)).isoformat())
         def fetch_symbol(symbol: str) -> list[dict[str, Any]]:
@@ -72,8 +75,15 @@ class FinMindAdapter:
                     if (status is None or status in retry_statuses) and attempt < retries:
                         time.sleep(backoff * (2 ** attempt))
                         continue
+                    cached = cached_by_symbol.get(data_id, [])
+                    if status == 402 and cached:
+                        self.fallback_symbols.append(data_id)
+                        return cached
                     raise DataError(f"{spec.name}/{data_id}: provider request failed ({type(exc).__name__}, HTTP {status})") from None
             payload = response.json()
+            if payload.get("status") == 402 and cached_by_symbol.get(data_id):
+                self.fallback_symbols.append(data_id)
+                return cached_by_symbol[data_id]
             if payload.get("msg") not in ("success", "Success", None):
                 raise DataError(f"{spec.name}/{symbol}: provider rejected request (status={payload.get('status')})")
             return payload.get("data") or []
@@ -212,7 +222,15 @@ class DataCatalog:
         normalized = self.normalize(spec, rows)
         from .artifacts import utc_now
         normalized["captured_at"] = utc_now()
-        return self.store(spec, normalized, asof, spec.source)
+        result = self.store(spec, normalized, asof, spec.source)
+        fallback = sorted(set(getattr(adapter, "fallback_symbols", ())))
+        if fallback:
+            result["provider_fallback_symbols"] = fallback
+            manifest_path = self.root / f"{spec.name}.manifest.json"
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            payload["provider_fallback_symbols"] = fallback
+            manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        return result
 
     def store(self, spec: DatasetSpec, frame: pd.DataFrame, asof: str, source: str) -> dict[str, Any]:
         self.root.mkdir(parents=True, exist_ok=True)
