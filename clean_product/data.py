@@ -44,13 +44,15 @@ class FinMindAdapter:
         starts = {}
         cached_by_symbol: dict[str, list[dict[str, Any]]] = {}
         existing_path = Path(config["data_root"]) / f"{spec.name}.csv"
-        if not explicit and existing_path.is_file():
+        if existing_path.is_file():
             prior = pd.read_csv(existing_path, dtype={spec.symbols_field: str})
             if not prior.empty:
-                for symbol, rows in prior.groupby(spec.symbols_field):
+                groups = prior.groupby(spec.symbols_field) if not explicit else [(explicit, prior)]
+                for symbol, rows in groups:
                     cached_by_symbol[str(symbol)] = rows.to_dict("records")
-                    latest = date.fromisoformat(str(rows[spec.date_field].max())[:10])
-                    starts[str(symbol)] = start if latest.isoformat() > asof else max(start, (latest - timedelta(days=16)).isoformat())
+                    if not explicit:
+                        latest = date.fromisoformat(str(rows[spec.date_field].max())[:10])
+                        starts[str(symbol)] = start if latest.isoformat() > asof else max(start, (latest - timedelta(days=16)).isoformat())
         def fetch_symbol(symbol: str) -> list[dict[str, Any]]:
             params = dict(base)
             data_id = re.sub(r"^TW(?=\d+$)", "", str(symbol))
