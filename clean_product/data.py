@@ -35,6 +35,7 @@ class SourceAdapter(Protocol):
 class FinMindAdapter:
     def fetch(self, spec: DatasetSpec, *, asof: str, start: str, config: dict) -> list[dict[str, Any]]:
         self.fallback_symbols: list[str] = []
+        self.unavailable_symbols: list[str] = []
         token = os.getenv("FINMIND_TOKEN", "").strip()
         base = dict(spec.params)
         explicit = base.pop("data_id", None)
@@ -81,11 +82,17 @@ class FinMindAdapter:
                     if status == 402 and cached:
                         self.fallback_symbols.append(data_id)
                         return cached
+                    if status == 402:
+                        self.unavailable_symbols.append(data_id)
+                        return []
                     raise DataError(f"{spec.name}/{data_id}: provider request failed ({type(exc).__name__}, HTTP {status})") from None
             payload = response.json()
             if payload.get("status") == 402 and cached_by_symbol.get(data_id):
                 self.fallback_symbols.append(data_id)
                 return cached_by_symbol[data_id]
+            if payload.get("status") == 402:
+                self.unavailable_symbols.append(data_id)
+                return []
             if payload.get("msg") not in ("success", "Success", None):
                 raise DataError(f"{spec.name}/{symbol}: provider rejected request (status={payload.get('status')})")
             return payload.get("data") or []
@@ -231,6 +238,13 @@ class DataCatalog:
             manifest_path = self.root / f"{spec.name}.manifest.json"
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             payload["provider_fallback_symbols"] = fallback
+            manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        unavailable = sorted(set(getattr(adapter, "unavailable_symbols", ())))
+        if unavailable:
+            result["provider_unavailable_symbols"] = unavailable
+            manifest_path = self.root / f"{spec.name}.manifest.json"
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            payload["provider_unavailable_symbols"] = unavailable
             manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         return result
 

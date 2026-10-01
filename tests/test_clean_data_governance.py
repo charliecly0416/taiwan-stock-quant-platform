@@ -177,3 +177,8 @@ def test_finmind_quota_fallback_reuses_cached_symbol_and_records_manifest(tmp_pa
     assert len(manifest) == 1 and manifest.iloc[0].stock_id == 3665
     payload = (cfg['data_root'] / 'margin.manifest.json').read_text()
     assert 'provider_fallback_symbols' in payload
+
+    cfg['universe'] = ['TW3665', 'TW7610']
+    result = DataCatalog(cfg).fetch(datasets(cfg)['margin'], '2026-10-01')
+    assert result['provider_fallback_symbols'] == ['3665']
+    assert result['provider_unavailable_symbols'] == ['7610']
