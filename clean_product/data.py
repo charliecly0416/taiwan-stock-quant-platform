@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Protocol
@@ -53,13 +54,25 @@ class FinMindAdapter:
             params.update(dataset=spec.endpoint, data_id=data_id, start_date=starts.get(data_id, start), end_date=asof)
             if token:
                 params["token"] = token
-            try:
-                response = requests.get("https://api.finmindtrade.com/api/v4/data", params=params, timeout=60)
-                response.raise_for_status()
-            except requests.RequestException as exc:
-                # requests errors can embed a URL containing the query-string token.
-                status = exc.response.status_code if exc.response is not None else None
-                raise DataError(f"{spec.name}/{data_id}: provider request failed ({type(exc).__name__}, HTTP {status})") from None
+            retry_statuses = {408, 429, 500, 502, 503, 504}
+            retries = max(0, min(5, int((config.get("provider_refresh") or {}).get("finmind_retries", 3))))
+            backoff = max(0.0, float((config.get("provider_refresh") or {}).get("finmind_retry_backoff_seconds", 1.0)))
+            for attempt in range(retries + 1):
+                try:
+                    response = requests.get("https://api.finmindtrade.com/api/v4/data", params=params, timeout=60)
+                    status = getattr(response, "status_code", None)
+                    if status in retry_statuses and attempt < retries:
+                        time.sleep(backoff * (2 ** attempt))
+                        continue
+                    response.raise_for_status()
+                    break
+                except requests.RequestException as exc:
+                    # requests errors can embed a URL containing the query-string token.
+                    status = exc.response.status_code if exc.response is not None else None
+                    if (status is None or status in retry_statuses) and attempt < retries:
+                        time.sleep(backoff * (2 ** attempt))
+                        continue
+                    raise DataError(f"{spec.name}/{data_id}: provider request failed ({type(exc).__name__}, HTTP {status})") from None
             payload = response.json()
             if payload.get("msg") not in ("success", "Success", None):
                 raise DataError(f"{spec.name}/{symbol}: provider rejected request (status={payload.get('status')})")

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+import requests
 
 from clean_product.config import datasets
 from clean_product.data import DataCatalog, DataError, FinMindAdapter
@@ -118,3 +119,31 @@ def test_historical_fetch_does_not_start_after_requested_end(tmp_path, monkeypat
     DataCatalog(cfg).fetch(datasets(cfg)['prices'], '2026-09-10')
     assert captured and captured[0]['start_date'] <= captured[0]['end_date'] == '2026-09-10'
     assert 'token' not in captured[0]
+
+
+def test_finmind_retries_transient_http_failures_per_symbol(tmp_path, monkeypatch):
+    cfg = config(tmp_path)
+    cfg['provider_refresh'] = {'finmind_retries': 2, 'finmind_retry_backoff_seconds': 0}
+    calls = []
+
+    class Response:
+        def __init__(self, status_code, payload):
+            self.status_code = status_code
+            self._payload = payload
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.HTTPError(response=self)
+
+        def json(self):
+            return self._payload
+
+    def get(url, **kwargs):
+        calls.append(kwargs['params']['data_id'])
+        if len(calls) == 1:
+            return Response(502, {})
+        return Response(200, {'msg': 'success', 'data': []})
+
+    monkeypatch.setattr('clean_product.data.requests.get', get)
+    FinMindAdapter().fetch(datasets(cfg)['prices'], asof='2026-09-24', start='2026-09-23', config=cfg)
+    assert calls == ['2330', '2330']
