@@ -81,10 +81,11 @@ def _execute(config, result, local_only):
     config.pop('_shadow_root', None)
     config['artifact_root'] = Path(result['artifact_root'])
     config['data_root'] = cache
-    # Acquisition uses only the exact Top50 minus the frozen exclusion, never
-    # the provider's 1,964-symbol screening universe.
-    exact = model_a.head(50)
-    symbols = exact[~exact.instrument.isin(stage.get('exclude', []))].instrument.tolist()
+    # Acquisition uses only Model A's 150 scored rows, never the provider's
+    # 1,964-symbol screening universe.  Feature construction then refills the
+    # B candidate set to 50 by Model A rank after dropping incomplete rows.
+    acquisition = model_a.sort_values(['rank', 'instrument']).head(150)
+    symbols = acquisition[~acquisition.instrument.isin(stage.get('exclude', []))].instrument.tolist()
     fetch_config = {**config, 'universe': symbols, 'universe_file': None}
     catalog = DataCatalog(fetch_config)
     calendar_file = cache / 'market_calendar.csv'
@@ -126,8 +127,9 @@ def _execute(config, result, local_only):
     signal = ModelRunner(config).run('model_a_plus_b', asof, data={'__model_a_signals': {asof: model_a}})
     if signal.status != 'READY':
         raise ModelBlocked('SHADOW_SIGNAL_BLOCKED', signal.reason or '')
-    if set(signal.rows.instrument) != set(symbols):
-        raise ModelBlocked('SHADOW_EXACT50_MISMATCH')
+    selected = pd.read_parquet(artifact['path'])['instrument'].astype(str).tolist()
+    if set(signal.rows.instrument) != set(selected) or len(signal.rows) != 50:
+        raise ModelBlocked('SHADOW_ELIGIBLE50_MISMATCH')
     # Validate the persisted artifact through the same consumer as the API.
     config['_shadow_root'] = config['artifact_root']
     stored = ProductService(config)._stored_signal('model_a_plus_b', asof)

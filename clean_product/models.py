@@ -277,9 +277,8 @@ def _b19r2r(frame: pd.DataFrame, *, asof: str, config: dict, stage: dict, fixtur
         excluded = {str(item).upper() for item in stage.get("exclude", [])}
         exact = frame.head(50)
         return _fixture_b(exact[~exact.instrument.isin(excluded)], asof=asof, data=data)
-    exact = frame.head(50).copy()
+    all_candidates = frame.copy()
     excluded = {str(item).upper() for item in stage.get("exclude", [])}
-    exact = exact[~exact.instrument.astype(str).str.upper().isin(excluded)].copy()
     schema = json.loads(path(stage["feature_schema"]).read_text(encoding="utf-8"))
     order = list(schema.get("feature_order") or [])
     if len(order) != 78 or len(set(order)) != 78:
@@ -304,6 +303,11 @@ def _b19r2r(frame: pd.DataFrame, *, asof: str, config: dict, stage: dict, fixtur
         raise ModelBlocked("B19R2R_VALIDATED_78F_UNAVAILABLE", asof)
     if "feature_raw_complete_78" in features:
         features = features[features.feature_raw_complete_78.eq(True)]
+    selected = features[["date", "instrument"]].drop_duplicates()
+    exact = all_candidates.merge(selected, on=["date", "instrument"], how="inner", validate="one_to_one")
+    exact = exact[~exact.instrument.astype(str).str.upper().isin(excluded)].sort_values(["rank", "instrument"])
+    if len(exact) != 50:
+        raise ModelBlocked("B19R2R_ELIGIBLE50_MISMATCH", f"rows={len(exact)}")
     features = exact[["date", "instrument"]].merge(features, on=["date", "instrument"], how="left", validate="one_to_one")
     numeric = features.reindex(columns=order).apply(pd.to_numeric, errors="coerce")
     missing = [name for name in order if name not in numeric or not np.isfinite(numeric[name]).all()]
@@ -375,6 +379,7 @@ class ModelRunner:
                 canonical_id=spec.get("canonical_id", model_name),
                 pipeline_fingerprint=pipeline_fingerprint(self.config, model_name), full_qlib_ranks=full_ranks,
                 baseline_candidate_ranks=candidate_ranks,
+                candidate_policy=spec.get("candidate_policy"),
             ))
         return SignalResult(model_name, asof, frame, status, reason, output if write else None, full_ranks)
 

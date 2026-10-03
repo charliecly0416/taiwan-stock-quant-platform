@@ -81,6 +81,27 @@ def test_real_delta_is_consumed_by_b_stage_and_cannot_override_frozen_dates(tmp_
         write_b19_feature_artifact(frame=frame, asof='2026-09-29', config={'artifact_root': tmp_path}, feature_order=order, run_id='r2')
 
 
+def test_b_stage_refills_from_model_a_rank_when_delta_skips_incomplete_rows(tmp_path, monkeypatch):
+    order = [f'f{i}' for i in range(78)]
+    stage = {'feature_schema': str(tmp_path / 'schema.json'), 'historical_features': str(tmp_path / 'historical.parquet'),
+             'training_manifest': str(tmp_path / 'training.json'), 'model_path': str(tmp_path / 'model.pkl'), 'exclude': ['TW7769']}
+    write_json(Path(stage['feature_schema']), {'feature_order': order})
+    write_json(Path(stage['training_manifest']), {'model_id': 'modelb_b19r2r_lambdarank_exact50_78f_v2'})
+    pd.DataFrame([{'date': '2026-05-07', 'instrument': 'TW2330', **dict.fromkeys(order, 0.)}]).to_parquet(stage['historical_features'])
+    rows = pd.DataFrame([{'date': '2026-09-29', 'instrument': f'TW{2300+i}', 'score': float(60-i), 'rank': i+1} for i in range(55)])
+    selected = pd.concat([rows.iloc[:49], rows.iloc[[50]]], ignore_index=True)
+    frame = selected[['date', 'instrument']].copy()
+    for name in order: frame[name] = 1.0
+    artifact = write_b19_feature_artifact(frame=frame, asof='2026-09-29', config={'artifact_root': tmp_path}, feature_order=order, run_id='r1')
+    stage.update(feature_delta=artifact['path'], feature_delta_sha256=artifact['sha256'])
+    class Model:
+        booster_ = type('Booster', (), {'feature_name': lambda self: order})()
+        def predict(self, numeric): return numeric.f0.to_numpy()
+    monkeypatch.setattr('clean_product.models._joblib', lambda _: Model())
+    result = _b19r2r(rows, asof='2026-09-29', config={}, stage=stage, fixture=False, data={})
+    assert len(result) == 50 and 'TW2350' in set(result.instrument) and 'TW2349' not in set(result.instrument)
+
+
 def test_source_categories_balances_and_availability_are_not_neutral_filled():
     institutional = pd.DataFrame([{'stock_id': '2330', 'date': '2026-09-28', 'name': name, 'buy': buy, 'sell': 1}
                                   for name, buy in [('Foreign_Investor', 10), ('Foreign_Dealer_Self', 999), ('Investment_Trust', 3), ('Dealer_self', 4), ('Dealer_Hedging', 5)]])

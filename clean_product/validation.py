@@ -122,9 +122,13 @@ def validate_full_ranks(frame: pd.DataFrame, ranks: dict, candidates: dict, spec
     if len(spec["stages"]) == 1 and (len(frame) != len(candidates) or not frame.instrument.map(candidates).eq(frame['rank']).all()):
         raise ValueError("SIGNAL_BASELINE_RANK_MISMATCH")
     if "b19r2r_frozen" in spec["stages"]:
-        allowed = {key for key, rank in candidates.items() if rank <= 50 and key != "TW7769"}
-        if set(frame.instrument) != allowed:
-            raise ValueError("SIGNAL_B19_EXACT50_MISMATCH")
+        if spec.get("candidate_policy") == "model_a_ranked_eligible_top50":
+            if len(frame) != 50 or not set(frame.instrument).issubset(set(ranks)):
+                raise ValueError("SIGNAL_B19_ELIGIBLE50_MISMATCH")
+        else:
+            allowed = {key for key, rank in candidates.items() if rank <= 50 and key != "TW7769"}
+            if set(frame.instrument) != allowed:
+                raise ValueError("SIGNAL_B19_EXACT50_MISMATCH")
 
 
 def read_signal_artifact(directory: Path, config: dict, model: str, asof: str) -> tuple[dict, pd.DataFrame]:
@@ -135,6 +139,7 @@ def read_signal_artifact(directory: Path, config: dict, model: str, asof: str) -
             or payload.get("fixture") is not False
             or payload.get("model") != model or payload.get("asof") != asof
             or payload.get("canonical_id") != spec.get("canonical_id", model)
+            or payload.get("candidate_policy") != spec.get("candidate_policy")
             or payload.get("pipeline_fingerprint") != pipeline_fingerprint(config, model)):
         raise ValueError("SIGNAL_ARTIFACT_IDENTITY_MISMATCH")
     entry = payload.get("files", {}).get("signals", {})

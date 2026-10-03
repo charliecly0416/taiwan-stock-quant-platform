@@ -189,12 +189,13 @@ models:
     - margin
     - twii
     label: Model A + B19R2R
-    description: 独立重跑 Model A，再用 78 个 PIT 特征重排同日 Top50
+    description: 独立重跑 Model A，过滤缺失 78F 的标的后按原始排名递补至 Top50 重排
     role: shadow
     stages:
     - model_a_frozen
     - b19r2r_frozen
     production_allowed: false
+    candidate_policy: model_a_ranked_eligible_top50
 agent:
   build_daily_prompt: true
   prompt_root: data_tw/product/artifacts/agent_daily_prompt

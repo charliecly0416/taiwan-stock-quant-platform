@@ -207,16 +207,45 @@ def build_b19_features(*, asof: str, model_a: pd.DataFrame, data: dict[str, pd.D
     calendar = data.get("__calendar") or [day for day in trading_days(config) if dates[0] <= day <= asof] or dates
     breadth_symbols = set(pd.read_parquet(path(config["model_stages"]["b19r2r_frozen"]["historical_features"]), columns=["instrument"]).instrument.unique())
     technical, breadth = _price_features(prices, asof, calendar, breadth_symbols)
-    exact = model_a.sort_values("rank").head(50)
-    exact = exact[~exact.instrument.isin(config["model_stages"]["b19r2r_frozen"].get("exclude", []))]
-    output = exact[["date", "instrument"]].merge(score, on=["date", "instrument"]).merge(technical, on=["date", "instrument"])
+    # Build features for the complete Model A scoring universe (150 rows),
+    # then take the highest ranked 50 rows that have a finite, PIT-safe
+    # feature vector.  This is the canonical refill rule: a missing candidate
+    # is skipped and the next Model A-ranked candidate fills its place.
+    universe = model_a.sort_values(["rank", "instrument"]).copy()
+    excluded = set(config["model_stages"]["b19r2r_frozen"].get("exclude", []))
+    universe = universe[~universe.instrument.isin(excluded)]
+    output = universe[["date", "instrument"]].merge(score, on=["date", "instrument"]).merge(technical, on=["date", "instrument"])
     output = output.merge(_institutional(data.get("institutional", pd.DataFrame()), prior, asof=asof), on="instrument", how="left")
     output = output.merge(_margin(data.get("margin", pd.DataFrame()), prior, asof=asof), on="instrument", how="left")
     output["market_breadth20"] = breadth
     for name, value in _market(data.get("twii", pd.DataFrame()), asof, calendar).items(): output[name] = value
-    if len(output) != len(exact) or set(output.instrument) != set(exact.instrument):
-        raise ModelBlocked("B19R2R_EXACT50_KEY_MISMATCH")
-    return output[["date", "instrument", *feature_order]]
+    numeric = output.reindex(columns=feature_order).apply(pd.to_numeric, errors="coerce")
+    complete = np.isfinite(numeric.to_numpy(dtype=float)).all(axis=1)
+    output["_feature_complete"] = complete
+    eligible = output[output["_feature_complete"]].sort_values(["qlib_rank", "instrument"]).head(50)
+    if len(eligible) < 50:
+        gaps = []
+        for index, row in output.loc[~output["_feature_complete"]].head(20).iterrows():
+            gaps.append({"instrument": str(row["instrument"]),
+                         "missing_features": [name for name in feature_order if not np.isfinite(numeric.loc[index, name])]})
+        write_json(Path(config["artifact_root"]) / "feature_coverage.json",
+                   {"status": "BLOCKED", "asof": asof, "required_rows": 50,
+                    "source_rows": len(universe), "complete_rows": len(eligible),
+                    "gaps": gaps, "candidate_policy": "model_a_ranked_eligible_top50",
+                    "neutral_fill": False})
+        raise ModelBlocked("B19R2R_INCOMPLETE_78F", json.dumps({"required_rows": 50,
+                                                                  "eligible_rows": len(eligible),
+                                                                  "gaps": gaps}, ensure_ascii=False))
+    audit = {
+        "policy": "model_a_ranked_eligible_top50",
+        "source_rows": int(len(universe)),
+        "selected_rows": int(len(eligible)),
+        "skipped_rows": int(len(universe) - len(eligible)),
+        "skipped_instruments": output.loc[~output["_feature_complete"], "instrument"].astype(str).tolist(),
+        "excluded_instruments": sorted(excluded),
+    }
+    config["_shadow_candidate_audit"] = audit
+    return eligible[["date", "instrument", *feature_order]]
 
 
 def validate_b19_inputs(*, asof: str, data: dict[str, pd.DataFrame], config: dict) -> str:
@@ -324,6 +353,8 @@ def write_b19_feature_artifact(*, frame: pd.DataFrame, asof: str, config: dict,
         role="shadow", production_allowed=False, mainline_blocking=False,
         availability_policy="next_market_session", availability_is_derived=True,
         captured_at=utc_now(), source_inputs=config.get("_shadow_sources", {}),
+        candidate_policy=(config.get("_shadow_candidate_audit") or {}).get("policy", "model_a_ranked_eligible_top50"),
+        candidate_audit=config.get("_shadow_candidate_audit", {}),
     )
     write_json(root / "manifest.json", payload)
     return {"path": str(target), "sha256": sha256(target), "manifest": str(root / "manifest.json"),
