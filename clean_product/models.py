@@ -305,7 +305,7 @@ def _b19r2r(frame: pd.DataFrame, *, asof: str, config: dict, stage: dict, fixtur
         features = features[features.feature_raw_complete_78.eq(True)]
     selected = features[["date", "instrument"]].drop_duplicates()
     exact = all_candidates.merge(selected, on=["date", "instrument"], how="inner", validate="one_to_one")
-    exact = exact[~exact.instrument.astype(str).str.upper().isin(excluded)].sort_values(["rank", "instrument"])
+    exact = exact[~exact.instrument.astype(str).str.upper().isin(excluded)].sort_values(["rank", "instrument"]).head(50)
     if len(exact) != 50:
         raise ModelBlocked("B19R2R_ELIGIBLE50_MISMATCH", f"rows={len(exact)}")
     features = exact[["date", "instrument"]].merge(features, on=["date", "instrument"], how="left", validate="one_to_one")

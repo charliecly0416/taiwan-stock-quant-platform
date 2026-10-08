@@ -10,6 +10,32 @@ from clean_product.service import ProductService
 from clean_product.strategy import top50_exit_one_worst_sell
 
 
+def test_b19_historical_features_refill_in_model_a_order(tmp_path, monkeypatch):
+    from clean_product import models
+    from unittest.mock import Mock
+
+    order = [f'feature_{i}' for i in range(78)]
+    schema = tmp_path / 'schema.json'
+    schema.write_text(json.dumps({'feature_order': order}))
+    training = tmp_path / 'training.json'
+    training.write_text(json.dumps({'model_id': 'modelb_b19r2r_lambdarank_exact50_78f_v2'}))
+    symbols = ['TW7769'] + [f'TW{i:04d}' for i in range(1, 150)]
+    rows = pd.DataFrame({'date': '2026-05-07', 'instrument': symbols, 'rank': range(1, 151)})
+    features = rows[['date', 'instrument']].assign(**{name: 1.0 for name in order}, feature_raw_complete_78=True)
+    features.loc[features.instrument.eq('TW0001'), 'feature_raw_complete_78'] = False
+    historical = tmp_path / 'features.parquet'; features.to_parquet(historical)
+    predictor = Mock()
+    predictor.booster_.feature_name.return_value = order
+    predictor.predict.side_effect = lambda values: list(range(len(values), 0, -1))
+    monkeypatch.setattr(models, '_joblib', lambda *args: predictor)
+    stage = {'feature_schema': str(schema), 'historical_features': str(historical),
+             'training_manifest': str(training), 'model_path': 'fixture', 'exclude': ['TW7769']}
+    result = models._b19r2r(rows.sample(frac=1, random_state=7), asof='2026-05-07',
+                           config={}, stage=stage, fixture=False, data={})
+    assert result.instrument.tolist() == [f'TW{i:04d}' for i in range(2, 52)]
+    assert len(predictor.predict.call_args.args[0]) == 50
+
+
 def config(tmp_path):
     return {"data_root": str(tmp_path / "data"), "artifact_root": str(tmp_path / "artifacts"),
             "model_stages": {"test_stage": {}},
