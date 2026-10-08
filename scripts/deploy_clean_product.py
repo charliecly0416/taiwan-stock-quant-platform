@@ -40,7 +40,9 @@ def prepare(snapshot, destination, ref, python):
     with tarfile.open(fileobj=io.BytesIO(archive)) as bundle: bundle.extractall(destination, filter='data')
     config = yaml.safe_load((destination / 'runtime-config.yaml').read_text())
     source_config = yaml.safe_load((destination / 'configs/product.yaml').read_text())
-    for section in ('daily', 'datasets'):
+    # Model consumer policy belongs to the deployed code, while model_stages
+    # retains the restored asset paths and frozen model identity.
+    for section in ('daily', 'datasets', 'models'):
         config[section] = source_config[section]
     config['datasets']['prices'].setdefault('params', {})['provider_uri'] = config['model_stages']['model_a_frozen']['provider_uri']
     # Backup credentials are intentionally absent; signing secrets are created by
