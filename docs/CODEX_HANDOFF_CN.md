@@ -9,6 +9,8 @@
 3. `configs/product.yaml`、active_baseline_descriptor、tw_modular_registry、tw_product_artifact_registry、tw_replay_window_policy。
 4. `clean_product/` 和 `backend/app/routes/`；前端 `frontend/src/`。
 
+最近部署见 [2026-10-08 Shadow 递补验收](SHADOW_REFILL_DEPLOYMENT_20261008_CN.md)：运行代码 `6139891`，真实采集后的手动验证已 READY；当晚正式定时结果须读独立复核报告，不能以手动结果代替。
+
 ## 不能改变的产品边界
 
 唯一 baseline 为 Model A `e4_frozen_qlib_2018_2022`，策略 `top50_exit_one_worst_sell`，执行 `next_open`。B19R2R 是 shadow，`production_allowed=false`，不进入默认或模拟账户。它的新日期特征缺失不阻塞 Model A。
