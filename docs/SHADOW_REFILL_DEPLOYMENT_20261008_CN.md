@@ -55,3 +55,21 @@ TW6187 递补。当前排名、比较和问答接口均为 READY；比较重合�
 结果将写入 `~/.local/state/tw-stock-clean/acceptance/20261008/scheduled-result.json`。
 检查脚本和临时任务位于仓库外，不改变主线调度逻辑；报告生成前不能宣称正式定时验收通过。
 临时 timer 不跨主机重启持久化，原有正式 timers 继续由已安装的 systemd units 管理。
+
+## 10/11 后续核对与优化
+
+10/8 21:35 的 `scheduled-result.json` 为 PASS；10/8、10/9 各三轮正式 Shadow 均为 READY / COMPLETED / 50 行，10/9 使用 10/8 的 A 批次。此前待验收事项已由正式定时证据确认。
+
+10/11 台北时间 21:57 部署 `9c63923`，新目录为 `~/.local/share/tw-stock-clean/releases/clean-20261011-shadow-reuse`。后续尝试会验证同一 A 批次的信号与特征，已有完整结果则记录 READY / SKIPPED / SHADOW_ALREADY_READY，不再重复采集与推理。`reused_run_id` 保留原成功来源；新批次、失败或损坏结果继续执行，无新增策略分支或配置开关。
+
+本机 inotify 告警来自 VS Code fileWatcher 的约 123,863 个监听项接近用户上限 124,126，已持久化调整上限为 524,288。真实 clean-health 与临时 systemd 任务验证完成后，没有新的 inotify 额度错误；编辑器进程保持运行。
+
+验证记录：
+
+- Shadow 针对性测试 15 passed；M3 43 passed；ARCH-1 PASS；模块回归 71 passed；代码提交 GitHub CI 成功。
+- 新目录首次以已有数据生成 50 支 Shadow；第二次真实产物复用为 PASS，用时约 0.09 秒，网络请求为 0，缓存与 active / shadow_active 指针不变。`shadow-reuse-validation.json` 保存在运行目录。
+- `verify_tw_stock_research_stack.py` 为 PASS；部署后实际 API 的 A / B / 比较 / 问答均为 READY，数据日期 10/8。
+- 正式 8000 端口的七页、三视口浏览器验收通过，网络/控制台/页面错误为 0，证据为源码目录 `tmp/deploy_20261011/frontend/`。模拟账户操作使用 fixture；没有使用图片工具或做人工视觉审查。
+- `clean-shadow-reuse-check-20261011` 临时 timer 验证为 SKIPPED，并明确记录 manual；未伪造正式晚间 scheduled 采集。
+- 部署前备份 `20261011T135135-2d817cd7/manifest.json` 已恢复验证，部署后备份为 `20261011T135740-0e4c13e9/manifest.json`，均位于上述备份根目录。
+- 旧运行目录保留，模拟账本一致性复制，Model B 仍只用于研究比较。

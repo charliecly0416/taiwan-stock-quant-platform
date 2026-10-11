@@ -9,7 +9,7 @@
 3. `configs/product.yaml`、active_baseline_descriptor、tw_modular_registry、tw_product_artifact_registry、tw_replay_window_policy。
 4. `clean_product/` 和 `backend/app/routes/`；前端 `frontend/src/`。
 
-最近部署见 [2026-10-08 Shadow 递补验收](SHADOW_REFILL_DEPLOYMENT_20261008_CN.md)：运行代码 `6139891`，真实采集后的手动验证已 READY；当晚正式定时结果须读独立复核报告，不能以手动结果代替。
+最近部署为 `9c63923`（2026-10-11）：同一 A 批次的有效 Shadow 直接复用，失败或新批次继续执行。详见 [Shadow 部署验收](SHADOW_REFILL_DEPLOYMENT_20261008_CN.md)。10/8 晚间正式定时已 PASS；10/11 的 systemd 验证为手动安排，正式工作日调度继续使用原有 timers。
 
 ## 不能改变的产品边界
 
