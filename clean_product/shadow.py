@@ -141,13 +141,14 @@ def _execute(config, result, local_only):
 def run_shadow(*, config_path=CONFIG_PATH, trigger_reason='manual', local_only=False):
     if trigger_reason not in ('manual', 'scheduled'):
         raise ValueError('INVALID_TRIGGER_REASON')
-    config = env_config(load_config(config_path)); store = config['_artifact_store']
+    config = load_config(config_path); store = env_config(config)['_artifact_store']
     store.mkdir(parents=True, exist_ok=True)
     with (store / 'shadow.lock').open('a') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return {'status': 'BLOCKED', 'reason': 'SHADOW_ALREADY_RUNNING', 'mainline_blocking': False}
+        config = env_config(config)
         active = config.get('_active_release', {})
         run_id = uuid4().hex
         root = store / 'shadow' / run_id
@@ -165,6 +166,28 @@ def run_shadow(*, config_path=CONFIG_PATH, trigger_reason='manual', local_only=F
         try:
             if not active:
                 raise ModelBlocked('SHADOW_ACTIVE_BASELINE_REQUIRED')
+            # A validated shadow is immutable for its source release. Record
+            # this timer attempt without fetching or republishing that result.
+            with (store / 'daily.lock').open('a') as daily_lock:
+                fcntl.flock(daily_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                if json.loads((store / 'active.json').read_text()) != active:
+                    raise ModelBlocked('SHADOW_BASELINE_CHANGED_RETRY')
+                if config.get('_shadow_root'):
+                    service = ProductService(config)
+                    stored = service._stored_signal('model_a_plus_b', active['asof'])
+                    stage = config['model_stages']['b19r2r_frozen']
+                    try:
+                        verify_file(stage['feature_delta'], stage.get('feature_delta_sha256'))
+                    except (ValueError, OSError):
+                        stored = None
+                    if service.readiness()['ready'] and stored is not None and stored.status == 'READY' and len(stored.rows) == 50:
+                        previous = json.loads((store / 'shadow_active.json').read_text())
+                        result.update(status='READY', execution_status='SKIPPED',
+                                      reason='SHADOW_ALREADY_READY', signal_rows=50,
+                                      reused_run_id=previous['run_id'],
+                                      reused_artifact_root=str(config['_shadow_root']))
+                        result['created_at'] = utc_now(); record()
+                        return result
             _execute(deepcopy(config), result, local_only)
             # A can publish while shadow is fetching. Never attach old B to new A.
             with (store / 'daily.lock').open('a') as daily_lock:

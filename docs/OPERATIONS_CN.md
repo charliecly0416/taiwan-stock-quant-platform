@@ -23,6 +23,8 @@ journalctl --user -u clean-web -u clean-daily -u clean-health -u clean-backup -n
 
 Shadow 使用独立 `clean-shadow.timer`（台北工作日18:45、19:45、20:45）和 `clean-shadow.service`，绑定已发布的 Model A 批次；其失败、超时或同日重试都不阻塞 A。`daily.shadow_separate=true` 时主线只负责 Model A；shadow 入口是 `scripts/run_product.py shadow`，无需 `--publish`，不会切换主线 active.json。
 
+同一 Model A 批次已有可验证的 50 支 Shadow 信号及特征时，后续手动或定时尝试记录 `status=READY`、`execution_status=SKIPPED`、`reason=SHADOW_ALREADY_READY`，通过 `reused_run_id` 指向原成功记录，不抓取、不推理、不重写 shadow_active.json。新批次（包括同日重新发布）、失败或产物校验不通过时仍正常执行。定时跳过记录证明已检查现有产物，不代表本轮完成了新的采集；原成功记录保留真实触发方式。
+
 FinMind 只抓 Model A 当日 150 支评分集合（排除 TW7769）的法人及融资券，并抓 TAIEX 指数；B 先过滤缺失 78F 的标的，再按 Model A 原始排名递补至 50 支。公开接口可不带 token；可选服务文件 `~/.config/tw-stock-clean/finmind.env` 提供 FINMIND_TOKEN（0600，不入库）。缓存按标的续抓，指数至少400自然日，数据响应保存 captured_at；无官方发布时间时，特征明确标记 availability_is_derived，按下一交易日可用策略计算，不能把它说成真实历史抓取证据。
 
 首次运行从冻结特征末日续补 Model A 候选排名历史，之后增量保存。价格与指数先对齐独立 Yahoo ^TWII 交易日历（不把个股日期并集当作市场开市证明）；每次成功构建保存不可变来源副本及采集时间；market_breadth20 保持冻结特征的150支参考集合。缺法人类别、前一交易日数据、真实昨余额或 OX 数据均阻塞 shadow，不补零。每次生成独立目录 `shadow/{run_id}`，含78F delta、信号、run.json；验证后才写 shadow_active.json，并再次检查 A 批次没有改变。旧 B 不会挂到新 A 上。API operations 的 shadow.latest / shadow.scheduled 分别记录最近尝试与定时尝试；健康告警为 WARNING，A 的 ready 保持独立。`execution_status=COMPLETED` 表示任务完成检查；数据门禁仍可为 `status=BLOCKED`，不会伪装为模型 READY。网络或程序异常为 execution_status=FAILED，服务退出非零。feature_coverage.json 和 operations.shadow.latest.feature_gaps 给出具体缺数据的股票及字段。
@@ -56,6 +58,8 @@ restore拒绝覆盖已有目录，验证对象与SQLite后生成重新定位的 
 保留策略为30天、至少7个快照，retention仅列出可归档计划，**不自动删除共享对象或旧资产**。删除须依仓库规则先验证仓库外副本可恢复。当前备份在同一台机器，能处理误改与代码升级；整盘损坏保护需要另一个存储位置，尚未配置异地备份。
 
 ## 可复现部署和升级
+
+若 journal 出现 `Failed to add ... inotify watch ... No space left on device`，先核对磁盘与 inotify 用量。2026-10-11 本机 VS Code fileWatcher 占用约 123,863 个监听项，用户上限为 124,126；已通过 `/etc/sysctl.d/60-tw-stock-inotify.conf` 将 `fs.inotify.max_user_watches` 调整为 524,288，保留 `max_user_instances=128`。无需重启应用或关闭编辑器。新机器按实际监听用量配置；回退可恢复此前值并移除对应配置项。
 
 需要系统Python 3.13、Node.js 24/corepack、systemd用户服务、已登记的台湾定制Qlib wheel及资产备份。后端使用requirements-runtime.lock约束，前端使用frozen lockfile。脚本从指定Git提交导出源码，恢复资产，建新venv，安装依赖与构建前端，本地重新发布并验证150条排名与Agent后才标记READY。
 

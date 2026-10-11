@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -39,7 +40,10 @@ def test_shadow_failure_retry_and_next_baseline_are_independent(tmp_path, monkey
     assert json.loads((store / 'active.json').read_text()) == active
     assert env_config(cfg)['_shadow_root'] == Path(second['artifact_root'])
     scheduled = (store / 'shadow_scheduler_status.json').read_bytes()
-    run_shadow(config_path=target, trigger_reason='manual')
+    monkeypatch.setattr('clean_product.shadow.ProductService', lambda _: SimpleNamespace(
+        readiness=lambda: {'ready': True},
+        _stored_signal=lambda *args: SimpleNamespace(status='READY', rows=list(range(50)))))
+    assert run_shadow(config_path=target, trigger_reason='manual')['execution_status'] == 'SKIPPED'
     assert (store / 'shadow_scheduler_status.json').read_bytes() == scheduled
     active['run_id'] = 'A2'; active['asof'] = '2026-09-30'
     write_json(store / 'active.json', active)
@@ -55,6 +59,50 @@ def test_baseline_changed_during_shadow_does_not_attach(tmp_path, monkeypatch):
     result = run_shadow(config_path=target)
     assert result['reason'] == 'SHADOW_BASELINE_CHANGED_RETRY'
     assert not (store / 'shadow_active.json').exists()
+
+
+@pytest.mark.parametrize('change', ['none', 'new_batch', 'bad_signal', 'bad_features'])
+def test_successful_shadow_is_reused_only_for_valid_same_batch(tmp_path, monkeypatch, change):
+    _, target, store, active = runtime(tmp_path)
+    calls = []
+    def execute(config, result, local_only):
+        calls.append(result['run_id'])
+        feature = Path(result['artifact_root']) / 'features.parquet'
+        feature.parent.mkdir(parents=True, exist_ok=True); feature.write_bytes(b'feature fixture')
+        result.update(status='READY', execution_status='COMPLETED', signal_rows=50,
+                      feature_artifact={'path': str(feature), 'sha256': sha256(feature)})
+    monkeypatch.setattr('clean_product.shadow._execute', execute)
+    # _stored_signal is the shared API integrity validator; exercise how its
+    # rejection changes orchestration without replacing its dedicated tests.
+    class Service:
+        def __init__(self, config): pass
+        def readiness(self): return {'ready': True}
+        def _stored_signal(self, *args):
+            return SimpleNamespace(status='BLOCKED' if change == 'bad_signal' else 'READY', rows=list(range(50)))
+    monkeypatch.setattr('clean_product.shadow.ProductService', Service)
+    first = run_shadow(config_path=target, trigger_reason='manual', local_only=True)
+    pointer = (store / 'shadow_active.json').read_bytes()
+    original_run = (Path(first['artifact_root']) / 'run.json').read_bytes()
+    if change == 'new_batch':
+        active['run_id'] = 'A2'  # Same date, different release must execute.
+        write_json(store / 'active.json', active)
+    elif change == 'bad_features':
+        Path(first['feature_artifact']['path']).write_bytes(b'corrupted')
+    second = run_shadow(config_path=target, trigger_reason='scheduled')
+    if change == 'none':
+        assert len(calls) == 1 and second['execution_status'] == 'SKIPPED'
+        assert second['reason'] == 'SHADOW_ALREADY_READY'
+        assert second['reused_run_id'] == first['run_id'] and not second['latest_pointer_written']
+        assert second['datasets'] == [] and second['status'] == 'READY'
+        assert (store / 'shadow_active.json').read_bytes() == pointer
+        assert (Path(first['artifact_root']) / 'run.json').read_bytes() == original_run
+        scheduled = json.loads((store / 'shadow_scheduler_status.json').read_text())
+        assert scheduled['run_id'] == second['run_id'] and scheduled['trigger_reason'] == 'scheduled'
+        third = run_shadow(config_path=target, trigger_reason='scheduled')
+        assert third['reused_run_id'] == first['run_id'] and len(calls) == 1
+    else:
+        assert len(calls) == 2 and second['execution_status'] == 'COMPLETED'
+        assert second['latest_pointer_written']
 
 
 def test_real_delta_is_consumed_by_b_stage_and_cannot_override_frozen_dates(tmp_path, monkeypatch):
