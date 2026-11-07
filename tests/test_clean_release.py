@@ -130,7 +130,11 @@ def test_recovery_materializes_every_missing_session_in_one_inference(release_co
         data["__model_a_signals"] = {day: pd.DataFrame([
             {"date": day, "instrument": "TW2330", "score": .25, "rank": 1}
         ]) for day in dates}
+    def cached_stage(*args, asof, data, **kwargs):
+        assert asof in data["__model_a_signals"], "recovery lost its precomputed history"
+        return data["__model_a_signals"][asof]
     monkeypatch.setattr("clean_product.models.ModelRunner.precompute", precompute)
+    monkeypatch.setattr("clean_product.models._model_a_frozen", cached_stage)
     result = run_daily("2026-09-30", config_path=target, local_only=True, publish=True)
     assert result["status"] == "READY"
     expected = ["2026-09-25", "2026-09-28", "2026-09-29"]

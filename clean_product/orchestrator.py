@@ -221,7 +221,7 @@ def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_
             if spec.role == "baseline":
                 cached = signal.rows.copy()
                 cached.attrs["full_qlib_ranks"] = signal.full_ranks
-                data["__model_a_signals"] = {asof: cached}
+                data.setdefault("__model_a_signals", {})[asof] = cached
             intents = top50_exit_one_worst_sell(signal.rows, max_positions=int(config.get("simulation", {}).get("max_positions", 50)), full_ranks=signal.full_ranks)
             intent_rows = intents.to_dict("records")
             intent_root = config["artifact_root"] / "dry_runs" / "intents" if dry_run else config["artifact_root"] / "intents"
