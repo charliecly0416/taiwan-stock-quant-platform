@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from .config import path
+from .artifacts import write_json
 
 
 FIELDS = ("open", "high", "low", "close", "volume", "vwap", "factor")
@@ -79,7 +80,7 @@ def _fetch(symbol: str, start: str, asof: str, proxy: str) -> pd.DataFrame:
     headers = {"Referer": "https://www.google.com/"}
     for ticker in _ticker(symbol):
         page = Fetcher.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}",
-                           params=params, timeout=45, retries=1, impersonate="chrome",
+                           params=params, timeout=45, retries=3, retry_delay=2, impersonate="chrome",
                            headers=headers, **kwargs)
         if int(page.status) >= 400:
             continue
@@ -198,6 +199,12 @@ def refresh_yahoo_provider(config: dict, asof: str, run_id: str) -> dict[str, An
                 errors[symbol] = error
     coverage = len(covered_symbols) / len(symbols)
     minimum = float(settings.get("minimum_coverage", 0.95))
+    write_json(root / "refresh_report.json", {
+        "asof": asof, "run_id": run_id, "source_symbols": len(symbols),
+        "available_symbols": len(covered_symbols), "coverage": coverage,
+        "minimum_coverage": minimum, "fetch_errors": errors,
+        "missing_symbols": sorted(set(symbols) - set(covered_symbols)),
+    })
     if coverage < minimum:
         raise RuntimeError(f"provider refresh coverage {coverage:.3f} below {minimum:.3f}")
     info = _write_provider(normalized, provider)

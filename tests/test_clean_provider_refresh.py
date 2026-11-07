@@ -71,3 +71,6 @@ def test_insufficient_coverage_is_not_ready(tmp_path, monkeypatch):
     monkeypatch.setattr("clean_product.provider_refresh._fetch", lambda *a: pd.DataFrame(columns=COLUMNS))
     with pytest.raises(RuntimeError, match="coverage"):
         refresh_yahoo_provider(cfg, "2026-09-24", "test")
+    import json
+    report = json.loads((Path(cfg["artifact_root"]) / "provider_runs/test/refresh_report.json").read_text())
+    assert report["coverage"] == 0 and report["missing_symbols"] == ["TW2330"]

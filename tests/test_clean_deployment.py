@@ -19,7 +19,8 @@ def test_prepare_uses_release_candidate_policy_and_restored_model_paths(tmp_path
     old_models = {'model_a_plus_b': {'production_allowed': False}}
     new_models = {'model_a_plus_b': {**old_models['model_a_plus_b'],
                                    'candidate_policy': 'model_a_ranked_eligible_top50'}}
-    source = {'daily': {}, 'datasets': {'prices': {}}, 'models': new_models}
+    source = {'daily': {}, 'datasets': {'prices': {}}, 'models': new_models,
+              'provider_refresh': {'workers': 4, 'source_dir': '/checkout/data'}}
     bundle = io.BytesIO()
     with tarfile.open(fileobj=bundle, mode='w') as archive:
         content = yaml.safe_dump(source).encode()
@@ -30,6 +31,7 @@ def test_prepare_uses_release_candidate_policy_and_restored_model_paths(tmp_path
         target.mkdir()
         (target / 'qlib.whl').touch()
         config = {**source, 'models': old_models,
+                  'provider_refresh': {'workers': 16, 'source_dir': '/restored/data'},
                   'model_stages': {'model_a_frozen': stage},
                   'maintenance': {'runtime_wheel': 'qlib.whl'}}
         (target / 'runtime-config.yaml').write_text(yaml.safe_dump(config))
@@ -48,6 +50,7 @@ def test_prepare_uses_release_candidate_policy_and_restored_model_paths(tmp_path
     assert config['models'] == new_models
     assert config['model_stages']['model_a_frozen'] == stage
     assert config['datasets']['prices']['params']['provider_uri'] == stage['provider_uri']
+    assert config['provider_refresh'] == {'workers': 4, 'source_dir': '/restored/data'}
 
 
 def test_old_prepared_snapshot_never_stops_active_service(tmp_path, monkeypatch):

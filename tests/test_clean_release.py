@@ -117,3 +117,25 @@ def test_early_scheduled_failure_is_visible_and_keeps_published_release(release_
     assert (store / "active.json").read_bytes() == before
     assert ProductService(cfg).readiness()["ready"]
     assert list((store / "daily" / "attempts").glob("*/run.json"))
+
+
+def test_recovery_materializes_every_missing_session_in_one_inference(release_config, monkeypatch):
+    cfg, target = release_config
+    run_daily("2026-09-24", config_path=target, local_only=True, publish=True)
+    calendar = Path(cfg["model_stages"]["model_a_frozen"]["provider_uri"]) / "calendars/day.txt"
+    calendar.write_text("2026-09-23\n2026-09-24\n2026-09-25\n2026-09-28\n2026-09-29\n2026-09-30\n")
+    calls = []
+    def precompute(self, dates, *, data, **kwargs):
+        calls.append(dates)
+        data["__model_a_signals"] = {day: pd.DataFrame([
+            {"date": day, "instrument": "TW2330", "score": .25, "rank": 1}
+        ]) for day in dates}
+    monkeypatch.setattr("clean_product.models.ModelRunner.precompute", precompute)
+    result = run_daily("2026-09-30", config_path=target, local_only=True, publish=True)
+    assert result["status"] == "READY"
+    expected = ["2026-09-25", "2026-09-28", "2026-09-29"]
+    assert calls == [[*expected, "2026-09-30"]]
+    assert [item["asof"] for item in result["history_signals"]] == expected
+    effective = env_config(load_config(target))
+    service = ProductService(effective)
+    assert all(service._stored_signal("model_a", day).status == "READY" for day in expected)

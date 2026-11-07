@@ -41,7 +41,7 @@ provider_refresh:
   start: '2015-01-01'
   incremental_days: 45
   minimum_coverage: 0.95
-  workers: 16
+  workers: 4
   finmind_workers: 8
   finmind_retries: 3
   finmind_retry_backoff_seconds: 1.0

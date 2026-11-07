@@ -160,6 +160,15 @@ def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_
             data["__shadow_price_error"] = str(exc)
     runner = ModelRunner(config); tracks = []
     failed_datasets = {item["dataset"] for item in acquired if item["status"] != "READY"}
+    history_days = []
+    if publish and not dry_run:
+        count = max(1, min(5, int(config.get("daily", {}).get("history_sessions", 1))))
+        prior_days = [day for day in trading_days(config) if day < asof]
+        history_days = sorted(set(
+            (prior_days[-(count - 1):] if count > 1 else [])
+            + ([day for day in prior_days if active["asof"] < day]
+               if active.get("asof") else [])
+        ))
     ordered_models = sorted(models(config).items(), key=lambda item: (item[1].role != "baseline", item[0]))
     for name, spec in ordered_models:
         if spec.role == "shadow" and config.get("daily", {}).get("include_shadow") is False:
@@ -199,6 +208,8 @@ def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_
         try:
             if feature_artifact:
                 runner = ModelRunner(config)
+            if spec.role == "baseline" and history_days:
+                runner.precompute([*history_days, asof], data=data, fixture=dry_run)
             signal = runner.run(name, asof, data=data, fixture=dry_run)
         except Exception as exc:
             tracks.append({"model": name, "role": spec.role, "status": "BLOCKED",
@@ -229,10 +240,8 @@ def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_
     status = "READY" if baseline and baseline["status"] == "READY" else "BLOCKED"
     history = []
     if publish and status == "READY":
-        count = max(1, min(5, int(config.get("daily", {}).get("history_sessions", 1))))
-        days = [day for day in trading_days(config) if day < asof]
-        for day in (days[-(count - 1):] if count > 1 else []):
-            prior = runner.run(baseline["model"], day, data={}, fixture=False)
+        for day in history_days:
+            prior = runner.run(baseline["model"], day, data=data, fixture=False)
             history.append({"asof": day, "status": prior.status, "signal_rows": len(prior.rows), "reason": prior.reason})
             if prior.status != "READY":
                 status = "BLOCKED"

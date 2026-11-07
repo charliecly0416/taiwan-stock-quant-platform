@@ -44,6 +44,11 @@ def prepare(snapshot, destination, ref, python):
     # retains the restored asset paths and frozen model identity.
     for section in ('daily', 'datasets', 'models'):
         config[section] = source_config[section]
+    # Keep the restored data path, while deploying current acquisition settings.
+    config.setdefault('provider_refresh', {}).update({
+        key: value for key, value in source_config.get('provider_refresh', {}).items()
+        if key != 'source_dir'
+    })
     config['datasets']['prices'].setdefault('params', {})['provider_uri'] = config['model_stages']['model_a_frozen']['provider_uri']
     # Backup credentials are intentionally absent; signing secrets are created by
     # the installer on a new host. Artifact-local Agent mode is the safe default.
