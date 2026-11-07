@@ -32,6 +32,19 @@ FinMind 只抓 Model A 当日 150 支评分集合（排除 TW7769）的法人及
 首次运行从冻结特征末日续补 Model A 候选排名历史，之后增量保存。历史候选按交易日整批替换，当前 active A 批次优先；不跨批次合并同日股票。缓存仅保留实际开市日期及完整有效的150条排名，缺失或不完整日期重新计算。价格与指数先对齐独立 Yahoo ^TWII 交易日历（不把个股日期并集当作市场开市证明）；每次成功构建保存不可变来源副本及采集时间；market_breadth20 保持冻结特征的150支参考集合。缺法人类别、前一交易日数据、真实昨余额或 OX 数据均阻塞 shadow，不补零。每次生成独立目录 `shadow/{run_id}`，含78F delta、信号、run.json；验证后才写 shadow_active.json，并再次检查 A 批次没有改变。旧 B 不会挂到新 A 上。API operations 的 shadow.latest / shadow.scheduled 分别记录最近尝试与定时尝试；健康告警为 WARNING，A 的 ready 保持独立。`execution_status=COMPLETED` 表示任务完成检查；数据门禁仍可为 `status=BLOCKED`，不会伪装为模型 READY。网络或程序异常为 execution_status=FAILED，服务退出非零。feature_coverage.json 和 operations.shadow.latest.feature_gaps 给出具体缺数据的股票及字段。
 
 手动验证使用 `.venv/bin/python scripts/run_product.py shadow`；已有采集数据时可加 `--local-only`。手动成功不等于定时成功，须核对 timer 的触发记录与 shadow.scheduled。备份包含 shadow 缓存、运行与指针。
+
+### 两轨历史
+
+A 与 A+B 的历史查询、排名变化、回放共用接口；首页各模型轨道提供独立入口，切换模型会更新已存日期与回放范围。`GET /api/tw-stock/history?model=model_a_plus_b` 列出已验证日期及来源。现有 A / Shadow 定时器继续分别运行，成功发布的信号自动进入历史，无需第三个归档任务。旧信号保留原 provider / 特征配置；B 失败不阻塞 A，也不会借用另一 A 批次的同日 B。
+
+经过独立验证的补算包可显式导入（在正式运行目录执行）：
+
+```bash
+.venv/bin/python scripts/import_clean_signal_history.py --source /absolute/validated-reconstruction --config configs/product.yaml --store /absolute/product/artifacts
+```
+
+导入只新增 `history/{batch}`，全部校验后才标记 READY，要求来源与当前 A 批次一致；不切 active/shadow 指针、不刷新行情、不改变账户。失败目录保留 BUILDING，不会被查询消费。运行时只读产品 store，不依赖外部实验目录。备份包含导入的信号、特征和来源输入，以及旧发布批次的信号，防止指针推进后遗漏历史。补算历史为 `historical_reconstruction`，不可算作当时实时或 scheduled 成功。
+
 ```bash
 # 以下为运维动作，不用来做普通代码验证
 .venv/bin/python scripts/run_product.py daily --publish
@@ -73,6 +86,8 @@ python scripts/deploy_clean_product.py activate --destination /absolute/new-rele
 ```
 
 prepare不影响现有服务。activate拒绝日期过时的备份，获得日更锁，暂停Web写入并复制最新模拟账本，安装units后探测ready；启动失败恢复此前units和Web。旧目录保留。服务配置备份在 `~/.local/state/tw-stock-clean/service-installs/`；当前部署记录在 `current-deployment.json`。切换后从systemd查询新运行目录再执行维护。
+
+不改变依赖、冻结模型或数据批次的代码补丁，可在原正式目录内更新明确文件清单：先在仓库外备份、扫描凭据并验证恢复，再锁定日更/Shadow、逐文件原子替换代码与前端入口，保留旧静态资源，重启Web并检查ready、历史、备份。不得重新publish来验证此类补丁。不要将新代码目录的 `data_tw` 简单链接到旧目录：现有备份严格拒绝运行目录外的资产。11/7两轨历史部署采用此补丁方式，恢复证据在 `~/.local/state/tw-stock-clean/audits/parallel-history-20261107/code-backup-manifest.json`。
 
 代码回退：用**最新资产备份**与此前稳定Git标签重新prepare/activate，避免恢复旧账本。数据批次回退则使用下述命令，先暂停日更timer，选择已验证release；命令验证目标后原子切换，不混合单个信号文件。
 

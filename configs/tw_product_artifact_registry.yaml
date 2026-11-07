@@ -11,5 +11,7 @@ shadow_active: shadow_active.json
 shadow_data: shadow_data
 shadow_calendar: shadow_data/market_calendar.csv
 shadow_scheduler: shadow_scheduler_status.json
+signal_history: history/{batch}/signals/{model}/{asof}
+signal_history_run: history/{batch}/run.json
 legacy_agent_readonly_root: data_tw/artifacts/agent_daily_prompt
 candidate_publish_allowed: false

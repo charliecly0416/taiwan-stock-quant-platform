@@ -89,6 +89,11 @@ def register_tw_stock_routes(app: Flask) -> None:
             return jsonify(ProductService().rankings(request.args.get("model", "model_a"), request.args.get("date"), limit))
         except Exception as exc: return _error(exc)
 
+    @app.get('/api/tw-stock/history')
+    def signal_history():
+        try: return jsonify(ProductService().history(request.args.get('model', 'model_a')))
+        except Exception as exc: return _error(exc)
+
     @app.get("/api/tw-stock/compare")
     def compare():
         try: return jsonify(ProductService().compare(request.args.get("left", "model_a"), request.args.get("right", "model_a_plus_b"), request.args.get("date"), request.args.get("start"), request.args.get("end")))

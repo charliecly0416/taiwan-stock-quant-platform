@@ -9,7 +9,7 @@
 3. `configs/product.yaml`、active_baseline_descriptor、tw_modular_registry、tw_product_artifact_registry、tw_replay_window_policy。
 4. `clean_product/` 和 `backend/app/routes/`；前端 `frontend/src/`。
 
-最近部署代码为 `70fc35c70ca33c68c126d958a6921a8d8f221b83`（2026-11-07），运行目录 `~/.local/share/tw-stock-clean/releases/clean-20261107-audited`，数据截至11/6。已修复Shadow历史跨批次残留候选，以及个股非交易日混入provider的问题，以保存的独立Yahoo ^TWII日历约束行情。10/12–11/6正确为18个交易日，2,700条A分数已保存、独立重算并核对正式API；11/6的B19R2R特征与50条分数也已手动恢复并绑定同一A批次。详见 [当前验收](MAINLINE_ACCEPTANCE_CN.md)。
+当前部署为2026-11-07两轨历史版本，运行目录 `~/.local/share/tw-stock-clean/releases/clean-20261107-audited`，数据截至11/6；代码身份见本机 `~/.local/state/tw-stock-clean/current-deployment.json`。已修复Shadow历史跨批次残留候选，以及个股非交易日混入provider的问题，以保存的独立Yahoo ^TWII日历约束行情。10/12–11/6正确为18个交易日，2,700条A分数与900条B分数已接入正式历史查询、比较和回放。补算历史有明确来源标记；默认仍A，B保持研究权限。详见 [当前验收](MAINLINE_ACCEPTANCE_CN.md)。
 
 10/12起历史scheduled连续失败，恢复为manual；目前health保留 `SCHEDULED_DAILY_FAILED` 告警，不能因ready=true而宣称全自动连续成功。下一次正式日更计划11/9台北18:30，Shadow18:45，分别有两次晚间重试。待真实触发后检查完整发布，不能手动伪造scheduled结果。审查证据在仓库外 `~/.local/state/tw-stock-clean/audits/continuity-20261107/final/`。
 
@@ -26,6 +26,7 @@
 - 默认发布物化当日与前一交易日信号，榜单变化和模拟账户可消费；历史修复可通过单次配置扩大至60交易日，正式默认仍为2。selection_universe使用provider实际生命周期。历史补算属于事后重建。
 - 保存标准行情、日历、Qlib行情二进制、分数及manifest；Alpha158大矩阵按冻结配置重建。本次18日恢复只物化最终日Agent上下文与策略意图，不冒称历史问答完整。
 - requests 只读本地数据，按标的读取行情，排名优先读已物化产物。
+- 两轨通过统一 history/排名/变化/回放接口查询；日更信号保留原配置以支持后续历史读取，补算包独立导入产品store。默认仍A，B不进入模拟账户；详见运维“两轨历史”。
 - 系统页展示模块串联与运行批次。运维区分 manual、scheduled、NO_NEW_MARKET_SESSION；定时器启用不等于完整定时采集成功。
 
 ## 开发与验收

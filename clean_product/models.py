@@ -15,7 +15,7 @@ import yaml
 
 from .artifacts import manifest, write_json
 from .config import env_config, path, universe
-from .validation import pipeline_fingerprint, validate_baseline, validate_signal_rows, verify_file
+from .validation import pipeline_context, pipeline_fingerprint, validate_baseline, validate_signal_rows, verify_file
 
 
 class ModelBlocked(RuntimeError):
@@ -34,6 +34,7 @@ class SignalResult:
     reason: str | None = None
     artifact_dir: Path | None = None
     full_ranks: dict[str, int] | None = None
+    provenance: dict[str, Any] | None = None
 
 
 class StageRegistry:
@@ -378,6 +379,7 @@ class ModelRunner:
                 production_allowed=bool(spec.get("production_allowed")), reason=reason, row_count=len(frame), fixture=fixture,
                 canonical_id=spec.get("canonical_id", model_name),
                 pipeline_fingerprint=pipeline_fingerprint(self.config, model_name), full_qlib_ranks=full_ranks,
+                pipeline_context=pipeline_context(self.config, model_name),
                 baseline_candidate_ranks=candidate_ranks,
                 candidate_policy=spec.get("candidate_policy"),
             ))

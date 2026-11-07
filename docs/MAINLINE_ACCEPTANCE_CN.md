@@ -5,12 +5,34 @@
 ## 当前运行状态
 
 - GitHub 仓库已公开，默认分支为 `product-clean`；旧主线保留在 `legacy-main-20260928`。
-- 已部署代码：`70fc35c70ca33c68c126d958a6921a8d8f221b83`；后续验收文档提交不改变运行代码。原 `clean-v1.0.0` 标签只代表9/28版本。
+- 已部署11/7两轨历史版本，代码身份见本机 `~/.local/state/tw-stock-clean/current-deployment.json`；其前一代码版本为 `70fc35c70ca33c68c126d958a6921a8d8f221b83`。原 `clean-v1.0.0` 标签只代表9/28版本。
 - 正式目录：`~/.local/share/tw-stock-clean/releases/clean-20261107-audited`，独立 venv；于11/7 06:33 UTC切换。Web、daily、shadow、health、backup 的 WorkingDirectory 均已核对。
 - 正式5000/8000均 HTTP 200、ready=true，最新数据为2026-11-06。Web active，切换后 NRestarts=0。
 - 当前 A 批次：`2026-11-06-2026-11-07T06:31:17.718053+00:00-abd51c82`。
 - 唯一 baseline：Model A `e4_frozen_qlib_2018_2022`；策略 `top50_exit_one_worst_sell`；执行 `next_open`。
 - B19R2R 已手动完成同一 A 批次的11/6特征与50支重排，状态 READY；仍为 `production_allowed=false`、`mainline_blocking=false`、`no_apply=true`。
+
+## 两轨历史接入（11/7）
+
+A 与 A+B 的查询、排名变化、比较和回放已平行提供，首页各轨道有独立入口；切换模型会更新历史日期和回放范围。默认仍A，B不进入模拟账户。接口 `GET /api/tw-stock/history?model=model_a_plus_b` 返回已校验日期及来源，其他研究接口沿用同一 `model` 参数。
+
+10/12–11/6的18个交易日已全部可查：A共2,700条，B共900条；B的900×78个特征值均有限。补算包已复制进产品store的 `history/reconstruction-6a132adfb0764023843fd289c902e795`，查询不依赖外部实验目录。它明确标记为 `historical_reconstruction`，不是当时实时或定时结果。比较按B的来源批次选择A，当前日期不复用另一A批次的B。
+
+既有 A / Shadow 定时器分别保留；新信号保存公开配置上下文，成功发布后自动被历史发现，指针推进不丢历史，不新增第三条归档调度。尚未发生下一交易日的真实定时触发，不能据此宣称日更已长期稳定。
+
+| 10/12–11/6同策略、next_open、同费用回放 | A | A+B |
+| --- | --- | --- |
+| 累计收益 | -30.90% | -31.42% |
+| 最大回撤 | -31.51% | -31.94% |
+| 模拟交易数 | 82 | 80 |
+
+B在此短区间没有优于A，功能平行不代表模型效果提升。两侧API结果均与独立回放核验一致。
+
+本次证据位于 `~/.local/state/tw-stock-clean/audits/parallel-history-20261107/`：239项Python测试、13项Node测试、前端构建、M3/模块合同/ARCH-1通过；真实运行配置的stack通过。源码checkout保留旧忽略资产，最初直接运行stack命中了旧批次并失败，未据此改写或重建它；正式配置复验为PASS。隔离及正式36次排名查询、成对回放通过；三视口新历史流程和七页浏览器检查通过，错误/禁止请求/横向溢出均为0。截图仅保存，未使用view_image，人工像素视觉复核未执行。
+
+部署未改六个active/Shadow/日更状态指针、冻结模型或模拟账户。最终采用原正式目录的代码补丁，旧代码在仓库外备份并验证恢复；临时代码目录已退出服务，所有units仍指向原正式目录，以保持既有备份资产边界。
+
+含两轨历史的新备份 `~/.local/state/tw-stock-clean/backups/snapshots/20261107T103404-e2a442dd/manifest.json` 已验证16,500个文件；`backup-final.json` 与 `backup-verification.json` 保存证据。
 
 ## 停更区间、连续性与底层修复
 

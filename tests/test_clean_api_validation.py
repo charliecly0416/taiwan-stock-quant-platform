@@ -7,6 +7,7 @@ from backend.app.routes.tw_stock import _date_range_arg
 
 @pytest.mark.parametrize("query", [
     "paper?model=missing&date=2026-09-24",
+    "history?model=missing",
     "rankings?model=../missing&date=2026-09-24",
     "data/prices?start=not-a-date&end=2026-09-24",
     "data/prices?start=2026-09-25&end=2026-09-24",

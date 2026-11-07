@@ -18,6 +18,7 @@ const query = values => new URLSearchParams(
 
 export const api = {
   overview: () => request('/api/tw-stock/overview'),
+  history: model => request('/api/tw-stock/history?' + query({ model })),
   rankings: (model, date, limit = 50) => request('/api/tw-stock/rankings?' + query({ model, date: date || '', limit })),
   compare: (left, right, date, start = '', end = '') => request('/api/tw-stock/compare?' + query({ left, right, date: date || '', start, end })),
   strategy: (model, date) => request('/api/tw-stock/strategy?' + query({ model, date: date || '' })),

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -35,7 +36,9 @@ def validate_registries(config: dict) -> None:
     expected = {'signals': 'signals/{model}/{asof}', 'intents': 'intents/{model}/{asof}',
                 'daily': 'daily/{asof}/{run_id}', 'agent': 'agent_daily_prompt/{asof}',
                 'failed_signals': 'failed_runs/signals/{model}/{asof}/{run_id}',
-                'shadow_feature_delta': 'shadow_features/{asof}/FEATURE_ARTIFACT_DELTA.parquet'}
+                'shadow_feature_delta': 'shadow_features/{asof}/FEATURE_ARTIFACT_DELTA.parquet',
+                'signal_history': 'history/{batch}/signals/{model}/{asof}',
+                'signal_history_run': 'history/{batch}/run.json'}
     if any(artifacts.get(k) != v for k, v in expected.items()):
         raise ValueError('ARTIFACT_REGISTRY_LAYOUT_MISMATCH')
 
@@ -79,6 +82,37 @@ def pipeline_fingerprint(config: dict, model: str) -> str:
                 "datasets": config.get("datasets", {}), "universe": config.get("universe"),
                 "universe_file": config.get("universe_file")}
     return hashlib.sha256(json.dumps(identity, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def pipeline_context(config: dict, model: str) -> dict:
+    """Only public validation inputs, never credentials or process environments."""
+    return {"model_stages": {name: config['model_stages'].get(name, {})
+                             for name in config['models'][model].get('stages', [])},
+            **{name: config.get(name) for name in ('datasets', 'universe', 'universe_file')}}
+
+
+def historical_config(config: dict, model: str, context: dict) -> dict:
+    result = deepcopy(config)
+    dynamic = {'model_a_frozen': {'provider_uri', 'selection_prices', 'selection_universe'},
+               'b19r2r_frozen': {'feature_delta', 'feature_delta_sha256'}}
+    expected = set(config['models'][model].get('stages', []))
+    if (not isinstance(context, dict) or not isinstance(context.get('model_stages'), dict)
+            or set(context['model_stages']) != expected
+            or not all(isinstance(stage, dict) for stage in context['model_stages'].values())):
+        raise ValueError('SIGNAL_HISTORY_CONTEXT_INVALID')
+    for name, old in context['model_stages'].items():
+        current = config['model_stages'].get(name, {})
+        stable = lambda stage: {key: value for key, value in stage.items() if key not in dynamic.get(name, set())}
+        if stable(old) != stable(current):
+            raise ValueError('SIGNAL_HISTORY_MODEL_IDENTITY_MISMATCH')
+        result['model_stages'][name] = old
+    for key in ('datasets', 'universe', 'universe_file'):
+        result[key] = context.get(key)
+    validate_baseline(result)
+    stage = result['model_stages'].get('b19r2r_frozen', {})
+    if 'b19r2r_frozen' in expected and stage.get('feature_delta'):
+        verify_file(stage['feature_delta'], stage.get('feature_delta_sha256'))
+    return result
 
 
 def validate_signal_rows(frame: pd.DataFrame, asof: str) -> None:
@@ -131,8 +165,12 @@ def validate_full_ranks(frame: pd.DataFrame, ranks: dict, candidates: dict, spec
                 raise ValueError("SIGNAL_B19_EXACT50_MISMATCH")
 
 
-def read_signal_artifact(directory: Path, config: dict, model: str, asof: str) -> tuple[dict, pd.DataFrame]:
+def read_signal_artifact(directory: Path, config: dict, model: str, asof: str, *, historical=False) -> tuple[dict, pd.DataFrame]:
     payload = json.loads((directory / "manifest.json").read_text())
+    if not isinstance(payload, dict):
+        raise ValueError('SIGNAL_ARTIFACT_MANIFEST_INVALID')
+    if historical and payload.get('pipeline_context'):
+        config = historical_config(config, model, payload['pipeline_context'])
     spec = config["models"][model]
     if (payload.get("schema_version") != "tw.clean.artifact.v1"
             or payload.get("artifact_type") != "ModelSignalArtifact"

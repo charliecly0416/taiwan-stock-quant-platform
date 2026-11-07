@@ -2,6 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { api } from '../src/api.js'
 
+test('both tracks use the same readonly history endpoint', async t => {
+  const urls = []
+  t.mock.method(globalThis, 'fetch', async path => {
+    urls.push(path)
+    return { ok: true, json: async () => ({ dates: ['2026-11-06'] }) }
+  })
+  await api.history('model_a')
+  await api.history('model_a_plus_b')
+  assert.deepEqual(urls, ['/api/tw-stock/history?model=model_a', '/api/tw-stock/history?model=model_a_plus_b'])
+})
+
 test('comparison omits unused date bounds so strict API validation succeeds', async t => {
   let url
   t.mock.method(globalThis, 'fetch', async path => {

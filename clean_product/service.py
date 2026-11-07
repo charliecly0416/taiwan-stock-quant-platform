@@ -12,6 +12,7 @@ import pandas as pd
 from .config import env_config, load_config, models, trading_days
 from .data import DataCatalog, DataError
 from .models import ModelRunner, SignalResult
+from .history import locate_signal, published_roots
 from .replay import replay
 from .strategy import top50_exit_one_worst_sell
 from .validation import read_signal_artifact, validate_baseline, verify_file
@@ -57,6 +58,7 @@ def _technical(frame: pd.DataFrame) -> pd.DataFrame:
 class ProductService:
     def __init__(self, config: dict | None = None) -> None:
         self.config = env_config(config or load_config()); self.catalog = DataCatalog(self.config); self.runner = ModelRunner(self.config)
+        self._history_roots = {}
 
     def trading_days(self) -> list[str]:
         return trading_days(self.config)
@@ -72,27 +74,56 @@ class ProductService:
             except DataError: pass
         return data
 
-    def _stored_signal(self, model: str, asof: str) -> SignalResult | None:
+    def _roots(self, model):
+        if model not in self._history_roots:
+            self._history_roots[model] = published_roots(self.config, model)
+        return self._history_roots[model]
+
+    def _stored_signal(self, model: str, asof: str, source_run_id=None) -> SignalResult | None:
         artifact_root = self.config["artifact_root"]
         if self.config["models"][model].get("role") == "shadow":
-            if self.config.get("_shadow_error"):
+            if self.config.get("_shadow_error") and asof == self.latest_asof():
                 return SignalResult(model, asof, pd.DataFrame(), "BLOCKED", self.config["_shadow_error"])
             artifact_root = self.config.get("_shadow_root", artifact_root)
-        root = artifact_root / "signals" / model / asof
-        if not root.exists():
+        located = locate_signal(self.config, self._roots(model), model, asof, source_run_id)
+        if not located:
             shadow = self.config.get("_shadow_status", {})
             if (self.config["models"][model].get("role") == "shadow" and shadow.get("asof") == asof
                     and shadow.get("status") in {"BLOCKED", "RUNNING"}):
                 return SignalResult(model, asof, pd.DataFrame(), "BLOCKED", shadow.get("reason", "SHADOW_RUNNING"))
             return None
+        root, source = located
         try:
             validate_baseline(self.config)
-            payload, rows = read_signal_artifact(root, self.config, model, asof)
+            payload, rows = read_signal_artifact(root, self.config, model, asof,
+                                               historical=root != artifact_root / 'signals' / model / asof)
             return SignalResult(model, asof, rows, payload["status"], payload.get("reason"), root,
-                                payload.get("full_qlib_ranks"))
+                                payload.get("full_qlib_ranks"),
+                                {'source_run_id': source, 'evidence_kind': payload.get('evidence_kind', 'stored'),
+                                 'manifest': str(root / 'manifest.json')})
         except (ValueError, OSError, KeyError, TypeError) as exc:
             return SignalResult(model, asof, pd.DataFrame(columns=["date", "instrument", "score", "rank"]),
                                 "BLOCKED", f"SIGNAL_ARTIFACT_INVALID: {exc}")
+
+    def history(self, model: str) -> dict:
+        if model not in self.config['models']:
+            raise ValueError(f'unknown model: {model}')
+        calendar = set(self.trading_days())
+        days = set()
+        for root, _ in self._roots(model):
+            folder = root / 'signals' / model
+            if folder.is_dir():
+                days.update(item.name for item in folder.iterdir() if item.is_dir() and item.name in calendar)
+        rows = []
+        for day in sorted(days):
+            signal = self._stored_signal(model, day)
+            if signal is not None:
+                rows.append({'asof': day, 'status': signal.status, 'rows': len(signal.rows),
+                             'reason': signal.reason, **(signal.provenance or {})})
+        ready = [row['asof'] for row in rows if row['status'] == 'READY']
+        return {'model': model, 'dates': ready, 'rows': rows, 'count': len(ready),
+                'first': ready[0] if ready else None, 'latest': ready[-1] if ready else None,
+                'readonly': True, 'simulation_only': True, 'no_apply': True}
 
     def _track_status(self, model: str, asof: str | None) -> dict[str, Any]:
         signal = self._stored_signal(model, asof) if asof else None
@@ -123,15 +154,20 @@ class ProductService:
         asof = self.latest_asof(); tracks = []
         for name, spec in models(self.config).items():
             snapshot = self._track_status(name, asof)
-            tracks.append({"id": name, "label": self.config["models"][name].get("label", name), "description": self.config["models"][name].get("description"), "role": spec.role, "production_allowed": spec.production_allowed, **snapshot})
+            tracks.append({"id": name, "label": self.config["models"][name].get("label", name), "description": self.config["models"][name].get("description"), "role": spec.role, "production_allowed": spec.production_allowed, **snapshot, 'history': self.history(name)})
         default = self.config.get("product", {}).get("default_model", "model_a")
         baseline = next((item for item in tracks if item["id"] == default), {})
         data_status = self.catalog.status()
         required = set(self.config["models"][default].get("required_datasets", ["prices"]))
         for item in data_status:
             item["mainline_required"] = item["dataset"] in required
+        common = sorted(set.intersection(*(set(track['history']['dates']) for track in tracks))) if tracks else []
+        examples = dict(self.config.get('research_examples', {}))
+        if common:
+            examples.update(comparison_date=common[-1], comparison_start=common[0], comparison_end=common[-1],
+                            replay_start=common[0], replay_end=common[-1])
         return {"status": "READY" if baseline.get("status") == "READY" else "BLOCKED",
-                "reason": baseline.get("reason"), "product": self.config.get("product", {}), "asof": asof, "strategy": self.config.get("strategy"), "execution": self.config.get("execution"), "models": tracks, "data": data_status, "operations": self.operations(), "examples": {**self.config.get("research_examples", {}), "paper_date": next((day for day in reversed(self.trading_days()) if day < (asof or "")), None)}, "readonly": True, "simulation_only": True}
+                "reason": baseline.get("reason"), "product": self.config.get("product", {}), "asof": asof, "strategy": self.config.get("strategy"), "execution": self.config.get("execution"), "models": tracks, "data": data_status, "operations": self.operations(), "examples": {**examples, "paper_date": next((day for day in reversed(self.trading_days()) if day < (asof or "")), None)}, "readonly": True, "simulation_only": True}
 
     def readiness(self) -> dict[str, Any]:
         reasons = []
@@ -166,10 +202,18 @@ class ProductService:
             manifest_path = result.artifact_dir / "manifest.json"
             if manifest_path.exists():
                 artifact = json.loads(manifest_path.read_text(encoding="utf-8"))
-        return {"status": result.status, "reason": result.reason, "model": model, "label": spec.get("label", model), "role": spec.get("role"), "asof": result.asof, "rows": _records(result.rows.head(limit)), "row_count": len(result.rows), "artifact": artifact, "readonly": True, "simulation_only": True}
+        return {"status": result.status, "reason": result.reason, "model": model, "label": spec.get("label", model), "role": spec.get("role"), "asof": result.asof, "rows": _records(result.rows.head(limit)), "row_count": len(result.rows), "artifact": artifact, 'provenance': result.provenance, "readonly": True, "simulation_only": True}
 
     def compare(self, left: str, right: str, asof: str | None = None, start: str | None = None, end: str | None = None) -> dict[str, Any]:
         lhs, rhs = self.signal(left, asof), self.signal(right, asof)
+        for name, other, result in ((left, rhs, lhs), (right, lhs, rhs)):
+            if self.config['models'][name].get('role') == 'baseline' and other.provenance:
+                source = other.provenance.get('source_run_id')
+                if source and source != (result.provenance or {}).get('source_run_id'):
+                    matched = self._stored_signal(name, result.asof, source)
+                    matched = matched or SignalResult(name, result.asof, pd.DataFrame(), 'BLOCKED', 'COMPARISON_SOURCE_RELEASE_UNAVAILABLE')
+                    if name == left: lhs = matched
+                    else: rhs = matched
         if lhs.status != "READY" or rhs.status != "READY":
             mainline_blocking = any(result.status != "READY" and self.config["models"][name].get("role") == "baseline" for name, result in ((left, lhs), (right, rhs)))
             return {"status": "BLOCKED", "asof": asof or self.latest_asof(), "left": {"model": left, "status": lhs.status, "reason": lhs.reason}, "right": {"model": right, "status": rhs.status, "reason": rhs.reason}, "mainline_blocking": mainline_blocking, "readonly": True}
@@ -179,7 +223,7 @@ class ProductService:
         if start or end:
             if not start or not end:
                 raise ValueError("comparison replay requires both start and end")
-            payload["window"] = {"start": start, "end": end, "left": self.run_replay(left, start, end), "right": self.run_replay(right, start, end)}
+            payload["window"] = {"start": start, "end": end, "left": self.run_replay(left, start, end, paired_with=right), "right": self.run_replay(right, start, end, paired_with=left)}
         return payload
 
     def strategy(self, model: str, asof: str | None = None) -> dict[str, Any]:
@@ -286,8 +330,17 @@ class ProductService:
             return {"status": "READY", "symbol": digits, "model": model, "asof": ranking["asof"], "answer": "该标的不在当前模型候选范围内；请结合资料日期和完整榜单人工复核。", "evidence": [], "readonly": True, "simulation_only": True}
         return {"status": "READY", "symbol": digits, "model": model, "asof": ranking["asof"], "answer": f"{digits} 当前在 {ranking['label']} 研究排序第 {item['rank']}；该分数只表示相对排序，不能解释为收益率、胜率或上涨概率。请结合行情与策略回放继续人工复核。", "evidence": [{"type": "ModelSignalArtifact", "rank": item["rank"], "score": item["score"]}], "readonly": True, "simulation_only": True}
 
-    def run_replay(self, model: str, start: str, end: str) -> dict[str, Any]:
-        data = self._model_data(end, start); return replay(self.config, data, model, start, end)
+    def run_replay(self, model: str, start: str, end: str, *, paired_with=None) -> dict[str, Any]:
+        def read(name, day):
+            if (paired_with and self.config['models'][name].get('role') == 'baseline'
+                    and self.config['models'][paired_with].get('role') == 'shadow'):
+                companion = self._stored_signal(paired_with, day)
+                source = (companion.provenance or {}).get('source_run_id') if companion else None
+                if source:
+                    return self._stored_signal(name, day, source)
+            return self.signal(name, day)
+        data = self._model_data(end, start)
+        return replay(self.config, data, model, start, end, signal_reader=read)
 
     def operations(self) -> dict[str, Any]:
         root = self.config.get("_artifact_store", self.config["artifact_root"]) / "daily"

@@ -61,7 +61,7 @@ export function architecturePanel(overview) {
     ['前端与模拟账户', 'frontend/src / paper.py', '七个研究视图；模拟账本独立预览与确认'],
   ]
   return '<article class="panel architecture-panel"><div class="panel-head"><div><p class="eyebrow">CLEAN PRODUCT · MODULE FLOW</p><h3>一条数据链路，独立模块协作</h3></div>' + statusPill(overview.status) + '</div>' +
-    '<p class="panel-note">Model A 是当前主线，B19R2R 仅作历史研究对照。全市场行情用于筛选，模型只对当日候选评分。</p>' +
+    '<p class="panel-note">Model A 为默认轨道，Model A+B 独立日更；两轨均可查询历史与回放。全市场行情用于筛选，模型只对当日候选评分。</p>' +
     '<ol class="pipeline">' + stages.map(([name, code, description], index) => '<li><span class="pipeline-step">' + (index + 1) + '</span><div><strong>' + name + '</strong><p>' + description + '</p><code>' + code + '</code></div></li>').join('') + '</ol>' +
     '<div class="technical-strip"><span>资料日期<strong>' + escape(overview.asof || '待验证') + '</strong></span><span>基线信号<strong>' + escape(baseline?.rows ?? '—') + '</strong></span><span>服务入口<strong>Flask + Gunicorn</strong></span><span>运行管理<strong>systemd</strong></span><span>发布方式<strong>完整批次切换</strong></span></div>' +
     '<details><summary>展开运维与来源</summary><dl><dt>当前批次</dt><dd>' + escape(release?.run_id || '尚未激活完整批次') + '</dd><dt>最近手工运行</dt><dd>' + escape(operation.latest_manual?.created_at || '尚无') + '</dd><dt>最近计划运行</dt><dd>' + escape(operation.latest_scheduled?.created_at || operation.scheduler?.created_at || '尚未触发，不能以手工运行替代') + '</dd><dt>日更策略</dt><dd>台北时间工作日 18:30、19:30、20:30；检查实际市场交易日，失败保留上一批次。</dd><dt>持久化边界</dt><dd>研究产物按运行保存；模拟账户使用独立 SQLite 账本，研究页面不写账户。</dd></dl></details></article>'
@@ -82,4 +82,12 @@ export function maintenancePanel(operations = {}) {
     '<dl><dt>最后检查</dt><dd>' + escape(report.created_at) + '</dd><dt>最近备份</dt><dd>' + escape(report.backup?.created_at || '尚无') +
     '</dd><dt>剩余空间</dt><dd>' + format.number(report.free_bytes / 1024 ** 3) + ' GB</dd></dl>' +
     (alerts.length ? '<ul role="alert">' + alerts.map(a => '<li>' + escape(labels[a.code] || a.code) + '</li>').join('') + '</ul>' : '<p>当前检查没有异常。</p>') + '</article>'
+}
+export function historySummary(history) {
+  if (!history?.count) return '尚无已保存的历史；可输入日期检查冻结模型的历史范围。'
+  return '已存 ' + history.count + ' 个交易日 · ' + history.first + ' — ' + history.latest + '；补算历史仅用于复盘。'
+}
+
+export function historyOptions(history) {
+  return (history?.dates || []).map(day => '<option value="' + escape(day) + '"></option>').join('')
 }

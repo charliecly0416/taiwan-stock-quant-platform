@@ -52,6 +52,22 @@ def test_restore_rejects_tampering_and_never_overwrites_destination(operations, 
     assert not (tmp_path / 'new').exists()
 
 
+def test_backup_keeps_imported_and_previously_published_signal_history(operations):
+    cfg, root, store = operations
+    cfg['models'] = {'model_a': {'role': 'baseline'}}
+    past = store / 'releases/past'
+    signal = past / 'signals/model_a/2026-09-24/signals.csv'
+    signal.parent.mkdir(parents=True)
+    signal.write_text('date,instrument,score,rank\n2026-09-24,TW2330,0.9,1\n')
+    write_json(store / 'daily/2026-09-24/past/run.json', {
+        'status': 'READY', 'latest_pointer_written': True, 'artifact_root': str(past), 'run_id': 'past'})
+    write_json(store / 'history/imported/run.json', {'status': 'BUILDING'})
+    result = backup(cfg, project_root=root)
+    names = {item['path'] for item in json.loads(Path(result['manifest']).read_text())['files']}
+    assert str(signal.relative_to(root)) in names
+    assert 'artifacts/history/imported/run.json' in names
+
+
 def test_backup_rejects_credential_patterns(operations):
     cfg, root, _ = operations
     (root / 'configs/accidental.yaml').write_text('token: ' + 'ghp_' + 'x' * 40)

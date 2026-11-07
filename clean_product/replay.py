@@ -34,7 +34,7 @@ def _valid_price(table: pd.DataFrame, day: str, symbol: str, field: str) -> bool
     return key in table.index and np.isfinite(table.loc[key, field]) and table.loc[key, field] > 0
 
 
-def replay(config: dict, data: dict[str, pd.DataFrame], model_name: str, start: str, end: str, *, fixture: bool = False) -> dict[str, Any]:
+def replay(config: dict, data: dict[str, pd.DataFrame], model_name: str, start: str, end: str, *, fixture: bool = False, signal_reader=None) -> dict[str, Any]:
     blocked = {"status": "BLOCKED", "model": model_name, "start": start, "end": end,
                "readonly": True, "simulation_only": True, "fixture": fixture}
     calendar = trading_days(config) if not fixture else []
@@ -67,13 +67,17 @@ def replay(config: dict, data: dict[str, pd.DataFrame], model_name: str, start: 
                 "readonly": True, "simulation_only": True, "fixture": fixture}
     runner = ModelRunner(config)
     try:
-        runner.precompute(days[:-1], data=data, fixture=fixture)
+        if signal_reader is None:
+            runner.precompute(days[:-1], data=data, fixture=fixture)
     except (ValueError, RuntimeError, OSError, KeyError) as exc:
         return {"status": "BLOCKED", "model": model_name, "start": start, "end": end,
                 "reason": str(exc), "readonly": True, "simulation_only": True, "fixture": fixture}
     for index, signal_day in enumerate(days[:-1]):
         execute_day = days[index + 1]
-        result = runner.run(model_name, signal_day, data=data, fixture=fixture, write=False)
+        result = (signal_reader(model_name, signal_day) if signal_reader else
+                  runner.run(model_name, signal_day, data=data, fixture=fixture, write=False))
+        if result is None:
+            return {**blocked, 'reason': 'REPLAY_SIGNAL_ARTIFACT_UNAVAILABLE', 'blocked_on': signal_day}
         if result.status != "READY":
             return {"status": "BLOCKED", "model": model_name, "start": start, "end": end, "blocked_on": signal_day, "reason": result.reason, "readonly": True, "simulation_only": True}
         ranking = result.rows.head(50)

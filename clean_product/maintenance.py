@@ -18,6 +18,7 @@ import yaml
 
 from .artifacts import sha256, utc_now, write_json
 from .config import ROOT, env_config, path
+from .history import published_roots
 
 ASSET_FIELDS = ('model_path', 'training_manifest', 'prediction_archive', 'raw_prediction_archive',
                 'inference_config', 'selection_prices', 'selection_universe', 'provider_uri',
@@ -96,7 +97,9 @@ def inventory(config, *, project_root=ROOT):
     targets = {root / 'configs', cfg['artifact_root'], cfg['data_root']}
     store = cfg['_artifact_store']
     targets.update(store / name for name in ('active.json', 'daily', 'scheduler_status.json', 'daily_status.json',
-                                               'shadow', 'shadow_data', 'shadow_active.json', 'shadow_status.json', 'shadow_scheduler_status.json'))
+                                               'shadow', 'history', 'shadow_data', 'shadow_active.json', 'shadow_status.json', 'shadow_scheduler_status.json'))
+    for model in cfg.get('models', {}):
+        targets.update(root / 'signals' for root, _ in published_roots(cfg, model))
     for stage in cfg.get('model_stages', {}).values():
         targets.update(path(stage[k]) for k in ASSET_FIELDS if stage.get(k))
     if cfg.get('universe_file'): targets.add(path(cfg['universe_file']))

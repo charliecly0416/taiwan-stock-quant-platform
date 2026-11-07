@@ -1,7 +1,7 @@
 import './style.css'
 import { api } from './api.js'
 import { bindPaper, paperView } from './paper.js'
-import { architecturePanel, maintenancePanel, empty, escape, format, latestRenderer, lineChart, modelOptions, statusPill } from './components.js'
+import { architecturePanel, maintenancePanel, empty, escape, format, historyOptions, historySummary, latestRenderer, lineChart, modelOptions, statusPill } from './components.js'
 
 const state = { overview: null, detail: null, view: 'overview', model: 'model_a' }
 const app = document.querySelector('#app')
@@ -55,7 +55,7 @@ async function overviewView() {
     '<article class="metric-card"><span>最近日更</span><strong>' + (operation.latest?.asof || '尚未运行') + '</strong><small>' + (operation.latest?.dry_run ? '最近记录为 dry-run' : '正式 artifact') + '</small></article></div>' +
     '<div class="workbench-grid"><article class="panel candidate-panel"><div class="panel-head"><div><p class="eyebrow">MODEL A · TOP50</p><h3>今日候选</h3></div><span>' + statusPill(detail.rankings.status, detail.rankings.status) + '</span></div><p class="panel-note">研究分数只用于相对排序；候选调入需要人工复核。</p>' + (detail.rankings.status === 'READY' ? rankingTable(detail.rankings.rows, 10) : empty('候选暂不可用', detail.rankings.reason || '缺少有效模型产物。')) + '<div class="panel-foot"><span>榜首 ' + (detail.rankings.rows[0] ? escape(format.symbol(detail.rankings.rows[0].instrument)) : '—') + '</span><a href="#rankings" data-jump="rankings">查看完整榜单与变化 →</a></div></article><article class="panel strategy-panel"><div class="panel-head"><div><p class="eyebrow">STRATEGY RULE</p><h3>策略意图</h3></div><span>' + statusPill(detail.strategy.status, detail.strategy.status) + '</span></div><p class="panel-note">' + escape(state.overview.strategy) + ' · ' + escape(state.overview.execution) + '</p>' + (detail.strategy.status === 'READY' ? intentList(detail.strategy.intents) : empty('策略暂不可用', detail.strategy.reason || '缺少有效模型产物。')) + '<div class="panel-foot"><span>模拟初始资金 ' + format.money(detail.paper.nav) + '</span><a href="#replay" data-jump="replay">查看历史回放 →</a></div></article></div>' +
     '<div class="section-head"><div><p class="eyebrow">MODEL LANES</p><h2>同一规范，两条模型轨道</h2></div><a href="#compare" data-jump="compare">打开模型比较 →</a></div>' +
-    '<div class="model-rails">' + models.map(model => '<article class="rail ' + escape(model.role) + '"><div class="rail-line"></div><div><div class="rail-top"><span>' + escape(model.role) + '</span>' + statusPill(model.status, model.status) + '</div><h3>' + escape(model.label) + '</h3><p>' + escape(model.description) + '</p><dl><div><dt>产物日期</dt><dd>' + (model.asof || '尚无') + '</dd></div><div><dt>排名数量</dt><dd>' + (model.rows || 0) + '</dd></div><div><dt>产品权限</dt><dd>' + (model.production_allowed ? '默认模拟轨道' : '只读影子轨道') + '</dd></div></dl>' + (model.reason ? '<div class="notice">' + escape(model.reason) + '</div>' : '') + '</div></article>').join('') + '</div>' +
+    '<div class="model-rails">' + models.map(model => '<article class="rail ' + escape(model.role) + '"><div class="rail-line"></div><div><div class="rail-top"><span>' + escape(model.role) + '</span>' + statusPill(model.status, model.status) + '</div><h3>' + escape(model.label) + '</h3><p>' + escape(model.description) + '</p><dl><div><dt>产物日期</dt><dd>' + (model.asof || '尚无') + '</dd></div><div><dt>排名数量</dt><dd>' + (model.rows || 0) + '</dd></div><div><dt>产品权限</dt><dd>' + (model.production_allowed ? '默认轨道' : '并行研究轨道') + '</dd></div></dl>' + '<p>' + escape(historySummary(model.history)) + '</p><a href="#rankings" data-jump="rankings" data-track="' + escape(model.id) + '">查询此轨排名与历史 →</a>' + (model.reason ? '<div class="notice">' + escape(model.reason) + '</div>' : '') + '</div></article>').join('') + '</div>' +
     '<article class="panel cross-panel"><div class="panel-head"><div><p class="eyebrow">RANK + TECHNICAL CONTEXT</p><h3>候选的行情背景</h3></div><span class="pill muted">只读复核</span></div><p class="panel-note">技术指标帮助人工复核候选背景，不改变模型排序，也不生成交易建议。</p>' + (detail.cross.status !== 'READY' ? empty('行情背景暂不可用', detail.cross.reason || '缺少同日验证资料。') : '<div class="table-scroll"><table><thead><tr><th>标的</th><th>排名</th><th>收盘</th><th>MA20</th><th>RSI14</th><th>背景</th></tr></thead><tbody>' + (detail.cross.rows || []).map(row => '<tr><td><strong>' + escape(format.symbol(row.instrument)) + '</strong></td><td>#' + row.rank + '</td><td>' + format.number(row.close) + '</td><td>' + format.number(row.ma20) + '</td><td>' + format.number(row.rsi14) + '</td><td>' + escape(row.research_state || '人工复核') + '</td></tr>').join('') + '</tbody></table></div>') + '</article>' +
     '<article class="panel explanation-panel"><div class="panel-head"><div><p class="eyebrow">RESEARCH EXPLANATION</p><h3>研究解释助手</h3></div><span class="pill muted">本地、只读</span></div><p class="panel-note">基于当前 ModelSignalArtifact 生成口径解释，不调用远端模型、不暴露密钥。</p><form id="explain-form" class="inline-form"><input name="symbol" value="' + (detail.rankings.rows[0] ? format.symbol(detail.rankings.rows[0].instrument) : '2330') + '" inputmode="numeric" aria-label="股票代码"><button>解释当前排序</button></form><div id="explain-result">' + empty('选择标的后查看', '解释只描述研究排序与证据，不输出交易指令。') + '</div></article>' +
     '<article class="panel agent-panel"><div class="panel-head"><h3>每日研究问答</h3><span class="pill muted">每日产物 · 本地解释</span></div><p class="panel-note">支持排名、日期和策略口径提问；每日上下文与模型来源必须通过验证。</p><form id="agent-form" class="inline-form"><textarea name="question" maxlength="1000" required aria-label="研究问题">排名第一是谁？</textarea><button>查询研究证据</button></form><div id="agent-result"></div></article>' +
@@ -72,8 +72,9 @@ async function compareView() {
 
 async function rankingsView() {
   const models = state.overview.models
-  const date = state.overview.asof || ''
-  return '<form class="control-bar" id="rankings-form"><label>模型<select name="model">' + modelOptions(models, state.model) + '</select></label><label>资料日期<input type="date" name="date" value="' + date + '"></label><label>榜单范围<select name="limit"><option value="30">Top30</option><option value="50" selected>Top50</option></select></label><button type="submit">读取榜单</button><button type="button" data-load-changes>读取进入/离开</button></form><p class="form-note">榜单是研究排序；分数不代表收益率、胜率、上涨概率或仓位大小。</p><div id="rankings-result">' + empty('等待榜单', '选择模型与资料日期后读取只读 ModelSignalArtifact。') + '</div><div id="ranking-changes-result"></div>'
+  const history = models.find(model => model.id === state.model)?.history
+  const date = history?.latest || state.overview.asof || ''
+  return '<form class="control-bar" id="rankings-form"><label>模型<select name="model">' + modelOptions(models, state.model) + '</select></label><label>资料日期<input type="date" name="date" list="ranking-history-dates" value="' + date + '"></label><label>榜单范围<select name="limit"><option value="30">Top30</option><option value="50" selected>Top50</option></select></label><button type="submit">读取榜单</button><button type="button" data-load-changes>读取进入/离开</button></form><datalist id="ranking-history-dates">' + historyOptions(history) + '</datalist><p class="form-note" id="history-summary">' + escape(historySummary(history)) + '</p><p class="form-note">榜单是研究排序；分数不代表收益率、胜率、上涨概率或仓位大小。</p><div id="rankings-result">' + empty('等待榜单', '选择模型与资料日期后读取只读 ModelSignalArtifact。') + '</div><div id="ranking-changes-result"></div>'
 }
 
 function rankingsResult(data) {
@@ -91,7 +92,10 @@ function compareResult(data) {
 
 async function replayView() {
   const models = state.overview.models
-  return '<form class="control-bar" id="replay-form"><label>模型<select name="model">' + modelOptions(models, state.model) + '</select></label><label>开始日期<input type="date" name="start" value="2025-06-23" required></label><label>结束日期<input type="date" name="end" value="2025-06-30" required></label><button>运行模拟回放</button></form><p class="form-note">回放会按每个交易日实际调用所选模型、生成策略意图，并在下一交易日开盘模拟成交。</p><div id="replay-result">' + empty('等待参数', '建议先用较短日期范围确认结果，再扩大回放窗口。') + '</div>'
+  const history = models.find(model => model.id === state.model)?.history
+  const start = history?.first || state.overview.examples?.replay_start || '2025-06-23'
+  const end = history?.latest || state.overview.examples?.replay_end || '2025-06-30'
+  return '<form class="control-bar" id="replay-form"><label>模型<select name="model">' + modelOptions(models, state.model) + '</select></label><label>开始日期<input type="date" name="start" value="' + start + '" required></label><label>结束日期<input type="date" name="end" value="' + end + '" required></label><button>运行模拟回放</button></form><p class="form-note" id="history-summary">' + escape(historySummary(history)) + '</p><p class="form-note">回放优先读取逐日已保存的模型分数，按同一策略与费用在下一交易日开盘模拟成交。</p><div id="replay-result">' + empty('等待参数', '建议先用较短日期范围确认结果，再扩大回放窗口。') + '</div>'
 }
 
 function replayResult(data) {
@@ -143,6 +147,19 @@ function chatResult(data) {
 
 function bindView() {
   bindPaper()
+  document.querySelectorAll('#rankings-form select[name="model"], #replay-form select[name="model"]').forEach(select => {
+    select.addEventListener('change', () => {
+      state.model = select.value
+      const history = state.overview.models.find(model => model.id === state.model)?.history
+      const form = select.form
+      if (form.elements.date) form.elements.date.value = history?.latest || state.overview.asof || ''
+      if (form.elements.start && history?.first) form.elements.start.value = history.first
+      if (form.elements.end && history?.latest) form.elements.end.value = history.latest
+      const dates = document.querySelector('#ranking-history-dates')
+      if (dates) dates.innerHTML = historyOptions(history)
+      document.querySelector('#history-summary').textContent = historySummary(history)
+    })
+  })
   bindRequest('#compare-form', '#compare-result', form => api.compare(form.left, form.right, form.date, form.includeReplay ? form.start : '', form.includeReplay ? form.end : ''), compareResult, '两条模型轨道正在独立计算…')
   bindRequest('#replay-form', '#replay-result', form => api.replay(form.model, form.start, form.end), replayResult, '逐日运行模型、策略与 next_open 模拟…')
   bindRequest('#market-form', '#market-result', form => api.market(form.symbol, form.start, form.end), marketResult, '读取治理后的本地行情…')
@@ -150,7 +167,7 @@ function bindView() {
   bindRequest('#rankings-form', '#ranking-changes-result', form => api.rankingChanges(form.model, form.date, 1), changesResult, '读取榜单变化…', '[data-load-changes]')
   bindRequest('#explain-form', '#explain-result', form => api.explain(form.symbol, state.overview.product.default_model || 'model_a', state.overview.asof), explanationResult, '读取模型产物解释…')
   bindRequest('#agent-form', '#agent-result', form => api.simpleChat(form.question, state.overview.asof), chatResult, '验证每日上下文及来源…')
-  document.querySelectorAll('[data-jump]').forEach(link => link.addEventListener('click', () => { state.view = link.dataset.jump; setTimeout(render, 0) }))
+  document.querySelectorAll('[data-jump]').forEach(link => link.addEventListener('click', () => { state.view = link.dataset.jump; if (link.dataset.track) state.model = link.dataset.track; setTimeout(render, 0) }))
 }
 
 async function render() {
