@@ -8,6 +8,7 @@ formal provider or latest pointer is replaced by this module.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import Counter
 from datetime import date, timedelta, timezone
 import math
 from pathlib import Path
@@ -17,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 from .config import path
-from .artifacts import write_json
+from .artifacts import sha256, write_json
 
 
 FIELDS = ("open", "high", "low", "close", "volume", "vwap", "factor")
@@ -100,19 +101,14 @@ def market_asof(config: dict, today: str) -> str:
     return str(days.max())
 
 
-def _write_provider(normalized: Path, provider: Path) -> dict[str, Any]:
+def _write_provider(normalized: Path, provider: Path, calendar: list[str]) -> dict[str, Any]:
     files = sorted(normalized.glob("TW*.csv"))
     files = [p for p in files if p.stem != "TWII"]
     # Keep the provider build bounded by the largest single symbol file.  A
     # full Taiwan universe is several million rows; retaining every frame in
     # a dict here can exhaust the daily worker before the binary write starts.
-    calendar_values: set[str] = set()
-    for filename in files:
-        dates = pd.read_csv(filename, usecols=["date"])["date"]
-        calendar_values.update(str(value)[:10] for value in dates)
-    calendar = sorted(calendar_values)
-    if not calendar:
-        raise RuntimeError("Yahoo refresh produced no calendar")
+    if not calendar or calendar != sorted(set(calendar)):
+        raise RuntimeError("MARKET_CALENDAR_INVALID")
     provider.mkdir(parents=True, exist_ok=False)
     (provider / "calendars").mkdir()
     (provider / "features").mkdir()
@@ -124,6 +120,8 @@ def _write_provider(normalized: Path, provider: Path) -> dict[str, Any]:
         symbol = filename.stem
         frame = pd.read_csv(filename)
         frame = frame.drop_duplicates("date").sort_values("date")
+        if not frame.date.isin(positions).all():
+            raise RuntimeError("PROVIDER_NON_MARKET_DATE")
         first, last = str(frame.date.iloc[0])[:10], str(frame.date.iloc[-1])[:10]
         instrument_rows.append(f"{symbol}\t{first}\t{last}")
         folder = provider / "features" / symbol.lower(); folder.mkdir()
@@ -154,8 +152,20 @@ def refresh_yahoo_provider(config: dict, asof: str, run_id: str) -> dict[str, An
     proxy = str(settings.get("proxy", "http://127.0.0.1:7890"))
     history_start = str(settings.get("start", "2015-01-01"))
     incremental_start = (date.fromisoformat(asof) - timedelta(days=int(settings.get("incremental_days", 45)))).isoformat()
+    # Individual Yahoo tickers can carry bars on an exchange closure.  The
+    # independent index, not their date union, defines every provider offset.
+    index = _fetch("TWII", history_start, asof, proxy)
+    index = index[index.date.between(history_start, asof)].sort_values("date")
+    calendar = sorted(set(index.date.astype(str)))
+    if not calendar or calendar[-1] != asof:
+        raise RuntimeError("MARKET_CALENDAR_UNAVAILABLE_OR_STALE")
+    index.to_csv(root / "market_calendar.csv", index=False)
+    calendar_evidence = {"source": "Yahoo ^TWII", "path": str(root / "market_calendar.csv"),
+                         "sha256": sha256(root / "market_calendar.csv"),
+                         "first": calendar[0], "last": calendar[-1], "sessions": len(calendar)}
+    session_set = set(calendar)
 
-    def refresh(symbol: str) -> tuple[str, bool, str | None]:
+    def refresh(symbol: str) -> tuple[str, bool, str | None, list[str]]:
         existing_path = source / f"{symbol}.csv"
         existing = pd.read_csv(existing_path) if existing_path.exists() else pd.DataFrame(columns=COLUMNS)
         existing = existing.loc[existing.date.astype(str).le(asof)].copy()
@@ -181,18 +191,23 @@ def refresh_yahoo_provider(config: dict, asof: str, run_id: str) -> dict[str, An
         merged = (pd.concat(parts, ignore_index=True)
                   if parts else pd.DataFrame(columns=COLUMNS))
         merged = merged.drop_duplicates(["symbol", "date"], keep="last")
+        outside = ~merged.date.isin(session_set)
+        removed_dates = merged.loc[outside, "date"].astype(str).tolist()
+        merged = merged.loc[~outside]
         merged = merged[list(COLUMNS)].sort_values("date").reset_index(drop=True)
         covered = asof in set(merged.date.astype(str))
         if not merged.empty:
             merged.to_csv(normalized / f"{symbol}.csv", index=False)
         # Futures retain their return value: never return an entire price frame.
-        return symbol, covered, error
+        return symbol, covered, error, removed_dates
 
     covered_symbols, errors = [], {}
+    removed = Counter()
     with ThreadPoolExecutor(max_workers=int(settings.get("workers", 8))) as executor:
         futures = [executor.submit(refresh, symbol) for symbol in symbols]
         for future in as_completed(futures):
-            symbol, covered, error = future.result()
+            symbol, covered, error, removed_dates = future.result()
+            removed.update(removed_dates)
             if covered:
                 covered_symbols.append(symbol)
             if error:
@@ -204,10 +219,12 @@ def refresh_yahoo_provider(config: dict, asof: str, run_id: str) -> dict[str, An
         "available_symbols": len(covered_symbols), "coverage": coverage,
         "minimum_coverage": minimum, "fetch_errors": errors,
         "missing_symbols": sorted(set(symbols) - set(covered_symbols)),
+        "market_calendar": calendar_evidence, "off_calendar_rows_removed": dict(sorted(removed.items())),
     })
     if coverage < minimum:
         raise RuntimeError(f"provider refresh coverage {coverage:.3f} below {minimum:.3f}")
-    info = _write_provider(normalized, provider)
+    info = _write_provider(normalized, provider, calendar)
     return {"status": "READY", "asof": asof, "run_id": run_id, "source_symbols": len(symbols),
             "available_symbols": len(covered_symbols), "coverage": coverage, "fetch_errors": errors, "provider": str(provider),
-            "selection_prices": str(normalized), "universe_file": str(provider / "instruments/all.txt"), **info}
+            "selection_prices": str(normalized), "universe_file": str(provider / "instruments/all.txt"),
+            "market_calendar": calendar_evidence, "off_calendar_rows_removed": dict(sorted(removed.items())), **info}

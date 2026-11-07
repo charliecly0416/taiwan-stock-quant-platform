@@ -29,7 +29,7 @@ def test_provider_binary_offsets_preserve_missing_days(tmp_path):
     prices("TW2330", ["2026-09-21", "2026-09-23"]).to_csv(source / "TW2330.csv", index=False)
     prices("TW2317", ["2026-09-22", "2026-09-23"]).to_csv(source / "TW2317.csv", index=False)
     output = tmp_path / "provider"
-    assert _write_provider(source, output)["symbols"] == 2
+    assert _write_provider(source, output, ["2026-09-21", "2026-09-22", "2026-09-23"])["symbols"] == 2
     assert np.fromfile(output / "features/tw2317/close.day.bin", dtype="<f4").tolist() == [1, 11, 11]
     values = np.fromfile(output / "features/tw2330/close.day.bin", dtype="<f4")
     assert values[0] == 0 and np.isnan(values[2]) and values[3] == 11
@@ -48,7 +48,8 @@ def test_refresh_uses_incremental_overlap_and_tolerates_one_failed_symbol(tmp_pa
     result = refresh_yahoo_provider(cfg, "2026-09-24", "test")
     assert result["coverage"] == .5 and result["symbols"] == 2
     assert result["fetch_errors"] == {"TW2317": "TimeoutError"}
-    assert {start for _, start in calls} == {"2026-08-10"}
+    assert {start for symbol, start in calls if symbol != "TWII"} == {"2026-08-10"}
+    assert ("TWII", "2015-01-01") in calls
 
 
 def test_adjustment_change_refreshes_whole_history(tmp_path, monkeypatch):
@@ -56,6 +57,7 @@ def test_adjustment_change_refreshes_whole_history(tmp_path, monkeypatch):
     prices("TW2330", ["2018-01-02", "2026-09-23"]).to_csv(source / "TW2330.csv", index=False)
     calls = []
     def fetch(symbol, start, asof, proxy):
+        if symbol == "TWII": return prices(symbol, ["2018-01-02", "2026-09-23", asof])
         calls.append(start)
         return prices(symbol, ["2018-01-02", "2026-09-23", asof] if start == "2015-01-01" else ["2026-09-23", asof], .5)
     monkeypatch.setattr("clean_product.provider_refresh._fetch", fetch)
@@ -68,9 +70,46 @@ def test_adjustment_change_refreshes_whole_history(tmp_path, monkeypatch):
 def test_insufficient_coverage_is_not_ready(tmp_path, monkeypatch):
     cfg = config(tmp_path); source = Path(cfg["provider_refresh"]["source_dir"])
     prices("TW2330", ["2026-09-23"]).to_csv(source / "TW2330.csv", index=False)
-    monkeypatch.setattr("clean_product.provider_refresh._fetch", lambda *a: pd.DataFrame(columns=COLUMNS))
+    monkeypatch.setattr("clean_product.provider_refresh._fetch", lambda symbol, *a:
+                        prices(symbol, ["2026-09-23", "2026-09-24"]) if symbol == "TWII"
+                        else pd.DataFrame(columns=COLUMNS))
     with pytest.raises(RuntimeError, match="coverage"):
         refresh_yahoo_provider(cfg, "2026-09-24", "test")
     import json
     report = json.loads((Path(cfg["artifact_root"]) / "provider_runs/test/refresh_report.json").read_text())
     assert report["coverage"] == 0 and report["missing_symbols"] == ["TW2330"]
+
+
+def test_index_calendar_removes_stock_bars_on_exchange_closure(tmp_path, monkeypatch):
+    cfg = config(tmp_path); source = Path(cfg["provider_refresh"]["source_dir"])
+    prices("TW2330", ["2026-10-22", "2026-10-23"]).to_csv(source / "TW2330.csv", index=False)
+    def fetch(symbol, *args):
+        return prices(symbol, ["2026-10-22", "2026-10-27"] if symbol == "TWII"
+                      else ["2026-10-23", "2026-10-27"])
+    monkeypatch.setattr("clean_product.provider_refresh._fetch", fetch)
+    result = refresh_yahoo_provider(cfg, "2026-10-27", "closure")
+    assert pd.read_csv(Path(result["selection_prices"]) / "TW2330.csv").date.tolist() == ["2026-10-22", "2026-10-27"]
+    assert (Path(result["provider"]) / "calendars/day.txt").read_text().splitlines() == ["2026-10-22", "2026-10-27"]
+    assert result["off_calendar_rows_removed"] == {"2026-10-23": 1}
+    assert result["coverage"] == 1
+    from clean_product.artifacts import sha256
+    assert sha256(Path(result["market_calendar"]["path"])) == result["market_calendar"]["sha256"]
+
+
+@pytest.mark.parametrize("dates", [[], ["2026-10-22"]])
+def test_missing_or_stale_index_blocks_before_stock_acquisition(tmp_path, monkeypatch, dates):
+    cfg = config(tmp_path); source = Path(cfg["provider_refresh"]["source_dir"])
+    prices("TW2330", ["2026-10-22"]).to_csv(source / "TW2330.csv", index=False)
+    def fetch(symbol, *args):
+        assert symbol == "TWII"
+        return prices(symbol, dates) if dates else pd.DataFrame(columns=COLUMNS)
+    monkeypatch.setattr("clean_product.provider_refresh._fetch", fetch)
+    with pytest.raises(RuntimeError, match="MARKET_CALENDAR_UNAVAILABLE_OR_STALE"):
+        refresh_yahoo_provider(cfg, "2026-10-27", "stale")
+
+
+def test_provider_rejects_rows_outside_independent_calendar(tmp_path):
+    source = tmp_path / "source"; source.mkdir()
+    prices("TW2330", ["2026-10-22", "2026-10-23"]).to_csv(source / "TW2330.csv", index=False)
+    with pytest.raises(RuntimeError, match="PROVIDER_NON_MARKET_DATE"):
+        _write_provider(source, tmp_path / "provider", ["2026-10-22", "2026-10-27"])

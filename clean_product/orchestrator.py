@@ -162,7 +162,7 @@ def _run_daily(asof: str | None = None, *, config_path: Path = CONFIG_PATH, dry_
     failed_datasets = {item["dataset"] for item in acquired if item["status"] != "READY"}
     history_days = []
     if publish and not dry_run:
-        count = max(1, min(5, int(config.get("daily", {}).get("history_sessions", 1))))
+        count = max(1, min(60, int(config.get("daily", {}).get("history_sessions", 1))))
         prior_days = [day for day in trading_days(config) if day < asof]
         history_days = sorted(set(
             (prior_days[-(count - 1):] if count > 1 else [])

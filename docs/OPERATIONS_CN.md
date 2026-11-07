@@ -19,6 +19,8 @@ journalctl --user -u clean-web -u clean-daily -u clean-health -u clean-backup -n
 
 台北工作日18:30、19:30、20:30运行 `clean-daily.timer`。指数实际交易日决定是否采集；休市记录 `NO_NEW_MARKET_SESSION`，不按自然日制造“新交易日”。全市场行情只用于流动性筛选，Model A评分150支，策略Top50；B影子资料不阻塞A。Yahoo 增量刷新依赖 `scrapling[fetchers]`，已固定在 `backend/requirements.txt` 和运行约束中；新环境必须通过 `pip check` 后才可启用 timer。
 
+provider 的完整交易日历也由独立 Yahoo `^TWII` 提供，保存于该次 `provider_runs/{run_id}/market_calendar.csv`，引用及摘要写入 `refresh_report.json`。指数缺失或未到目标日会阻塞；个股在非开市日期的记录会被剔除并按日期统计，不能用个股日期并集推断开市。年度休市表未必包含临时休市，审查时应对照指数与交易所实际成交日期。`daily.history_sessions` 默认2；经授权修复历史日历时可在单次运行配置中扩大至60个交易日，完成后仍使用默认配置。
+
 每次尝试先持久记录RUNNING；早期请求失败也记录BLOCKED及失败类型。定时与手动记录分开。发布生成完整独立release，通过后原子切换active.json，失败保留旧批次。
 
 Shadow 使用独立 `clean-shadow.timer`（台北工作日18:45、19:45、20:45）和 `clean-shadow.service`，绑定已发布的 Model A 批次；其失败、超时或同日重试都不阻塞 A。`daily.shadow_separate=true` 时主线只负责 Model A；shadow 入口是 `scripts/run_product.py shadow`，无需 `--publish`，不会切换主线 active.json。

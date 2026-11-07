@@ -143,3 +143,21 @@ def test_recovery_materializes_every_missing_session_in_one_inference(release_co
     effective = env_config(load_config(target))
     service = ProductService(effective)
     assert all(service._stored_signal("model_a", day).status == "READY" for day in expected)
+
+
+def test_explicit_history_window_rebuilds_published_dates_after_calendar_repair(release_config, monkeypatch):
+    cfg, target = release_config
+    days = ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24",
+            "2026-09-25", "2026-09-28", "2026-09-29", "2026-09-30"]
+    calendar = Path(cfg["model_stages"]["model_a_frozen"]["provider_uri"]) / "calendars/day.txt"
+    calendar.write_text("\n".join(days) + "\n")
+    cfg["daily"] = {"history_sessions": len(days)}
+    target.write_text(yaml.safe_dump(cfg))
+    def precompute(self, dates, *, data, **kwargs):
+        data["__model_a_signals"] = {day: pd.DataFrame([
+            {"date": day, "instrument": "TW2330", "score": .25, "rank": 1}
+        ]) for day in dates}
+    monkeypatch.setattr("clean_product.models.ModelRunner.precompute", precompute)
+    result = run_daily(days[-1], config_path=target, local_only=True, publish=True)
+    assert result["status"] == "READY"
+    assert [item["asof"] for item in result["history_signals"]] == days[:-1]
