@@ -44,6 +44,6 @@ python scripts/verify_tw_stock_research_stack.py
 TW_CLEAN_FRONTEND_URL=http://127.0.0.1:8000 python scripts/accept_clean_frontend.py
 ```
 
-本机发布验收必须使用真实服务端口。`--serve-build` 只用于开发隔离验证。浏览器可保存截图文件，但当前会话禁止 view_image 或把图片传入模型；阅读 DOM、网络和控制台 JSON，人工视觉审查如未执行须写明。
+本机发布验收必须使用真实服务端口。`--serve-build` 只用于开发隔离验证。用户已重新允许 view_image，可结合截图视觉检查及 DOM、网络和控制台 JSON 验收；区分自动检查与实际执行的截图视觉审查，不将旧的“未审图”证据改写为已完成。
 
 当前正式部署使用原生 Python + systemd，独立运行目录由systemctl查询；升级时不要误操作源码checkout的旧数据。健康检查、去重备份、恢复及部署入口见运维手册，功能对应见 [替代清单](CLEAN_REPLACEMENT_CN.md)。定制台湾 Qlib wheel 与冻结模型是运行依赖；Docker 构建、远端大模型调用和旧账户迁移不在当前已验收范围。

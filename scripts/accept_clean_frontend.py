@@ -92,10 +92,11 @@ def main() -> int:
     fixture_checks = {}
     comparison_checks, navigation_checks = {}, {}
     paper_checks = {}
+    overview_checks = {}
     mocked_paper_requests = set()
     fixture_replay = commission_replay_fixture()
     historical_comparison = canonical_comparison_case()
-    viewports = {"desktop": (1440, 1000), "tablet": (820, 1100), "mobile": (390, 844)}
+    viewports = {"desktop": (1440, 1000), "laptop": (1100, 1000), "tablet": (820, 1100), "mobile": (390, 844)}
 
     def received(response):
         network.append({"method": response.request.method, "url": response.url, "status": response.status,
@@ -158,6 +159,7 @@ def main() -> int:
         assert layout['content_characters'] > 0, "blank main view"
         assert not layout['controls_outside_viewport'], "form controls outside viewport"
         assert layout['readonly_boundary_visible'], "missing readonly boundary"
+        page.evaluate('window.scrollTo(0, 0)')
         page.screenshot(path=str(OUTPUT / f"{viewport}_{view}.png"), full_page=True)
 
     with sync_playwright() as playwright:
@@ -175,6 +177,21 @@ def main() -> int:
                 try:
                     page.goto(BASE_URL, wait_until="networkidle")
                     page.locator('.cross-panel').wait_for(timeout=30000)
+                    intents = page.locator('.strategy-panel .intent-list article')
+                    total = intents.count()
+                    if total > 8:
+                        assert page.locator('.strategy-panel .intent-list article:visible').count() == 8
+                        details = page.locator('.intent-details')
+                        details.locator('summary').click()
+                        assert page.locator('.strategy-panel .intent-list article:visible').count() == total
+                        details.locator('summary').click()
+                        assert page.locator('.strategy-panel .intent-list article:visible').count() == 8
+                    date_layout = page.locator('.metric-date').evaluate('''element => {
+                        const range = document.createRange(); range.selectNodeContents(element);
+                        return {lines: range.getClientRects().length, fits: element.scrollWidth <= element.clientWidth};
+                    }''')
+                    assert date_layout['lines'] == 1 and date_layout['fits'], 'daily date wraps or overflows'
+                    overview_checks[name] = {'passed': True, 'intent_count': total, 'date_layout': date_layout}
                     if page.locator('.cross-panel tbody tr').count():
                         technical_cells = page.locator('.cross-panel tbody tr').first.locator('td')
                         for index in (2, 3, 4):
@@ -404,7 +421,7 @@ def main() -> int:
     failed = [item for item in network if item['status'] >= 400]
     overflow = any(view['overflow_x'] for views in checks.values() for view in views.values())
     complete = all(len(views) == 7 for views in checks.values())
-    ui_passed = (complete and len(fixture_checks) == len(comparison_checks) == len(navigation_checks) == len(paper_checks) == len(viewports)
+    ui_passed = (complete and len(fixture_checks) == len(comparison_checks) == len(navigation_checks) == len(paper_checks) == len(overview_checks) == len(viewports)
                  and not (failures or forbidden or failed or failed_requests or console_errors or page_errors or overflow))
     source_files = sorted({str(path.relative_to(ROOT))
                            for pattern in ('clean_product/*.py', 'backend/app/**/*.py', 'configs/product.yaml',
@@ -412,14 +429,15 @@ def main() -> int:
                                            'scripts/accept_clean_frontend.py', 'scripts/verify_clean_product.py')
                            for path in ROOT.glob(pattern) if path.is_file()})
     summary = {
-        "base_url": BASE_URL, "scope": "seven_views_all_three_viewports", "ui_passed": ui_passed,
+        "base_url": BASE_URL, "scope": "seven_views_all_viewports", "ui_passed": ui_passed,
         "passed": ui_passed and not gaps, "release_acceptance": "NOT_EVALUATED",
         "checks": checks, "failures": failures, "business_gaps": gaps,
         "nonblocking_business_gaps": nonblocking_gaps,
         "fixture_replay_checks": fixture_checks,
         "historical_comparison_checks": comparison_checks, "navigation_race_checks": navigation_checks,
         "paper_fixture_checks": paper_checks,
-        "visual_review": "NOT_PERFORMED", "layout_verification": "DOM geometry and content assertions",
+        "overview_checks": overview_checks,
+        "visual_review": "MANUAL_VIEW_IMAGE_SEPARATE_AUDIT", "layout_verification": "DOM geometry and content assertions",
         "forbidden_request_count": len(forbidden), "failed_response_count": len(failed),
         "failed_request_count": len(failed_requests),
         "console_error_count": len(console_errors), "page_error_count": len(page_errors),
