@@ -1,64 +1,85 @@
 # 当前主线验收
 
-更新时间：2026-09-28 15:13 UTC。**Model A clean 已成为GitHub默认主线并接管正式5000/8000服务；本轮完成独立环境恢复、部署和持续运维接入，可用于当前研究产品及面试展示。** 验收不等于所有历史实验入口等价，也不承诺投资收益或未来零故障。
+更新时间：2026-11-07（UTC）。**clean Model A 已完成停更区间补齐、真实交易日历修复及正式部署，当前研究功能可用；历史自动采集曾连续失败，不能称为全自动链路已长期稳定。** 下一个新增交易日的正式定时验收尚待真实触发。
 
-## 运行版本与入口
+## 当前运行状态
 
-- GitHub默认分支：`product-clean`；旧main保留，`legacy-main-20260928`固定切换前版本。
-- 已部署代码：`a454b29431b6322092ba2fffb0dc81d32c5f0d8d`；稳定版本 `clean-v1.0.0` 对应该代码，后续文档提交不改变运行代码。
-- 正式目录：`~/.local/share/tw-stock-clean/releases/clean-20260928-ops`，独立venv；源码checkout仍用于开发。实际目录以systemd WorkingDirectory为准。
-- 两个端口均HTTP200 / ready=true；基线为Model A `e4_frozen_qlib_2018_2022`，策略Top50 / exit one worst / next_open。
-- 当前asof为2026-09-24，release为 `2026-09-24-2026-09-28T15:08:47.300926+00:00-68d2cad4`。9月24日与9月23日各150条信号，恢复前后排名、分数和各rank字段完全相同。
-- 当前维护状态OK、alerts为空。Web、daily.timer、health.timer、backup.timer均active且enabled。服务切换后NRestarts=0。
+- GitHub 仓库已公开，默认分支为 `product-clean`；旧主线保留在 `legacy-main-20260928`。
+- 已部署代码：`70fc35c70ca33c68c126d958a6921a8d8f221b83`；后续验收文档提交不改变运行代码。原 `clean-v1.0.0` 标签只代表9/28版本。
+- 正式目录：`~/.local/share/tw-stock-clean/releases/clean-20261107-audited`，独立 venv；于11/7 06:33 UTC切换。Web、daily、shadow、health、backup 的 WorkingDirectory 均已核对。
+- 正式5000/8000均 HTTP 200、ready=true，最新数据为2026-11-06。Web active，切换后 NRestarts=0。
+- 当前 A 批次：`2026-11-06-2026-11-07T06:31:17.718053+00:00-abd51c82`。
+- 唯一 baseline：Model A `e4_frozen_qlib_2018_2022`；策略 `top50_exit_one_worst_sell`；执行 `next_open`。
+- B19R2R 已手动完成同一 A 批次的11/6特征与50支重排，状态 READY；仍为 `production_allowed=false`、`mainline_blocking=false`、`no_apply=true`。
 
-## 本轮检查与证据
+## 停更区间、连续性与底层修复
 
-证据目录：`tmp/clean_operations_20260928/`，保留本机，不提交市场数据、模型、账本或token。
+对10/8–11/6的22个工作日共66条 scheduled 记录审查发现：没有漏触发，但只有1次完整发布、5次无新交易日跳过，另有48次 SSL 失败和12次刷新异常。10/12起没有持续成功更新。本次恢复明确记录为 manual，未清空或改写历史 scheduled 记录。
 
-| 检查 | 结果 | 证据文件 |
-| --- | --- | --- |
-| Python全套 | 195 passed | pytest.log |
-| 前端Node | 12 passed | node.log |
-| Vite生产构建 | PASS；JS约30.18KB，CSS约13.86KB（未压缩） | build.log |
-| ARCH-1 | PASS | arch1.json；deployed_arch1.json |
-| M3日更合同 | PASS；24个focused tests | m3.json |
-| 模块合同 | PASS；70个focused tests | modules.json |
-| 真实资料stack | 源码与部署目录均PASS | stack.json；deployed_stack.json |
-| 正式8000浏览器 | 七页 × 桌面/平板/手机PASS | frontend/summary.json |
-| 新增运维面板 | 三视口均显示OK，无水平溢出 | live_runtime.json |
-| 独立恢复和新venv启动 | 15,773文件恢复；依赖检查、构建、150排名、Agent通过 | prepare.json；部署目录deployment.log |
-| 结果一致性 | 两个交易日排名和分数逐字段完全相同 | restored_signal_comparison.json |
-| 模拟账本连续性 | 全部表结构和数据一致，SQLite integrity_check=ok | ledger_continuity.json |
-| 正式切换 | READY；当前目录变更已核对 | activate.json；live_runtime.json |
-| 真实备份和健康service | 备份READY；health OK，无告警 | live_operations.json |
-| 部署失败恢复 | fixture通过：旧units/Web恢复；拒绝过时备份 | test_clean_deployment.py |
-| GitHub CI | 运行36441229360成功，对应已部署提交 | clean-product workflow |
+另发现Shadow历史缓存按日期与股票合并多个A批次，导致个别日期出现151–152条。已改为按日期整批替换、当前active批次优先，只保留有效150条与实际开市日期；新增竞争批次和不完整缓存回归验证。
 
-Python/模块测试使用fixtures与隔离输出。stack为真实数据smoke与数值不变量检查；浏览器脚本自身 `release_acceptance=NOT_EVALUATED`，上线判断综合实际恢复、部署、API与浏览器证据，未把单个脚本当成所有发布条件的证明。
+独立对照证交所实际成交记录与 Yahoo `^TWII` 发现，10/23实际没有交易，却被旧 provider 的个股日期并集混入。仅检查年度休市表不足以发现这个问题。已修复为独立指数日历：保存原始交易日期、剔除非开市个股记录、拒绝非日历输入；指数未到目标日则阻塞发布。
 
-## 前端、Agent和只读边界
+已按修正后的日历重建10/12–11/6的 **18个交易日**（不是19天），每个交易日150条信号，共2,700条。正式接口已验证10/23返回 BLOCKED，10/27的排名变化正确对比10/22。恢复配置仅单次扩大历史窗口，正式 `daily.history_sessions` 仍为2。
 
-七页内容完整，console error、page error、失败响应、失败请求和禁止请求均为0。覆盖排名、Top30/50、排名变化、行情指标、回放、比较、Agent、系统页。已验证DOM内容和几何布局；截图仅在本地保存，**未调用view_image，未将图片传入模型；人工像素视觉复核未执行**。
+这些历史信号由本次保存的修正行情和原冻结模型补算，属于事后重建，不能冒充当日实时发布、当时已观察到的预测或定时成功证据。
 
-模拟账户的浏览器动作在本轮使用fixture，覆盖预览、确认、历史和token不持久化；本轮部署则实际复制并核对现有clean账本全部表与数据，没有写用户账户。此前同日真实API及浏览器模拟账户闭环证据保留在 `tmp/clean_mainline_20260928/`，不把它冒充本轮重新执行。
+| 检查 | 本轮结果 |
+| --- | --- |
+| 行情覆盖 | 1,986支来源，11/6有效1,963支，覆盖率98.84%；本次抓取异常为0 |
+| CSV结构 | 5,111,734行；键重复、乱序、日历外记录检查通过；近期OHLCV检查通过 |
+| 区间连续性 | 没有发现区间内部缺口；逐日150候选均有当天价格；23支长期无新行情标的不在当日150候选中 |
+| Qlib行情对照 | 261,079个近期二进制数值与标准CSV一致 |
+| 候选选择 | 18日保存集合与按当日数据重新筛选的150候选一致 |
+| 独立重算 | 2,700条分数排名全部一致，最大分数误差约9.95e-17 |
+| 正式API | 18日各150条排名与文件一致；分数差在JSON序列化精度内 |
+| 独立市场对照 | 18个实际交易日期与证交所一致；2308同期72个OHLC值核对通过 |
+| 回放账本 | 18日回放READY；82笔模拟交易；独立Decimal核算next_open、费用、Top50规则和NAV通过 |
 
-Agent通过后端simple-chat读取已验证每日产物，默认本地解释。未读取.env、未调用远端OpenAI、未调用券商或真实订单。比较页维持no_apply。导航竞态测试的三个 `isolated_navigation_case` 是刻意注入的fixture，非线上资料缺口；历史比较渲染亦有明确fixture标记。
+## 中间产物保存边界
 
-## 运维、备份与恢复
+当前批次目录为 `data_tw/product/artifacts/releases/{run_id}`，不是源码checkout中的旧数据目录。最终部署沿用本次已验证的行情provider，具体路径以active.json的provider/selection_prices字段为准，可引用同运行目录内之前的不可变采集批次；信号、意图和Agent位于当前A批次。
 
-- 真实切换于2026-09-28 15:11 UTC完成。原目录保留，未删除旧源码、资产或缓存。
-- 首份恢复快照为 `~/.local/state/tw-stock-clean/backups/snapshots/20260928T145100-df0adcdf/manifest.json`，其旁 `restore-verification.json` 记录真实恢复PASS。
-- 新运行目录的备份service已成功执行，最新快照 `20260928T151119-ab8e5594`，15,775文件、约869MB逻辑数据。静态内容去重存储。
-- 健康检查每10分钟；备份每日台北04:00；日更工作日台北18:30、19:30、20:30。所有timer已启用，不能将“启用”当作已长期运行的证据。
-- 2026-09-28 12:30 UTC的真实scheduled记录为 `NO_NEW_MARKET_SESSION`。下一次日更计划2026-09-29 10:30 UTC；下一新增交易日完整scheduled采集发布需等待真实触发，尚未宣称通过。
-- 升级使用指定Git版本 + 当前资产快照；prepare先验证，activate同步最新账本并切换服务。自动失败恢复通过fixture测试，未人为破坏生产来制造故障演习。
+| 层 | 实际保存或计算方式 |
+| --- | --- |
+| 原始标准行情 | `provider_runs/{run_id}/normalized/TW*.csv`；保留完整可用历史 |
+| 交易日历 | 同次 `market_calendar.csv` 与 provider 的 `calendars/day.txt`；refresh报告引用来源与摘要 |
+| Qlib行情provider | 同次 `provider/features/` 二进制OHLCV等行情字段；这不是Alpha158特征矩阵 |
+| Model A分数 | `signals/model_a/{asof}/signals.csv` 与manifest；本次恢复18日全部落盘，含分数和rank字段 |
+| 策略意图 | `intents/model_a/{asof}`；本次仅物化最终11/6，其他历史策略可由信号按需计算 |
+| Agent每日上下文 | `agent_daily_prompt/2026-11-06`；本批次没有逐日补建历史问答，历史simple-chat会明确返回不可用 |
+| Alpha158矩阵 | 不逐日保存大矩阵；保留行情、日历、冻结模型和配置，可重新计算；本轮已重算比对 |
+| B19R2R | 独立 `shadow/{run_id}` 保存来源输入、78F delta、50支分数与manifest；shadow_active绑定同一A批次 |
+| 运维证据 | daily运行、manual/scheduled状态、备份与health分别保留 |
 
-## 范围与后续条件
+## 软件、接口与前端验收
 
-- B19R2R仍是影子研究模型，production_allowed=false、mainline_blocking=false；新日期78F资料不足不阻塞A。
-- 旧登录、旧账户尚未迁移；现有clean账本已保留。功能保留与替代关系见 [替代清单](CLEAN_REPLACEMENT_CN.md)，不会悄悄恢复自由订单等范围外入口。
-- 私有GitHub仓库的分支保护被套餐限制拒绝（HTTP403）；CI正常执行，但服务器强制合并门禁尚不可用。没有将仓库公开。
-- 告警目前为系统页和journal；备份位于同机仓库外，尚无外部消息渠道和异地存储。30天/至少7份是归档计划，不会自动删除共享对象。
-- Docker、远端大模型调用、公网域名/HTTPS、长时间soak和下一新增交易日完整定时流程未验收。正式部署使用本机Python/systemd，不依赖这些可选路径。
+证据位于仓库外 `~/.local/state/tw-stock-clean/audits/continuity-20261107/`，独立行情、分数与回放核算在 `after-calendar-fix/`，最终部署验收在 `final/`。`final/lineage_validation.json`逐文件证明最终版13,904个provider文件、1,986份行情及18日分数排名与独立验算批次一致，因此沿用同一组A回放证据；Shadow历史另行重建，124个实际交易日每天均为150条，并独立复算最终50条B分数。修复前文件只用于问题溯源，不替代修复后结果；不提交行情、模型、账本或凭据。
 
-面试操作见 [演示路线](INTERVIEW_DEMO_CN.md)，模块串联见 [架构](ARCHITECTURE_CN.md)，后续升级和故障恢复见 [运维](OPERATIONS_CN.md)。
+| 检查 | 本轮结果 / 证据 |
+| --- | --- |
+| 前端Node | 12 passed；`node-final.log` |
+| Python全套 | 226 passed，1条pandas FutureWarning；`pytest-shadow-history-fix.log` |
+| M3 / 模块合同 / ARCH-1 | PASS；M3 50 tests，模块73 tests；三项JSON为审查根目录的m3-shadow-history-fix、modules-shadow-history-fix、arch1-shadow-history-fix |
+| 新环境依赖与前端构建 | pip check、pnpm install --frozen-lockfile、pnpm build通过；正式目录 `deployment.log` |
+| 真实数据stack | PASS；`final/stack.json` |
+| 分数、回放及市场独立核对 | `after-calendar-fix/`内audit、score_recomputation、replay_ledger_validation、independent_market_validation JSON |
+| 正式API及Shadow绑定 | PASS；`final/live_continuity.json` |
+| 正式8000浏览器 | 七页×桌面/平板/手机PASS；`final/frontend/summary.json` |
+| GitHub代码CI | success；[run 42347140317](https://github.com/charliecly0416/taiwan-stock-quant-platform/actions/runs/42347140317) |
+
+浏览器检查覆盖排名、变化、行情、回放、比较、Agent和系统页，失败响应、失败请求、禁止请求、console/page错误均为0，DOM几何无水平溢出。截图仅保存，未使用view_image，人工像素视觉复核未执行。浏览器模拟账户写操作由fixture拦截，没有写用户账户；部署使用SQLite backup复制账本并通过integrity_check。导航竞态与历史比较fixture有独立标记，不冒充真实数据证明。按只读E2E技能核对网络、控制台和交互证据。
+
+当前Agent默认读取已验证每日产物作本地解释；没有调用远端模型。单个stack/浏览器脚本自身仍标记 `release_acceptance=NOT_EVALUATED`，上表综合真实数据、部署和独立核算记录本轮结果。
+
+## 运维与仍需观察的范围
+
+- 11/7新备份 `~/.local/state/tw-stock-clean/backups/snapshots/20261107T063402-89968427/manifest.json` 已验证16,386个文件，含修复后的当前数据、Shadow和一致性模拟账本。证据为 `final/backup-verification.json`；旧运行目录与旧资产保留。
+- Clash按其官方clashctl入口检查，Yahoo使用free节点；订阅每60分钟更新。未直接切断服务或留下悬空代理变量。
+- timers均启用。A下次计划11/9台北18:30、19:30、20:30；Shadow为18:45、19:45、20:45。health每10分钟、备份台北04:00。
+- 最新health仍为CRITICAL，唯一告警 `SCHEDULED_DAILY_FAILED` 指向历史正式调度失败；Web ready与手动恢复成功不会抹除它。下一交易日真实触发后需分别检查A完整发布及Shadow结果，不能用周末NO_NEW或手动重试替代。
+- 10/12–11/6回放累计收益 **-30.90%**、最大回撤 **-31.51%**、手续费约NT$3,304。同期官方指数收盘变动约-19.47%，与策略next_open含费用口径不同，不能直接当作严格超额收益；当前结果不能支持“近期效果好”的结论。
+- 当前Agent问答可用，但本批次历史每日prompt/intent未全部物化；如需历史问答档案，应作为明确补建任务，不能动态伪装为已存产物。
+- 旧登录与旧账户迁移、远端大模型、公网HTTPS、Docker、异地备份及长期soak未在本轮新增验收。系统为只读研究与simulation-only账户，比较页保持no_apply。
+
+面试展示见 [演示路线](INTERVIEW_DEMO_CN.md)，后端串联见 [架构](ARCHITECTURE_CN.md)，运维入口见 [运维](OPERATIONS_CN.md)，功能范围见 [替代清单](CLEAN_REPLACEMENT_CN.md)。9/28首发与10月阶段记录保留于Git历史和既有文档，不覆盖本页当前状态。

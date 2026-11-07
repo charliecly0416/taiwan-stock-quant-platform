@@ -9,7 +9,9 @@
 3. `configs/product.yaml`、active_baseline_descriptor、tw_modular_registry、tw_product_artifact_registry、tw_replay_window_policy。
 4. `clean_product/` 和 `backend/app/routes/`；前端 `frontend/src/`。
 
-最近部署为 `9c63923`（2026-10-11）：同一 A 批次的有效 Shadow 直接复用，失败或新批次继续执行。详见 [Shadow 部署验收](SHADOW_REFILL_DEPLOYMENT_20261008_CN.md)。10/8 晚间正式定时已 PASS；10/11 的 systemd 验证为手动安排，正式工作日调度继续使用原有 timers。
+最近部署代码为 `70fc35c70ca33c68c126d958a6921a8d8f221b83`（2026-11-07），运行目录 `~/.local/share/tw-stock-clean/releases/clean-20261107-audited`，数据截至11/6。已修复Shadow历史跨批次残留候选，以及个股非交易日混入provider的问题，以保存的独立Yahoo ^TWII日历约束行情。10/12–11/6正确为18个交易日，2,700条A分数已保存、独立重算并核对正式API；11/6的B19R2R特征与50条分数也已手动恢复并绑定同一A批次。详见 [当前验收](MAINLINE_ACCEPTANCE_CN.md)。
+
+10/12起历史scheduled连续失败，恢复为manual；目前health保留 `SCHEDULED_DAILY_FAILED` 告警，不能因ready=true而宣称全自动连续成功。下一次正式日更计划11/9台北18:30，Shadow18:45，分别有两次晚间重试。待真实触发后检查完整发布，不能手动伪造scheduled结果。审查证据在仓库外 `~/.local/state/tw-stock-clean/audits/continuity-20261107/final/`。
 
 ## 不能改变的产品边界
 
@@ -19,9 +21,10 @@
 
 ## 当前实现
 
-- 全市场 Yahoo 行情接入唯一日更流程，增量刷新、复权修订回补、流式 Qlib provider。全市场只用于候选筛选；Model A 当日实际排名为 150 支，策略为 Top50。
+- 全市场 Yahoo 行情接入唯一日更流程，增量刷新、复权修订回补、独立指数交易日历、流式 Qlib provider。全市场只用于候选筛选；Model A 当日实际排名为150支，策略为Top50。
 - 每次发布生成独立 release，完整性通过后原子切 active.json；同日重跑不覆盖旧信号和问答。日更锁防并发，失败保留旧批次。
-- 发布时物化当日与前一交易日信号，榜单变化和模拟账户可消费；selection_universe 使用 provider 实际生命周期，避免旧桥接文件缺日期。
+- 默认发布物化当日与前一交易日信号，榜单变化和模拟账户可消费；历史修复可通过单次配置扩大至60交易日，正式默认仍为2。selection_universe使用provider实际生命周期。历史补算属于事后重建。
+- 保存标准行情、日历、Qlib行情二进制、分数及manifest；Alpha158大矩阵按冻结配置重建。本次18日恢复只物化最终日Agent上下文与策略意图，不冒称历史问答完整。
 - requests 只读本地数据，按标的读取行情，排名优先读已物化产物。
 - 系统页展示模块串联与运行批次。运维区分 manual、scheduled、NO_NEW_MARKET_SESSION；定时器启用不等于完整定时采集成功。
 
