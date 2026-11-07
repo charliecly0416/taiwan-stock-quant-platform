@@ -200,13 +200,45 @@ def test_history_cache_never_overwrites_published_baseline_signal(tmp_path):
     write_json(source / 'manifest.json', manifest(artifact_type='ModelSignalArtifact', status='READY', asof='2026-05-08', run_id='a', files={'signals': filename}, canonical_id='A'))
     frozen = tmp_path / 'frozen.parquet'; prior.assign(date='2026-05-07').to_parquet(frozen)
     cfg = {'_artifact_store': store, '_shadow_calendar': ['2026-05-07', '2026-05-08', '2026-05-11'],
+           '_active_release': {'artifact_root': str(store / 'releases/a')},
            'models': {'model_a': {'canonical_id': 'A'}}, 'model_stages': {'b19r2r_frozen': {'historical_features': str(frozen)}}}
     current = prior.assign(date='2026-05-11')
+    # A competing release changed the final candidate. Its extra symbol must
+    # not leak into the active session through either persisted files or cache.
+    competing = prior.copy(); competing.loc[149, 'instrument'] = 'TW9999'
+    other = store / 'releases/z/signals/model_a/2026-05-08'; other.mkdir(parents=True)
+    competing.to_csv(other / 'signals.csv', index=False)
+    write_json(other / 'manifest.json', manifest(artifact_type='ModelSignalArtifact', status='READY',
+        asof='2026-05-08', run_id='z', files={'signals': other / 'signals.csv'}, canonical_id='A'))
+    pd.concat([prior, competing.iloc[[-1]], prior.assign(date='2026-05-09')], ignore_index=True).to_parquet(cache / 'model_a_history.parquet')
     _history(cfg, current, cache)
     _history(cfg, current, cache)
     assert filename.read_bytes() == before
     history = pd.read_parquet(cache / 'model_a_history.parquet')
     assert len(history) == 300 and history.date.nunique() == 2
+    pd.testing.assert_frame_equal(history[history.date.eq('2026-05-08')].reset_index(drop=True), prior)
+
+
+def test_incomplete_shadow_history_cache_is_recomputed(tmp_path, monkeypatch):
+    from clean_product.shadow import _history
+    cache = tmp_path / 'cache'; cache.mkdir()
+    rows = pd.DataFrame([{'date': '2026-05-08', 'instrument': f'TW{1000+i}',
+                          'score': float(150-i), 'rank': i+1} for i in range(150)])
+    rows.iloc[:149].to_parquet(cache / 'model_a_history.parquet')
+    frozen = tmp_path / 'frozen.parquet'; rows.assign(date='2026-05-07').to_parquet(frozen)
+    cfg = {'_artifact_store': tmp_path / 'artifacts',
+           '_shadow_calendar': ['2026-05-07', '2026-05-08', '2026-05-11'],
+           'model_stages': {'b19r2r_frozen': {'historical_features': str(frozen)}}}
+    calls = []
+    class Runner:
+        def __init__(self, config): pass
+        def precompute(self, days, *, data):
+            calls.extend(days); data['__model_a_signals'] = {'2026-05-08': rows}
+    monkeypatch.setattr('clean_product.shadow.ModelRunner', Runner)
+    _history(cfg, rows.assign(date='2026-05-11'), cache)
+    assert calls == ['2026-05-08']
+    history = pd.read_parquet(cache / 'model_a_history.parquet')
+    assert history.groupby('date').size().eq(150).all()
 
 
 def test_current_shadow_gate_reaches_api_without_affecting_baseline(tmp_path):

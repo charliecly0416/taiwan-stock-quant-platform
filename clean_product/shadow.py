@@ -25,13 +25,25 @@ def _history(config, current, cache):
     frozen = pd.read_parquet(path(stage['historical_features']), columns=['date', 'instrument'])
     end = frozen.date.astype(str).str[:10].max()
     filename = cache / 'model_a_history.parquet'
-    history = pd.read_parquet(filename) if filename.exists() else pd.DataFrame(columns=['date', 'instrument', 'score', 'rank'])
+    cached = pd.read_parquet(filename) if filename.exists() else pd.DataFrame(columns=['date', 'instrument', 'score', 'rank'])
     asof = str(current.date.iloc[0])
     days = [day for day in config['_shadow_calendar'] if end < day < asof]
+    history = {}
+    for day, rows in cached.groupby('date'):
+        if day not in days or len(rows) != 150:
+            continue
+        try:
+            validate_signal_rows(rows, day)
+        except ValueError:
+            continue
+        history[day] = rows[['date', 'instrument', 'score', 'rank']]
     # Preserve rankings already published by A. Recompute only dates for which
-    # no immutable daily signal exists (the one-time historical gap).
-    published = []
-    for manifest_path in sorted(config['_artifact_store'].glob('releases/*/signals/model_a/*/manifest.json')):
+    # no complete daily signal exists. Replace whole sessions, never union
+    # candidates from competing releases; the active release takes precedence.
+    active_root = Path(config.get('_active_release', {}).get('artifact_root', ''))
+    manifests = sorted(config['_artifact_store'].glob('releases/*/signals/model_a/*/manifest.json'),
+                       key=lambda item: (active_root in item.parents, str(item)))
+    for manifest_path in manifests:
         metadata = json.loads(manifest_path.read_text())
         day = metadata.get('asof')
         if day not in days or metadata.get('status') != 'READY':
@@ -42,22 +54,20 @@ def _history(config, current, cache):
         verify_file(signal_file, metadata['files']['signals']['sha256'])
         rows = pd.read_csv(signal_file)
         validate_signal_rows(rows, day)
-        published.append(rows[['date', 'instrument', 'score', 'rank']])
-    if published:
-        history = pd.concat(([history] if not history.empty else []) + published, ignore_index=True).drop_duplicates(['date', 'instrument'], keep='last')
-    missing = sorted(set(days) - set(history.date))
+        if len(rows) == 150:
+            history[day] = rows[['date', 'instrument', 'score', 'rank']]
+    missing = sorted(set(days) - set(history))
     if missing:
         data = {}
         ModelRunner(config).precompute(missing, data=data)
-        frames = []
         for day in missing:
             rows = data['__model_a_signals'].get(day)
             if rows is None or len(rows) != 150:
                 raise ModelBlocked('B19R2R_MODELA_HISTORY_INCOMPLETE', day)
-            frames.append(rows[['date', 'instrument', 'score', 'rank']])
-        history = pd.concat([history, *frames], ignore_index=True)
-    history = pd.concat([history, current[['date', 'instrument', 'score', 'rank']]], ignore_index=True)
-    history = history.drop_duplicates(['date', 'instrument'], keep='last').sort_values(['date', 'rank'])
+            validate_signal_rows(rows, day)
+            history[day] = rows[['date', 'instrument', 'score', 'rank']]
+    history[asof] = current[['date', 'instrument', 'score', 'rank']]
+    history = pd.concat(list(history.values()), ignore_index=True).sort_values(['date', 'rank'])
     temporary = filename.with_suffix('.tmp.parquet')
     history.to_parquet(temporary, index=False); temporary.replace(filename)
     config['_shadow_history'] = str(filename)
