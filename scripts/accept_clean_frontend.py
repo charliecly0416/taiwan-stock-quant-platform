@@ -437,7 +437,7 @@ def main() -> int:
         "historical_comparison_checks": comparison_checks, "navigation_race_checks": navigation_checks,
         "paper_fixture_checks": paper_checks,
         "overview_checks": overview_checks,
-        "visual_review": "MANUAL_VIEW_IMAGE_SEPARATE_AUDIT", "layout_verification": "DOM geometry and content assertions",
+        "visual_review": "NOT_PERFORMED", "layout_verification": "DOM geometry and content assertions",
         "forbidden_request_count": len(forbidden), "failed_response_count": len(failed),
         "failed_request_count": len(failed_requests),
         "console_error_count": len(console_errors), "page_error_count": len(page_errors),

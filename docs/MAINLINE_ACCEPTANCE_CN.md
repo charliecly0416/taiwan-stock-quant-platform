@@ -28,11 +28,17 @@ A 与 A+B 的查询、排名变化、比较和回放已平行提供，首页各�
 
 B在此短区间没有优于A，功能平行不代表模型效果提升。两侧API结果均与独立回放核验一致。
 
-本次证据位于 `~/.local/state/tw-stock-clean/audits/parallel-history-20261107/`：239项Python测试、13项Node测试、前端构建、M3/模块合同/ARCH-1通过；真实运行配置的stack通过。源码checkout保留旧忽略资产，最初直接运行stack命中了旧批次并失败，未据此改写或重建它；正式配置复验为PASS。隔离及正式36次排名查询、成对回放通过；桌面、笔记本、平板和手机的新历史流程及七页浏览器检查通过，错误/禁止请求/横向溢出均为0。截图已通过 `view_image` 进行人工视觉复核，确认首页意图列表已折叠、日期不换行、各主要面板无空白或重叠。
+本次证据位于 `~/.local/state/tw-stock-clean/audits/parallel-history-20261107/`：239项Python测试、13项Node测试、前端构建、M3/模块合同/ARCH-1通过；真实运行配置的stack通过。源码checkout保留旧忽略资产，最初直接运行stack命中了旧批次并失败，未据此改写或重建它；正式配置复验为PASS。隔离及正式36次排名查询、成对回放通过；桌面、平板和手机的新历史流程及七页浏览器检查通过，错误/禁止请求/横向溢出均为0。当时浏览器脚本保存截图，截图视觉复核和后续响应式修复另见下节。
 
 部署未改六个active/Shadow/日更状态指针、冻结模型或模拟账户。最终采用原正式目录的代码补丁，旧代码在仓库外备份并验证恢复；临时代码目录已退出服务，所有units仍指向原正式目录，以保持既有备份资产边界。
 
 含两轨历史的新备份 `~/.local/state/tw-stock-clean/backups/snapshots/20261107T103404-e2a442dd/manifest.json` 已验证16,500个文件；`backup-final.json` 与 `backup-verification.json` 保存证据。
+
+## 前端截图视觉复核（11/7）
+
+证据位于 `~/.local/state/tw-stock-clean/audits/frontend-visual-20261107/`，独立报告为 `VISUAL_REVIEW_CN.md`。使用 `view_image` 复核正式服务最终四种尺寸的七页截图，并查看手机比较页和桌面首页下部细节；未发现明显文字重叠或主要面板意外空白。已修复首页50条意图默认全部展开造成的留白（默认8条，可展开全部50条）、最近日更日期断行，以及1051–1100像素窗口统计栏横向溢出。
+
+`final-live/summary.json` 记录桌面、1100像素笔记本、平板和手机共28个页面检查通过，失败/禁止请求及控制台错误均为0；`final-history/summary.json` 记录正式两轨历史流程通过。自动脚本只检验DOM、交互与网络，输出 `visual_review=NOT_PERFORMED`；此次实际截图视觉复核独立记录，不由脚本代为声称。部分回放、历史比较与模拟账户交互使用明确标记的fixture，不替代真实数据核验。视觉修复提交 `a34d2b7` 的GitHub CI已通过。
 
 ## 停更区间、连续性与底层修复
 
@@ -90,7 +96,7 @@ B在此短区间没有优于A，功能平行不代表模型效果提升。两侧
 | 正式8000浏览器 | 七页×桌面/平板/手机PASS；`final/frontend/summary.json` |
 | GitHub代码CI | success；[run 42347140317](https://github.com/charliecly0416/taiwan-stock-quant-platform/actions/runs/42347140317) |
 
-浏览器检查覆盖排名、变化、行情、回放、比较、Agent和系统页，失败响应、失败请求、禁止请求、console/page错误均为0，DOM几何无水平溢出。人工视觉复核使用正式服务截图完成；另增加1100像素笔记本宽度，确认统计栏不溢出。浏览器模拟账户写操作由fixture拦截，没有写用户账户；部署使用SQLite backup复制账本并通过integrity_check。导航竞态与历史比较fixture有独立标记，不冒充真实数据证明。按只读E2E技能核对网络、控制台和交互证据。
+浏览器检查覆盖排名、变化、行情、回放、比较、Agent和系统页，失败响应、失败请求、禁止请求、console/page错误均为0，DOM几何无水平溢出。此阶段仅保存截图；后续截图视觉复核与新增1100像素笔记本检查见上节。浏览器模拟账户写操作由fixture拦截，没有写用户账户；部署使用SQLite backup复制账本并通过integrity_check。导航竞态与历史比较fixture有独立标记，不冒充真实数据证明。按只读E2E技能核对网络、控制台和交互证据。
 
 当前Agent默认读取已验证每日产物作本地解释；没有调用远端模型。单个stack/浏览器脚本自身仍标记 `release_acceptance=NOT_EVALUATED`，上表综合真实数据、部署和独立核算记录本轮结果。
 
